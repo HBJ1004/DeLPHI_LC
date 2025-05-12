@@ -1,0 +1,9 @@
+{
+    "lr": 0.0006257624325406946,
+    "weight_decay": 4.7256015127161435e-05,
+    "dropout": 0.4150972889494752,
+    "hidden_dim": 128,
+    "num_layers": 2,
+    "num_heads": 4,
+    "fusion_method": "gating"
+}

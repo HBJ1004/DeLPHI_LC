@@ -1,0 +1,7 @@
+{
+    "input_dim": 16,
+    "fusion_method": "attention",
+    "dropout": 0.22078302986471432,
+    "hidden_dim": 192,
+    "num_layers": 2
+}
