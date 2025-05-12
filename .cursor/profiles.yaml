@@ -1,0 +1,27 @@
+# .cursor/profiles.yaml
+
+profiles:
+  project:
+    - docs/00_project_overview.md
+    - docs/01_repo_structure.md
+
+  data_edit:
+    - docs/01_repo_structure.md
+    - docs/02_data_spec.md
+    - docs/03_pipeline_phases.md
+
+  model_edit:
+    - docs/01_repo_structure.md
+    - docs/03_pipeline_phases.md
+    - docs/04_model_history.md
+    - docs/06_next_steps.md
+
+  loss_edit:
+    - docs/04_model_history.md
+    - docs/06_next_steps.md
+    - docs/07_best_practices.md
+
+  train_edit:
+    - docs/03_pipeline_phases.md
+    - docs/06_next_steps.md
+    - docs/07_best_practices.md
