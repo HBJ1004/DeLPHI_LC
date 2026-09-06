@@ -10,7 +10,7 @@ This repository contains the DeLPHI v1.0 implementation of the K3 model.
 Here, “v1.0” is the software release and “K3” is the candidate-generation
 architecture; neither term refers to the legacy V1 comparator used in the
 manuscript. For scientific methods and interpretation, cite **Jo, Ishiguro and
-Lee, in prep.** and the archived v1.0 software release.
+Lee, in prep.** and the versioned v1.0 GitHub release.
 
 ## Install and check
 
@@ -39,7 +39,7 @@ There are three supported ways to use DeLPHI:
 1. **Use published weights:** prepare one observation JSON file and run prediction.
 2. **Train on your own labelled data:** make train/validation JSONL files and
    train a new experimental model.
-3. **Reproduce the paper result:** use the frozen artifact archive and exact
+3. **Reproduce the paper result:** use the frozen release package and exact
    reproduction instructions.
 
 Start with the [data-format guide](docs/data-format.md). It explains coordinate
@@ -89,7 +89,9 @@ coverage. All 95% radii are 90°, covering the entire axial domain and providing
 no useful search-space reduction. These are not individual risk estimates.
 
 See [training on your data](docs/training-your-data.md) or [reproduction
-instructions](docs/reproduction.md) for the appropriate next step.
+instructions](docs/reproduction.md) for the appropriate next step. The GitHub
+release is the public distribution of record; it is versioned, but it is not a
+DOI-backed preservation archive.
 
 ## Source layout
 

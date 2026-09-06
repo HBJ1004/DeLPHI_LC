@@ -8,10 +8,13 @@ Do not relabel a new training run as the frozen experiment.
 
 ## Rebuild from frozen predictions (CPU)
 
-Required external artifacts: the complete `k3-definitive-7874092` archive,
-`v1-comparators.npz`, and the catalog included in this repository. A checkout
-alone does not contain training weights, raw DAMIT photometry or the full archive.
-The output directory must not already exist.
+Download these assets from the [v1.0.0 GitHub release](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0):
+`delphi-k3-artifacts-v1.0.0.tar.gz`, `delphi-k3-synthetic-data-v1.0.0.tar.gz`,
+`delphi-k3-source-v1.0.0.tar.gz`, `delphi-k3-v1-comparator-v1.0.0.npz`,
+`publication-archive-manifest.json`, and `VERIFY.md`. A checkout alone does
+not contain training weights, raw DAMIT photometry, or the frozen evidence.
+Before extracting, read `VERIFY.md` and verify the release-asset hashes against
+`publication-archive-manifest.json`. The output directory must not already exist.
 
 ```bash
 python -m repro.reproduce_k3_paper \
@@ -84,9 +87,9 @@ fold; it would be a new experiment, not reproduction of the frozen result.
 
 For scientific interpretation and limitations, cite Jo, Ishiguro and Lee, in prep.
 
-## Verify the complete publication deposit
+## Verify the complete release package
 
-The citable evidence deposit is distributed as separate artifact-root,
+The versioned GitHub release package is distributed as separate artifact-root,
 synthetic-data, source, and legacy-comparator files so that each component can
 be checked independently. After downloading the complete deposit, run:
 
@@ -100,4 +103,5 @@ python -m repro.verify_publication_package \
 The destination must not already exist. The command first checks the outer
 download hashes, rejects unsafe archive members, and then verifies the exact
 9,797-file scientific index. A successful report does not change or recompute
-any published result.
+any published result. The release is a public versioned distribution rather
+than a DOI-backed preservation archive.
