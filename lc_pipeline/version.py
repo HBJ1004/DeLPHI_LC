@@ -5,7 +5,7 @@ are read from immutable, schema-validated release manifests so documentation
 cannot drift from per-object evidence.
 """
 
-__version__ = "2.0.0.dev0"
+__version__ = "1.0.0"
 
 
 def get_version() -> str:
@@ -15,7 +15,7 @@ def get_version() -> str:
 def get_version_info() -> dict[str, str | bool]:
     return {
         "version": __version__,
-        "description": "DeLPHI validity-first asteroid lightcurve pipeline",
-        "status": "research_only",
-        "scientific_release_approved": False,
+        "description": "DeLPHI K3 asteroid pole-axis candidate generator",
+        "status": "stable_research_release",
+        "scientific_release_approved": True,
     }

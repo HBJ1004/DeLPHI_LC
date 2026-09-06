@@ -6,7 +6,11 @@ observing geometry, and an externally supplied rotation period. It scores
 refines their directions. Each axis represents both signs; it is not a unique
 directed pole.
 
-For scientific methods and interpretation, cite **Jo, Ishiguro and Lee, in prep.**
+This repository contains the DeLPHI v1.0 implementation of the K3 model.
+Here, “v1.0” is the software release and “K3” is the candidate-generation
+architecture; neither term refers to the legacy V1 comparator used in the
+manuscript. For scientific methods and interpretation, cite **Jo, Ishiguro and
+Lee, in prep.** and the archived v1.0 software release.
 
 ## Install and check
 
@@ -44,7 +48,8 @@ conventions, flux conversion, epoch grouping, and pole labels with examples.
 ## Use published weights
 
 Obtain an evaluated `k3-oof-fold-N.tar.gz` bundle and its `SHA256SUMS` from the
-project's release assets when published. Model weights are not stored in the Git
+[v1.0 release assets](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0).
+Model weights are not stored in the Git
 source tree. Check the download before extraction:
 
 ```bash
@@ -89,7 +94,7 @@ instructions](docs/reproduction.md) for the appropriate next step.
 ## Source layout
 
 - `lc_pipeline/k3/`: tokenizer, scorer, training, ensemble inference and evaluation.
-- `lc_pipeline/v2/`: shared data/geometry utilities and V1 benchmark implementation;
+- `lc_pipeline/v2/`: shared data/geometry utilities and legacy V1 comparator implementation;
   the directory name does not designate a second released model.
 - `lc_pipeline/publication/`: benchmark contracts and result aggregation.
 - `repro/`: machine-readable frozen specifications, catalog/splits and reproduction tools.
