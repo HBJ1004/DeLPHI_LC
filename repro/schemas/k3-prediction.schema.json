@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hangbin9/DeLPHI_lc/repro/schemas/k3-prediction.schema.json",
+  "title": "DeLPHI K3 axial prediction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "axes", "risk_deg", "model_id", "period_provenance", "tokenizer_schema_sha256"],
+  "properties": {
+    "schema": {"const": "delphi.k3-axial-prediction.v1"},
+    "status": {"enum": ["ok", "ambiguous", "abstain", "uninformative", "failed"]},
+    "axes": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["axis_xyz", "score_logit", "compatibility_mass", "cone90_deg", "cone95_deg", "grid_index"],
+        "properties": {
+          "axis_xyz": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}], "items": false},
+          "score_logit": {"type": "number"},
+          "compatibility_mass": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+          "cone90_deg": {"type": "number", "minimum": 0.0, "maximum": 90.0},
+          "cone95_deg": {"type": "number", "minimum": 0.0, "maximum": 90.0},
+          "grid_index": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "risk_deg": {"type": ["number", "null"], "minimum": 0.0},
+    "model_id": {"type": "string", "minLength": 1},
+    "period_provenance": {"type": ["string", "null"]},
+    "tokenizer_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "failure_reason": {"type": ["string", "null"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {"properties": {"axes": {"maxItems": 0}, "risk_deg": {"type": "null"}, "failure_reason": {"type": "string", "minLength": 1}}},
+      "else": {"properties": {"axes": {"minItems": 3, "maxItems": 3}, "risk_deg": {"type": "number"}}}
+    }
+  ]
+}

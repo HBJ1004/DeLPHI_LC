@@ -1,0 +1,35 @@
+{
+  "catalog_records_sha256": "ac1abdab62453fca6e3d7473af0ad3b7de1bcb04cee9b947fb7079d340613679",
+  "collision_audit_sha256": "8d8a04522da0b4c0bc57dcbe6ed06b292e8cfb62508ebe5a655faf584696dab8",
+  "coordinate_frame": "ecliptic_j2000",
+  "counts": {
+    "eligible": 170,
+    "explicit_solutions": 267,
+    "quarantined": 4,
+    "requested": 174
+  },
+  "directionality": "directed_spin_vector",
+  "dump_id": "damit-20250610T000301Z",
+  "eligible_object_ids_sha256": "b34063dc4b1e4b58ee5f7d3ac2976d075b13b499db05db9cd9a92eae62daa412",
+  "model_table_sha256": "530f8824e758054ac2923f02a06446ad8e919d132ca189b827cedaf33ad1b9e1",
+  "release_blockers": [
+    "source_artifact_immutable_uri_missing",
+    "independent_custodian_review_pending",
+    "prospective_test_pending"
+  ],
+  "release_eligible": false,
+  "requested_object_ids_sha256": "8501c61a96abccd1ae7ddadef07d5137215cb778b08837c53297681a38537715",
+  "schema": "delphi.data-catalog.v2",
+  "selection": {
+    "label_join": "same_normalized_asteroid_id_and_model_id",
+    "membership": "explicit_object_id_list",
+    "minimum_quality_flag": 3.0,
+    "retain_all_explicit_qualifying_solutions": true
+  },
+  "source_artifact": {
+    "immutable_uri": null,
+    "release_blocked_until_immutable_uri": true,
+    "repository": "DAMIT"
+  },
+  "source_file_manifest_sha256": "3e0405883f30a3cd7de1f2819ae336aa918ce7934061bd038490388cf07cb843"
+}

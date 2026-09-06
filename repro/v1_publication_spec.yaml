@@ -1,0 +1,150 @@
+{
+  "spec_version": "1.0.0",
+  "schema": "delphi.v1-publication-spec.v1",
+  "status": "locked_before_publication_outer_fold_execution",
+  "description": "Hash-bound definitive V1 publication protocol. It consumes but never modifies the completed V1/V2 axial comparison contract.",
+  "scope": {
+    "canonical_data": "DAMIT damit-20250610T000301Z",
+    "minimum_quality_flag": 3,
+    "eligible_object_count": 170,
+    "quarantined_object_count": 4,
+    "coordinate_frame": "ecliptic_j2000",
+    "candidate_count": 3,
+    "evaluation_equivalence": "axis_u_equivalent_to_minus_u",
+    "caveat": "Signed starts are an operational expansion of each predicted axis and do not assert that DAMIT mirror poles are exact mathematical antipodes."
+  },
+  "bindings": {
+    "axial_comparison_spec": {
+      "path": "repro/axial_comparison_spec.yaml",
+      "sha256": "ca7aeb442b1576dc92a729ae80926b8d2f49f9a74292ceece6db4ceddeabe49a"
+    },
+    "catalog": {
+      "path": "repro/data/damit-20250610T000301Z/catalog.jsonl",
+      "sha256": "ac1abdab62453fca6e3d7473af0ad3b7de1bcb04cee9b947fb7079d340613679"
+    },
+    "catalog_manifest": {
+      "path": "repro/data/damit-20250610T000301Z/catalog_manifest.json",
+      "sha256": "2e0a242c436322d132279053ea3b75aaae67d9b3424f2d5bdfd9a1c08117ca47"
+    },
+    "publication_splits": {
+      "path": "repro/data/damit-20250610T000301Z/publication-splits-v2.3.json",
+      "sha256": "1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4"
+    },
+    "tensor_cache": {
+      "default_path": "artifacts/v2-cache-damit-20250610-inferred-nside32-v2.3/cache-manifest.json",
+      "manifest_sha256": "e3b66df88c025692d4a4fd2fb6d779f7e21ef9405ca06cf3d54a81cc1e64df4d",
+      "configuration_sha256": "5339860521ef0b081c92aa0ac3c2f58c1aa0f09c994bef3a1b2c6f6eca0d891c",
+      "period_mode": "inferred",
+      "geometry_mode": "enabled",
+      "object_count": 170
+    }
+  },
+  "cross_validation": {
+    "folds": 5,
+    "roles_per_fold": {"train": 108, "validation": 14, "calibration": 14, "test": 34},
+    "outer_test_exactly_once": true,
+    "training_seeds": [17, 42, 137, 777, 2027],
+    "downstream_seed": 17,
+    "object_aggregation": "mean_across_seeds_then_one_object_one_vote"
+  },
+  "axis_evaluation": {
+    "arms": {
+      "v1_faithful": "primary",
+      "v1_corrected": "historical_loss_floor_sensitivity",
+      "amplitude_mlp": "predeclared_low_capacity_comparator"
+    },
+    "required_conditions": ["raw", "zero", "atlas", "exhaustive_deranged"],
+    "primary_metric": "axis_oracle_at3_error_deg",
+    "secondary_metrics": [
+      "median_axis_oracle_at3_error_deg",
+      "fraction_within_10_deg",
+      "fraction_within_20_deg",
+      "fraction_within_30_deg",
+      "axis_top1_error_deg",
+      "directed_oracle_at3_error_deg"
+    ],
+    "statistical_unit": "object"
+  },
+  "downstream": {
+    "engineering_pilot": {
+      "publication_object_policy": "no eligible publication object may be used",
+      "golden_case": "DAMIT version_0.2.1 test_lcs_rel",
+      "additional_cases": "ten deterministic complete nonpublication lightcurves selected by SHA-256 object-id order",
+      "candidate_stop_conditions": [0.0001, 0.00001, 0.000001],
+      "reference_iteration_limit": 200,
+      "selection_rule": "choose the largest candidate stop condition whose final RMS is within 0.1 percent of the 200-iteration reference for at least 95 percent of successful starts",
+      "failure_rule": "if no candidate passes, do not open a publication phase",
+      "timeout_rule": "ten times pilot successful-start p99 wall time, rounded up to minutes and clamped to 300..3600 seconds"
+    },
+    "primary_phase": "fixed-period",
+    "fixed_period_source": "median_of_explicit_qualifying_source_solution_periods",
+    "deployable_arms": ["v1", "damit_standard", "atlas", "random"],
+    "sensitivity_arms": ["catalog_oracle_reference", "v1_corrected"],
+    "damit_standard_starts_deg": [[0, 0], [180, 0], [90, 60], [240, 60], [90, -60], [240, -60]],
+    "starts_per_deployable_arm": 6,
+    "timing": {
+      "execution": "one benchmark child process at a time on the lowest available logical CPU",
+      "arm_order": "per-object deterministic Latin-square order derived from object-id and publication specification SHA-256",
+      "reported_quantities": ["summed_wall_seconds", "summed_process_cpu_seconds", "summed_iterations"],
+      "timeout_treatment": "a timeout is retained as failure and contributes its full timeout to elapsed time"
+    },
+    "axis_recovery_threshold_deg": 20.0,
+    "maximum_reference_rms_ratio": 1.05,
+    "acceleration_gate": {
+      "minimum_wall_time_reduction_fraction": 0.25,
+      "bootstrap_ci95_lower_must_exceed": 0.0,
+      "maximum_recovery_rate_inferiority_fraction": 0.02,
+      "maximum_geometric_mean_rms_ratio_ci95_upper": 1.01
+    },
+    "cone_sensitivity": {
+      "coverage_targets": [0.90, 0.95],
+      "calibration": "cross_fitted_from_other_four_oof_test_folds",
+      "full_sample_grid_points": 64,
+      "fold0_resolution_sensitivity_grid_points": 256,
+      "empty_cone_rule": "include the nearest grid point to each predicted V1 axis and record the fallback"
+    },
+    "end_to_end": {
+      "period_domain_hours": [2.0, 200.0],
+      "aliases": [0.5, 1.0, 2.0],
+      "period_scan_resolution_coefficient": 0.8,
+      "arms": ["standard_grid", "center_standard", "center_v1", "center_atlas", "center_random"],
+      "standard_grid": "official DAMIT period_scan over the union of calibrated alias intervals, followed by convexinv refinement",
+      "center_arms": "one convexinv refinement at each in-domain alias center with the arm's six starts",
+      "order_of_magnitude_claim_minimum_ratio": 10.0,
+      "order_of_magnitude_ci95_lower_minimum_ratio": 10.0
+    }
+  },
+  "statistics": {
+    "bootstrap": {"resamples": 10000, "seed": 20260901, "unit": "object"},
+    "permutation": {"sign_flips": 100000, "seed": 20260901, "unit": "object"},
+    "multiplicity": {"method": "Holm", "familywise_alpha": 0.01},
+    "morphology_claim_gate": {
+      "comparators": ["exhaustive_deranged", "atlas"],
+      "minimum_point_improvement_deg": 5.0,
+      "minimum_ci95_lower_improvement_deg": 2.0,
+      "maximum_holm_adjusted_p_value": 0.01
+    }
+  },
+  "phases": ["oof", "fixed-period", "cone-sensitivity", "end-to-end", "final-model"],
+  "phase_dependencies": {
+    "oof": [],
+    "fixed-period": ["oof"],
+    "cone-sensitivity": ["oof"],
+    "end-to-end": ["fixed-period"],
+    "final-model": ["oof", "fixed-period", "cone-sensitivity", "end-to-end"]
+  },
+  "artifact_policy": {
+    "clean_git_required": true,
+    "scientific_results_may_not_be_overwritten": true,
+    "incomplete_jobs_must_be_retained": true,
+    "raw_runs_and_checkpoints": "ignored_external_hash_addressed",
+    "small_manifests_predictions_and_summaries": "publish_with_sha256",
+    "negative_or_inconclusive_results": "publish_without_posthoc_threshold_changes"
+  },
+  "final_model": {
+    "model_kind": "v1_faithful",
+    "seed": 17,
+    "epoch_rule": "round_half_up_median_of_the_25_zero_based_oof_best_epochs_plus_one",
+    "scientific_accuracy_source": "oof_only"
+  }
+}

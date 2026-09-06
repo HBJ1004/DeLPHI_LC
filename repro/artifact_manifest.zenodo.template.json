@@ -1,0 +1,37 @@
+{
+  "schema_version": "2.0.0",
+  "manifest_type": "artifact",
+  "record_id": "delphi-v2-release-artifacts",
+  "created_at_utc": "${RFC3339_UTC_TIMESTAMP}",
+  "archive": {
+    "provider": "zenodo",
+    "doi": "${ZENODO_VERSION_DOI}",
+    "record_url": "${ZENODO_IMMUTABLE_RECORD_URL}",
+    "published_at_utc": "${RFC3339_UTC_TIMESTAMP}",
+    "immutable": true
+  },
+  "license": "${SPDX_LICENSE_IDENTIFIER}",
+  "creators": [
+    {
+      "name": "${FAMILY_NAME, GIVEN_NAMES}",
+      "orcid": "${HTTPS_ORCID_URI}"
+    }
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "${CANONICAL_GIT_COMMIT_URI}",
+      "relation": "isSupplementTo"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "${STABLE_ARTIFACT_ID}",
+      "logical_path": "${RELATIVE_ARCHIVE_PATH}",
+      "sha256": "${64_LOWERCASE_HEX_SHA256}",
+      "size_bytes": "${EXACT_POSITIVE_INTEGER_BYTES}",
+      "media_type": "${IANA_MEDIA_TYPE}",
+      "role": "checkpoint",
+      "generated_by_run_id": "${RUN_MANIFEST_RUN_ID}"
+    }
+  ]
+}

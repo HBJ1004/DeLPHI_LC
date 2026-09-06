@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://delphi-project.example/schemas/v2/verdict-manifest.schema.json",
+  "title": "DeLPHI V2 release verdict manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "manifest_type", "release_id", "evaluated_at_utc", "release_spec_sha256", "run_manifest", "artifact_manifest", "prospective_test", "gate_results", "overall_verdict", "approved_for_release"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "manifest_type": {"const": "verdict"},
+    "release_id": {"type": "string", "pattern": "^v2\\.[0-9]+\\.[0-9]+(?:-[a-z0-9.-]+)?$"},
+    "evaluated_at_utc": {"type": "string", "format": "date-time"},
+    "release_spec_sha256": {"$ref": "#/$defs/sha256"},
+    "run_manifest": {"$ref": "#/$defs/manifest_ref"},
+    "artifact_manifest": {"$ref": "#/$defs/manifest_ref"},
+    "prospective_test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["split_lock_sha256", "locked_at_utc", "labels_revealed_at_utc", "custodian_name", "custodian_independent", "no_test_set_tuning"],
+      "properties": {
+        "split_lock_sha256": {"$ref": "#/$defs/sha256"},
+        "locked_at_utc": {"type": "string", "format": "date-time"},
+        "labels_revealed_at_utc": {"type": "string", "format": "date-time"},
+        "custodian_name": {"type": "string", "minLength": 1},
+        "custodian_independent": {"const": true},
+        "no_test_set_tuning": {"const": true}
+      }
+    },
+    "gate_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "metric", "observed", "operator", "threshold", "passed", "evidence"],
+        "properties": {
+          "gate_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"},
+          "metric": {"type": "string", "minLength": 1},
+          "observed": {"type": ["number", "integer", "boolean", "string", "array"]},
+          "operator": {"enum": ["eq", "lt", "lte", "gt", "gte"]},
+          "threshold": {"type": ["number", "integer", "boolean", "string", "array"]},
+          "passed": {"type": "boolean"},
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/evidence_ref"}
+          }
+        }
+      }
+    },
+    "overall_verdict": {"enum": ["PASS", "FAIL"]},
+    "approved_for_release": {"type": "boolean"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_id", "sha256"],
+      "properties": {
+        "manifest_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidence_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

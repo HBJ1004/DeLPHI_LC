@@ -1,0 +1,204 @@
+{
+  "spec_version": "1.0.0",
+  "schema": "delphi.k3-redesign-spec.v1",
+  "status": "locked_before_development_and_publication_execution",
+  "title": "Candidate-conditioned K=3 axial compatibility scorer",
+  "decision_rule": "V1 remains the main method unless every mandatory K3 promotion gate passes without post-hoc threshold changes.",
+  "scientific_question": {
+    "primary": "Can deployable lightcurve and observing-geometry evidence rank three axial spin candidates more accurately than the frozen V1 model and non-informative controls?",
+    "primary_estimand": "one-object-one-vote antipode-aware oracle-at-3 angular error",
+    "interpretation": "The output is a compatibility surface and three search starts, not a posterior probability of physical pole truth.",
+    "known_period_scope": "primary",
+    "inferred_period_scope": "secondary_sensitivity_only"
+  },
+  "data_boundaries": {
+    "retrospective_oof": {
+      "dump_id": "damit-20250610T000301Z",
+      "eligible_objects": 170,
+      "folds": 5,
+      "roles_per_fold": {"train": 108, "validation": 14, "calibration": 14, "test": 34},
+      "test_exactly_once": true,
+      "source_split": "repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
+    },
+    "temporal": {
+      "dump_id": "damit-20260902T000301Z",
+      "eligibility": "quality_flag_greater_than_or_equal_to_3_and_not_present_in_retrospective_snapshot",
+      "role": "descriptive_external_validation",
+      "minimum_sample_for_confirmatory_claim": 30,
+      "small_sample_rule": "Report every object and an exact sample count; do not use this cohort for promotion, tuning, calibration, or confirmatory significance claims."
+    },
+    "leakage_rules": [
+      "No retrospective test or temporal object may be a synthetic geometry donor.",
+      "No shape donor identifier may occur in more than one synthetic split.",
+      "No geometry donor identifier may occur in more than one synthetic split.",
+      "Calibration uses only the declared calibration role and is cross-fitted for OOF reporting.",
+      "Catalogue pole coordinates are forbidden model inputs; a catalogue period is permitted only in the explicitly labelled fixed-period experiment, where it represents a deployable externally supplied period and is never an optimization target."
+    ]
+  },
+  "synthetic_data": {
+    "train_objects": 20000,
+    "validation_objects": 2000,
+    "test_objects": 2000,
+    "axis_distribution": "uniform_on_projective_sphere",
+    "shape_distribution": "convex_shape_donors_or_declared_random_convex_ellipsoids",
+    "geometry_distribution": "train_only_empirical_geometry_donors",
+    "donor_selection": {
+      "snapshot": "damit-20250610T000301Z",
+      "exclude_retrospective_catalogue_objects": true,
+      "minimum_source_epochs": 5,
+      "minimum_observations": 150,
+      "require_every_epoch_at_least_three_observations": true,
+      "partition": "sha256(master_seed:object_id)_ranked_80_10_10",
+      "partition_master_seed": 20260901,
+      "validated_donor_count": 514,
+      "split_counts": {"train": 411, "validation": 51, "test": 52}
+    },
+    "phase": "one_object_global_reference_with_random_initial_phase",
+    "noise": "empirical_train_only_noise_recipe_recorded_per_shard",
+    "noise_implementation": {
+      "method": "hashed_train_only_DAMIT_forward_fit_residual_bank_with_correlated_snippet_resampling",
+      "bank_sha256": "c286acb58fb04756403adb87c0f101a450dbc9e154f4fa87468626f85a2e2cf9",
+      "donor_pool_sha256": "561a0250aa0acbc82222e6d87be2942023d16d6c2841f54ca4d203feda496594",
+      "donor_count": 219,
+      "retrospective_overlap_count": 0,
+      "snippet_count": 4602,
+      "nonpositive_residual_policy": "deterministic_resample_up_to_32_then_fail"
+    },
+    "master_seeds": {"train": 20260911, "validation": 20260912, "test": 20260913},
+    "large_artifacts": "external_content_addressed",
+    "tracked_artifacts": "recipes_manifests_hashes_and_small_summaries_only"
+  },
+  "renderer": {
+    "law": "lommel_seeliger_plus_lambert",
+    "lambert_coefficient": 0.1,
+    "illumination": "asteroid_to_sun_and_asteroid_to_observer_vectors",
+    "implementation": "batched_torch_facet_quadrature",
+    "numerical_reference": "independent_numpy_implementation",
+    "random_agreement_max_absolute_error": 1e-5,
+    "real_forward_median_correlation_minimum": 0.90,
+    "real_forward_median_amplitude_deviation_maximum": 0.15
+  },
+  "tokenizer": {
+    "source_epoch_boundaries": "preserved",
+    "phase_bins": 64,
+    "fourier_harmonics": 8,
+    "phase_reference": "object_global_minimum_jd",
+    "brightness": "per_epoch_centered_log_relative_flux_without_amplitude_rescaling",
+    "bin_statistics": ["mean", "scatter", "log_count", "coverage"],
+    "geometry": "mean_sun_and_observer_directions_and_distances_per_occupied_phase_bin",
+    "observation_policy": "every_finite_observation_contributes_to_exactly_one_phase_bin",
+    "minimum_source_epoch_observations": 2,
+    "real_period_policy": "period_of_first_frozen_catalogue_solution_alternative_axes_remain_positive",
+    "forbidden_regrouping": "no_time_gap_or_fixed_day_window_reconstruction"
+  },
+  "model": {
+    "kind": "candidate_conditioned_axial_compatibility_scorer",
+    "photometry_encoder": "masked_circular_residual_cnn_plus_fourier_features",
+    "epoch_encoder": {"layers": 2, "width": 128, "set_invariant": true},
+    "candidate_invariants": [
+      "dot_p_s_squared",
+      "dot_p_e_squared",
+      "dot_p_s_times_dot_p_e",
+      "dot_s_e",
+      "phase_angle",
+      "sun_distance",
+      "observer_distance",
+      "within_epoch_dispersion",
+      "relative_amplitude",
+      "phase_coverage"
+    ],
+    "forbidden_candidate_features": ["raw_candidate_x", "raw_candidate_y", "raw_candidate_z", "catalogue_atlas"],
+    "symmetries": ["candidate_antipode_invariance", "simultaneous_3d_rotation_invariance", "epoch_permutation_invariance"]
+  },
+  "training": {
+    "synthetic": {
+      "optimizer": "adamw",
+      "batch_size": 16,
+      "maximum_epochs": 100,
+      "early_stopping_patience": 15,
+      "mixed_precision": true,
+      "uniform_negatives_per_positive_set": 48,
+      "local_hard_negatives_per_positive_set": 16,
+      "hard_negative_range_deg": [5.0, 45.0],
+      "negative_exclusion_deg": 10.0,
+      "ratio_loss": "binary_cross_entropy_true_joint_vs_uniform_product_of_marginals",
+      "rank_loss_weight": 0.25
+    },
+    "real_oof_finetune": {
+      "synthetic_to_real_ratio": [3, 1],
+      "maximum_epochs": 30,
+      "encoder_learning_rate_multiplier": 0.25,
+      "multiple_explicit_axes_are_positive": true
+    },
+    "development_seeds": [17, 42, 137],
+    "oof_seeds": [17, 42, 137, 777, 2027],
+    "ensemble": "average_full_score_grids_across_seeds_before_mode_extraction"
+  },
+  "inference": {
+    "grid": {"healpix_nside": 32, "unique_axial_candidates": 6144, "order": "nested"},
+    "candidate_count": 3,
+    "non_maximum_suppression_deg": 15.0,
+    "refinement": {"kind": "projected_gradient_ascent", "steps": 8, "maximum_displacement_deg": 5.0},
+    "ordering": "descending_score_then_stable_axial_grid_index",
+    "failure_rule": "Return exactly three finite normalized axes or an explicit failed status with no axes.",
+    "oracle_access": "forbidden"
+  },
+  "stage_gates": {
+    "tiny_overfit": {"oracle_at_3_error_deg_maximum": 3.0},
+    "synthetic_test": {
+      "mean_error_deg_maximum": 20.0,
+      "median_error_deg_maximum": 18.0,
+      "input_swap_gap_deg_minimum": 8.0,
+      "label_shuffle_must_not_improve": true
+    },
+    "development": {
+      "mean_error_deg_maximum": 23.0,
+      "minimum_improvement_vs_v1_deg": 3.0,
+      "minimum_improvement_vs_atlas_deg": 3.0,
+      "all_seeds_input_swap_gap_positive": true
+    },
+    "retrospective_oof": {
+      "mean_error_deg_maximum": 22.0,
+      "median_error_deg_maximum": 20.0,
+      "fraction_within_20_deg_minimum": 0.50,
+      "minimum_point_improvement_deg": 5.0,
+      "minimum_bootstrap_ci95_lower_improvement_deg": 2.0,
+      "maximum_holm_adjusted_p_value": 0.01,
+      "comparators": ["v1_faithful", "atlas", "exhaustive_deranged"],
+      "all_seed_input_swap_gaps_positive": true
+    },
+    "downstream_fixed_period": {
+      "minimum_wall_time_reduction_fraction": 0.25,
+      "wall_time_reduction_ci95_lower_must_exceed": 0.0,
+      "maximum_recovery_rate_inferiority_fraction": 0.02,
+      "maximum_geometric_mean_rms_ratio_ci95_upper": 1.01,
+      "include_neural_inference_time": true
+    },
+    "order_of_magnitude_claim": {
+      "minimum_speed_ratio": 10.0,
+      "bootstrap_ci95_lower_minimum_speed_ratio": 10.0,
+      "otherwise_forbidden": true
+    }
+  },
+  "calibration": {
+    "targets": [0.90, 0.95],
+    "method": "split_conformal_axial_oracle_radius",
+    "probability_language": "compatibility_mass_unless_empirical_coverage_is_reported",
+    "abstention": "calibrated_error_risk"
+  },
+  "statistics": {
+    "unit": "asteroid_object",
+    "bootstrap": {"resamples": 10000, "seed": 20260901},
+    "permutation": {"sign_flips": 100000, "seed": 20260901},
+    "multiplicity": {"method": "Holm", "familywise_alpha": 0.01},
+    "negative_result_policy": "publish_without_post_hoc_gate_changes"
+  },
+  "artifact_policy": {
+    "clean_git_required_for_definitive_runs": true,
+    "immutable_run_manifests": true,
+    "resume_requires_identical_configuration_and_commit": true,
+    "scientific_results_may_not_be_overwritten": true,
+    "checkpoints_and_score_grids": "external_sha256_addressed",
+    "tracked": ["protocol", "source", "tests", "manifests", "predictions", "small_summaries", "change_log"]
+  }
+}

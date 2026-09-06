@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hangbin9/DeLPHI_lc/repro/schemas/k3-run-manifest.schema.json",
+  "title": "DeLPHI K3 run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run_id", "stage", "status", "protocol_sha256", "implementation_commit", "configuration_sha256", "artifacts"],
+  "properties": {
+    "schema": {"const": "delphi.k3-run-manifest.v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["renderer-validation", "tiny-overfit", "synthetic", "development", "oof", "temporal", "downstream", "final-model"]},
+    "status": {"enum": ["planned", "running", "complete", "failed"]},
+    "protocol_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "implementation_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["logical_path", "sha256", "role"],
+        "properties": {
+          "logical_path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "spec_version": "1.0.0",
+  "schema": "delphi.axial-comparison-spec.v1",
+  "status": "locked_before_new_comparison_runs",
+  "description": "Hash-bound V1-versus-V2 axial candidate-generator comparison. This supplements and never rewrites the historical directed-density release contract.",
+  "scope": {
+    "canonical_data": "DAMIT damit-20250610T000301Z",
+    "minimum_quality_flag": 3,
+    "eligible_object_count": 170,
+    "coordinate_frame": "asteroid_centric_ecliptic_j2000",
+    "equivalence": "axis_u_equivalent_to_minus_u_for_this_evaluation_only",
+    "scientific_caveat": "axis equivalence does not claim that catalogue mirror poles are necessarily exact antipodes",
+    "period_features": "observation_inferred_only_for_every_learned_model"
+  },
+  "metric": {
+    "primary": "axis_oracle_at_3_error_deg",
+    "definition": "min over the first three predictions and all explicit source solutions of atan2(norm(cross(unit_prediction,unit_source)),abs(dot(unit_prediction,unit_source))) in float64 degrees",
+    "range_deg": [0.0, 90.0],
+    "object_aggregation": "mean_across_seeds_then_one_object_one_vote",
+    "headline_summary": "mean_error_deg",
+    "secondary": [
+      "median_error_deg",
+      "fraction_within_10_deg",
+      "fraction_within_20_deg",
+      "fraction_within_30_deg",
+      "axis_top1_error_deg",
+      "directed_oracle_at_3_error_deg"
+    ]
+  },
+  "training": {
+    "candidate_count": 3,
+    "d_model": 128,
+    "attention_heads": 4,
+    "dropout": 0.1,
+    "optimizer": "AdamW",
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "warmup_epochs": 5,
+    "schedule": "cosine",
+    "gradient_clip_norm": 1.0,
+    "effective_batch_size": 16,
+    "maximum_epochs": 150,
+    "early_stopping_patience": 25,
+    "checkpoint_metric": "validation_mean_axis_oracle_at_3_error_deg",
+    "axial_cost": "one_minus_dot_squared",
+    "softmin_temperature": "sin_squared_5_deg",
+    "softmin_normalization": "log_mean_exp_over_all_valid_candidate_solution_pairs",
+    "minimum_candidate_axis_separation_deg": 25.0,
+    "separation_penalty_weight": 0.1,
+    "longitude_augmentation": false
+  },
+  "models": {
+    "v1_faithful": "historical_13_feature_tokenizer_and_K3_transformer_with_historical_clamped_axial_floor_loss",
+    "v1_corrected": "same_v1_preprocessing_and_architecture_with_stable_axial_loss",
+    "v2_plain": "canonical_18_feature_hierarchical_encoder_and_three_unrestricted_axis_head",
+    "v2_residual": "same_encoder_and_bounded_tangent_residuals_from_train_only_atlas",
+    "amplitude_mlp": "nine_predeclared_scalar_lightcurve_features",
+    "atlas": "three_constant_axes_fit_using_training_labels_only"
+  },
+  "atlas": {
+    "object_weighting": "one_object_one_vote_regardless_of_solution_count",
+    "initialization": "deterministic_greedy_coverage",
+    "restart_count": 16,
+    "refinement_optimizer": "Adam",
+    "refinement_steps": 2000,
+    "refinement_learning_rate": 0.05,
+    "selection": "lowest_training_object_mean_axis_oracle_at_3_error",
+    "forbidden_labels": ["validation", "calibration", "test"]
+  },
+  "development": {
+    "split_file": "repro/data/damit-20250610T000301Z/development-split-v2.3.json",
+    "split_file_sha256": "f24225749296d048892c163346b1297904a2e70e44d1df1ac999bbda4dd0e9ce",
+    "roles": {"train": 120, "validation": 25, "calibration": 25},
+    "seeds": [17, 42, 137],
+    "v1_selection": "lower_validation_mean_error_between_v1_faithful_and_v1_corrected",
+    "v2_eligibility": {
+      "minimum_absolute_improvement_over_selected_v1_deg": 1.5,
+      "minimum_relative_improvement_over_selected_v1": 0.075,
+      "minimum_improvement_over_train_only_atlas_deg": 5.0,
+      "minimum_improvement_over_exhaustive_derangement_deg": 2.0,
+      "minimum_per_seed_improvement_over_v1_deg": -1.0
+    },
+    "candidate_selection": "larger_absolute_v1_improvement_then_if_within_0.1_deg_fewer_parameters",
+    "fail_closed": "if_neither_v2_is_eligible_do_not_open_publication_folds"
+  },
+  "confirmation": {
+    "split_file": "repro/data/damit-20250610T000301Z/publication-splits-v2.3.json",
+    "split_file_sha256": "1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4",
+    "folds": 5,
+    "fold_roles": {"train": 108, "validation": 14, "calibration": 14, "test": 34},
+    "training_seeds": [17, 42, 137, 777, 2027],
+    "analysis_description": "grouped_out_of_fold_cross_validation_not_prospective_or_blinded",
+    "bootstrap": {"resamples": 10000, "seed": 20260901, "unit": "object"},
+    "permutation": {"sign_flips": 100000, "seed": 20260901, "unit": "object"},
+    "multiplicity": {"method": "Holm", "familywise_alpha": 0.01},
+    "direct_v2_gate": {
+      "minimum_absolute_improvement_over_v1_deg": 3.0,
+      "minimum_relative_improvement_over_v1": 0.15,
+      "minimum_bootstrap_ci95_lower_deg": 0.0,
+      "maximum_holm_adjusted_p_value": 0.01,
+      "minimum_positive_seed_count": 4,
+      "minimum_any_seed_improvement_deg": -1.0
+    },
+    "integrity_controls": {
+      "minimum_atlas_and_deranged_point_gap_deg": 5.0,
+      "minimum_atlas_and_deranged_ci95_lower_deg": 2.0,
+      "minimum_label_shuffle_ci95_lower_deg": 2.0,
+      "required": [
+        "label_shuffle_training",
+        "geometry_disabled_training",
+        "exhaustive_input_derangement",
+        "zero_input",
+        "brightness_ablation",
+        "time_ablation",
+        "geometry_ablation",
+        "period_ablation"
+      ]
+    },
+    "amplitude_claim_guard": "v2_must_not_be_more_than_1_deg_worse_than_amplitude_mlp_for_transformer_superiority_claim"
+  },
+  "downstream_override": {
+    "eligibility": "direct_gain_significant_and_absolute_gain_is_1.5_to_3_deg_or_relative_gain_is_0.075_to_0.15",
+    "minimum_convex_inversion_iteration_reduction_vs_v1": 0.25,
+    "iteration_reduction_ci_must_exclude_zero": true,
+    "maximum_recovery_rate_inferiority_fraction": 0.02,
+    "maximum_rms_inferiority_fraction": 0.01,
+    "must_beat_train_only_atlas": true
+  },
+  "decision_values": ["V2_DIRECT", "V2_DOWNSTREAM_OVERRIDE", "V1_RETAINED"],
+  "artifact_policy": {
+    "raw_runs_and_checkpoints": "ignored_external_hash_addressed",
+    "commit": "small_manifests_hashes_summaries_and_negative_results",
+    "clean_git_required_for_confirmatory_training": true,
+    "threshold_changes_after_confirmation_begins": "forbidden"
+  }
+}

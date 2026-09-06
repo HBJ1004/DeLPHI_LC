@@ -1,0 +1,25 @@
+{
+  "exact_cross_object_solution_sets": [],
+  "near_cross_object_solutions": [
+    {
+      "directed_angle_deg": 0.0,
+      "left_model_id": 1834,
+      "left_object_id": "asteroid_718",
+      "resolution": "independent_source_lineage",
+      "right_model_id": 6219,
+      "right_object_id": "asteroid_3578"
+    },
+    {
+      "directed_angle_deg": 0.0,
+      "left_model_id": 4381,
+      "left_object_id": "asteroid_767",
+      "resolution": "independent_source_lineage",
+      "right_model_id": 6172,
+      "right_object_id": "asteroid_3553"
+    }
+  ],
+  "near_tolerance_deg": 0.0001,
+  "passed": true,
+  "schema": "delphi.label-collision-audit.v2",
+  "unresolved_count": 0
+}
