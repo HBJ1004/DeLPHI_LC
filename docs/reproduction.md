@@ -83,3 +83,21 @@ zeros. A valid cross-survey study needs real geometry and each object's held-out
 fold; it would be a new experiment, not reproduction of the frozen result.
 
 For scientific interpretation and limitations, cite Jo, Ishiguro and Lee, in prep.
+
+## Verify the complete publication deposit
+
+The citable evidence deposit is distributed as separate artifact-root,
+synthetic-data, source, and legacy-comparator files so that each component can
+be checked independently. After downloading the complete deposit, run:
+
+```bash
+python -m repro.verify_publication_package \
+  --package-directory /path/to/downloaded-deposit \
+  --extract-to /path/to/new-verification-directory \
+  --output /path/to/publication-archive-verification.json
+```
+
+The destination must not already exist. The command first checks the outer
+download hashes, rejects unsafe archive members, and then verifies the exact
+9,797-file scientific index. A successful report does not change or recompute
+any published result.
