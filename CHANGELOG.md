@@ -1,5 +1,19 @@
 # Release notes
 
+## v1.0 — 2026-09-07
+
+This is the author-designated final publication release of the DeLPHI K3
+software. It closes the independent third-audit compatibility findings by:
+
+- supporting the declared NumPy 1.26 floor throughout both the K3 and retained
+  V2 utility modules; and
+- limiting the Matplotlib/pyparsing warning exception to the affected
+  Matplotlib module without importing a version-specific warning class.
+
+The earlier `v1.0.0` scientific evidence release and `v1.0.1` audit candidate
+remain available as immutable provenance. This release does not retrain the
+published models or alter the frozen scientific results.
+
 ## v1.0.1 — 2026-09-06
 
 - Restored the declared NumPy 1.26 compatibility and added a minimum-dependency

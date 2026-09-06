@@ -403,7 +403,7 @@ def _prediction_from_arrays(
 ) -> AxisPrediction:
     candidates = np.asarray(axes[:3], dtype=np.float64)
     valid = np.all(np.isfinite(candidates), axis=1) & (
-        np.linalg.vector_norm(np.where(np.isfinite(candidates), candidates, 0.0), axis=1) > 1e-12
+        np.linalg.norm(np.where(np.isfinite(candidates), candidates, 0.0), axis=1) > 1e-12
     )
     stored = np.where(np.isfinite(candidates), candidates, 0.0)
     usable = stored[valid]
@@ -486,7 +486,7 @@ def exhaustive_deranged_axis_errors(
                 np.asarray(donor.axis_valid, dtype=bool)
                 if donor.axis_valid
                 else np.all(np.isfinite(donor_axes), axis=1)
-                & (np.linalg.vector_norm(donor_axes, axis=1) > 1e-12)
+                & (np.linalg.norm(donor_axes, axis=1) > 1e-12)
             )
             errors.append(
                 float(oracle_source_axis_match(donor_axes[mask], target_vectors).error_deg)

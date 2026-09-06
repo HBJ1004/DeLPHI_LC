@@ -100,9 +100,9 @@ addopts = [
 xfail_strict = true
 filterwarnings = [
   "error",
-  # Matplotlib 3.9 calls a pyparsing spelling deprecated by pyparsing 3.2+.
-  # Keep first-party warnings fatal while allowing that upstream combination.
-  "ignore:'oneOf' deprecated.*:pyparsing.exceptions.PyparsingDeprecationWarning",
+  # Matplotlib uses compatibility spellings deprecated by newer pyparsing.
+  # Scope the exception to Matplotlib while keeping first-party warnings fatal.
+  "ignore:.*deprecated - use.*:DeprecationWarning:matplotlib\\..*",
 ]
 markers = [
   "gpu: requires a CUDA-capable GPU and is excluded from CPU CI",

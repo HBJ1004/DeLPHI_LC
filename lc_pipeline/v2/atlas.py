@@ -124,7 +124,7 @@ def _normalized_source_objects(
     for value in sorted_values:
         value.validate()
         vectors = np.asarray(value.target_vectors, dtype=np.float64)
-        norms = np.linalg.vector_norm(vectors, axis=1)
+        norms = np.linalg.norm(vectors, axis=1)
         if not vectors.size or not np.all(np.isfinite(vectors)) or np.any(norms == 0):
             raise AtlasContractError(f"invalid source axes for {value.object_id}")
         result.append((value.object_id, vectors / norms[:, None]))
@@ -295,7 +295,7 @@ def read_axis_atlas(path: str | Path) -> AxisAtlas:
         axes_array = np.asarray(payload["axes"], dtype=np.float64)
         if axes_array.shape != (3, 3) or not np.all(np.isfinite(axes_array)):
             raise AtlasContractError("axis atlas requires three finite 3-vectors")
-        norms = np.linalg.vector_norm(axes_array, axis=1)
+        norms = np.linalg.norm(axes_array, axis=1)
         if not np.allclose(norms, 1.0, rtol=0.0, atol=1.0e-12):
             raise AtlasContractError("axis atlas vectors must be unit normalized")
         return AxisAtlas(

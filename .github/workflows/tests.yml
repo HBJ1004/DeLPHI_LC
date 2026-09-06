@@ -42,4 +42,4 @@ jobs:
           'coverage==7.5.0'
           'pytest-cov==5.0.0'
       - run: python -m pip install -e . --no-deps
-      - run: python -m pytest -q tests/test_axial_metrics.py tests/test_k3_inference_api.py tests/test_k3_bundle.py
+      - run: python -m pytest -q tests repro/tests

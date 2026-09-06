@@ -7,7 +7,7 @@ refines their directions. Each axis represents both signs; it is not a unique
 directed pole.
 
 This repository contains the DeLPHI K3 candidate-generation model. “K3” means
-that the model returns three axes; a software release number such as v1.0.1 is
+that the model returns three axes; a software release number such as v1.0 is
 only a package version. For scientific methods and interpretation, cite **Jo,
 Ishiguro and Lee, in prep.** and the versioned GitHub release.
 
