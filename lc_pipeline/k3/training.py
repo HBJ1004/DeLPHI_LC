@@ -20,6 +20,7 @@ os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from ..torch_compat import make_grad_scaler
 from ..v2.preprocessing import KnownPeriod
 from .config import K3TrainingConfig
 from .losses import K3LossError, density_ratio_training_loss
@@ -304,7 +305,7 @@ def fit_k3(
     device_value = torch.device(device)
     model.to(device_value)
     amp_enabled = bool(config.mixed_precision and device_value.type == "cuda")
-    scaler = torch.amp.GradScaler(device_value.type, enabled=amp_enabled)
+    scaler = make_grad_scaler(device_value.type, enabled=amp_enabled)
     if stage.startswith("synthetic") or stage == "custom":
         maximum_epochs, patience_limit = config.synthetic_max_epochs, config.synthetic_patience
         optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)

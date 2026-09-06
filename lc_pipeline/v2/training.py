@@ -25,6 +25,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
 from ..physics.directional import directed_angular_error_deg, torch_directed_angular_error_deg
+from ..torch_compat import make_grad_scaler
 from .data import PreparedObject, collate_prepared_objects
 from .density import pixel_centers_xyz, vector_to_pixel
 from .model import (
@@ -552,7 +553,7 @@ def fit_model(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     amp_enabled = config.mixed_precision and selected_device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    scaler = make_grad_scaler("cuda", enabled=amp_enabled)
     start_epoch = 0
     best_epoch = -1
     best_validation = math.inf

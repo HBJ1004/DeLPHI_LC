@@ -25,6 +25,7 @@ from ..physics.axial import (
     oracle_source_axis_match,
 )
 from ..physics.directional import oracle_source_pole_match
+from ..torch_compat import make_grad_scaler
 from .baselines import (
     AmplitudeAxisObject,
     FeatureStandardizer,
@@ -674,7 +675,7 @@ def fit_axis_model(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     amp_enabled = config.mixed_precision and selected_device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    scaler = make_grad_scaler("cuda", enabled=amp_enabled)
     start_epoch, best_epoch, stale_epochs = 0, -1, 0
     best_validation = math.inf
     history: list[AxialEpochMetrics] = []

@@ -8,7 +8,8 @@ software. It closes the independent third-audit compatibility findings by:
 - supporting the declared NumPy 1.26 floor throughout both the K3 and retained
   V2 utility modules; and
 - limiting the Matplotlib/pyparsing warning exception to the affected
-  Matplotlib module without importing a version-specific warning class.
+  Matplotlib module without importing a version-specific warning class; and
+- supporting gradient scaling across the declared PyTorch 2.2--2.x range.
 
 The earlier `v1.0.0` scientific evidence release and `v1.0.1` audit candidate
 remain available as immutable provenance. This release does not retrain the
