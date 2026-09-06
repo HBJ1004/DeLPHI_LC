@@ -1,0 +1,16 @@
+{
+  "schema": "delphi.k3-observations.v1",
+  "object_id": "example-asteroid",
+  "known_period": {"hours": 7.25, "provenance": "replace-with-period-source"},
+  "epochs": [{
+    "epoch_id": "example-epoch-001",
+    "observations": [
+      {"time_jd": 2461052.125, "relative_brightness": 1.034,
+       "sun_asteroid_ecliptic_j2000_au": [1.42, -0.31, 0.04],
+       "observer_asteroid_ecliptic_j2000_au": [0.77, -0.68, 0.03], "measured_error": 0.012},
+      {"time_jd": 2461052.132, "relative_brightness": 1.018,
+       "sun_asteroid_ecliptic_j2000_au": [1.42, -0.31, 0.04],
+       "observer_asteroid_ecliptic_j2000_au": [0.77, -0.68, 0.03], "measured_error": 0.012}
+    ]
+  }]
+}

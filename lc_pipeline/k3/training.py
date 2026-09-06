@@ -297,15 +297,15 @@ def fit_k3(
     run_provenance: Mapping[str, str] | None = None,
 ) -> K3FitResult:
     """Fit one stage with deterministic loaders and optional atomic checkpoints."""
-    if stage not in {"synthetic", "synthetic-label-shuffle", "real-oof"}:
-        raise K3TrainingError("stage must be synthetic, synthetic-label-shuffle, or real-oof")
+    if stage not in {"synthetic", "synthetic-label-shuffle", "real-oof", "custom"}:
+        raise K3TrainingError("stage must be synthetic, synthetic-label-shuffle, real-oof, or custom")
     normalized_provenance = _validated_run_provenance(run_provenance)
     configure_determinism(config.seed)
     device_value = torch.device(device)
     model.to(device_value)
     amp_enabled = bool(config.mixed_precision and device_value.type == "cuda")
     scaler = torch.amp.GradScaler(device_value.type, enabled=amp_enabled)
-    if stage.startswith("synthetic"):
+    if stage.startswith("synthetic") or stage == "custom":
         maximum_epochs, patience_limit = config.synthetic_max_epochs, config.synthetic_patience
         optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     else:

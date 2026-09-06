@@ -4,7 +4,7 @@ DeLPHI K3 proposes three asteroid spin-pole **axes** from relative lightcurves,
 observing geometry, and an externally supplied rotation period. It scores
 6,144 trial axes, averages five evaluated models, extracts three peaks, and
 refines their directions. Each axis represents both signs; it is not a unique
-directed pole. V1 is retained as the benchmark comparator.
+directed pole.
 
 For scientific methods and interpretation, cite **Jo, Ishiguro and Lee, in prep.**
 
@@ -28,7 +28,20 @@ The `constraints/` files record supported dependency constraints. Exact historic
 package versions and hardware belong to the benchmark archive, not a promise of
 bitwise reproducibility on different hardware.
 
-## Predict
+## Start here
+
+There are three supported ways to use DeLPHI:
+
+1. **Use published weights:** prepare one observation JSON file and run prediction.
+2. **Train on your own labelled data:** make train/validation JSONL files and
+   train a new experimental model.
+3. **Reproduce the paper result:** use the frozen artifact archive and exact
+   reproduction instructions.
+
+Start with the [data-format guide](docs/data-format.md). It explains coordinate
+conventions, flux conversion, epoch grouping, and pole labels with examples.
+
+## Use published weights
 
 Obtain an evaluated `k3-oof-fold-N.tar.gz` bundle and its `SHA256SUMS` from the
 project's release assets when published. Model weights are not stored in the Git
@@ -40,7 +53,7 @@ tar -xzf k3-oof-fold-0.tar.gz
 delphi-k3-predict --bundle k3-oof-fold-0 --input observations.json --output prediction.json
 ```
 
-See [input and output format](docs/usage.md). Use `--device cuda` for GPU inference.
+See the [step-by-step prediction guide](docs/usage.md). Use `--device cuda` for GPU inference.
 For one of the 170 benchmark asteroids, use **only its held-out fold** listed in
 the bundled `object_roles.test_ids`; other folds are rejected. Do not average
 all 25 models for a benchmark asteroid. For a new object, select a fold before
@@ -53,15 +66,11 @@ seeds. Angular errors use the closest of three axes to any qualifying reference
 solution, with antipodal equivalence. This oracle metric needs reference labels
 and does not select a pole at deployment.
 
-| Measure | K3 | V1 comparator |
-|---|---:|---:|
-| Mean oracle@3 error | 15.77° | 28.44° |
-| Median oracle@3 error | 12.09° | 27.55° |
-| Objects within 20° | 74.1% | 22.9% |
-
-K3 uses a five-model **score-map ensemble**; V1 numbers summarize each object's
-five seed errors. This is a comparison of complete pipelines, not a controlled
-test isolating architecture or ensembling.
+| Frozen K3 OOF measure | Result |
+|---|---:|
+| Mean oracle@3 error | 15.77° |
+| Median oracle@3 error | 12.09° |
+| Objects within 20° | 74.1% |
 
 In the matched, fixed-period convex-inversion benchmark (six starts per arm,
 50 iterations per start), baseline/guided wall time was **0.947**: guided execution
@@ -74,8 +83,8 @@ The 90% fold containment radii span 31.31–61.52° with 94.1% pooled empirical
 coverage. All 95% radii are 90°, covering the entire axial domain and providing
 no useful search-space reduction. These are not individual risk estimates.
 
-See [reproduction instructions](docs/reproduction.md) for results, controls,
-figures, training entry points, and the required external inputs.
+See [training on your data](docs/training-your-data.md) or [reproduction
+instructions](docs/reproduction.md) for the appropriate next step.
 
 ## Source layout
 
