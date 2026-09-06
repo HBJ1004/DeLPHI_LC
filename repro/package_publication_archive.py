@@ -89,6 +89,12 @@ def _git_commit(repository: Path) -> str:
     return commit
 
 
+def _snapshot(files: Iterable[Path]) -> tuple[tuple[str, int, int], ...]:
+    return tuple(
+        (str(path.resolve()), path.stat().st_size, path.stat().st_mtime_ns) for path in files
+    )
+
+
 def _write_tar(source: Path, members: Iterable[Path], root_name: str, output: Path) -> None:
     """Write a byte-reproducible gzip-compressed tar of regular files."""
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
@@ -165,6 +171,14 @@ def build_package(
     if not v1_comparator.is_file() or v1_comparator.is_symlink():
         raise PublicationPackageError("V1 comparator must be a real file")
     _require_clean_git(source_root)
+    source_commit = _git_commit(source_root)
+    artifact_files = _regular_files(artifact_root)
+    synthetic_files = _regular_files(synthetic_data)
+    source_files = _git_files(source_root)
+    artifact_snapshot = _snapshot(artifact_files)
+    synthetic_snapshot = _snapshot(synthetic_files)
+    source_snapshot = _snapshot(source_files)
+    comparator_snapshot = _snapshot((v1_comparator,))
     index = artifact_root / "release" / "archive-index.json"
     verification = verify_publication_archive_index(
         artifact_root=artifact_root,
@@ -182,10 +196,23 @@ def build_package(
         synthetic_archive = staging / ARCHIVE_NAMES["synthetic-data"]
         source_archive = staging / ARCHIVE_NAMES["source"]
         comparator_copy = staging / ARCHIVE_NAMES["v1-comparator"]
-        _write_tar(artifact_root, _regular_files(artifact_root), "artifact-root", artifact_archive)
-        _write_tar(synthetic_data, _regular_files(synthetic_data), "synthetic-data", synthetic_archive)
-        _write_tar(source_root, _git_files(source_root), "delphi-k3-source-v1.0.0", source_archive)
+        _write_tar(artifact_root, artifact_files, "artifact-root", artifact_archive)
+        _write_tar(synthetic_data, synthetic_files, "synthetic-data", synthetic_archive)
+        _write_tar(source_root, source_files, "delphi-k3-source-v1.0.0", source_archive)
         shutil.copyfile(v1_comparator, comparator_copy)
+        _require_clean_git(source_root)
+        if (
+            _git_commit(source_root) != source_commit
+            or _git_files(source_root) != source_files
+            or _regular_files(artifact_root) != artifact_files
+            or _regular_files(synthetic_data) != synthetic_files
+            or _snapshot(artifact_files) != artifact_snapshot
+            or _snapshot(synthetic_files) != synthetic_snapshot
+            or _snapshot(source_files) != source_snapshot
+            or _snapshot((v1_comparator,)) != comparator_snapshot
+            or sha256_file(comparator_copy) != sha256_file(v1_comparator)
+        ):
+            raise PublicationPackageError("a publication source changed during packaging")
         (staging / "VERIFY.md").write_text(_verify_text(), encoding="utf-8")
 
         summary = json.loads(
@@ -201,7 +228,7 @@ def build_package(
         payload: dict[str, object] = {
             "schema": SCHEMA,
             "software_version": __version__,
-            "source_commit": _git_commit(source_root),
+            "source_commit": source_commit,
             "analysis_commit": summary["implementation_commit"],
             "protocol_sha256": summary["protocol_sha256"],
             "archive_index_sha256": verification["archive_index_sha256"],
