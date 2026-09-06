@@ -49,10 +49,12 @@ delphi-k3-predict \
 Add `--device cuda` to use a supported NVIDIA GPU. The output file is created
 only once; choose a new filename for a rerun.
 
-`axes` contains three unit vectors in ecliptic J2000 Cartesian coordinates.
+`axes` contains an unordered set of three unit vectors in ecliptic J2000
+Cartesian coordinates.
 Each is an **axis**, so `(x, y, z)` and `(-x, -y, -z)` describe the same output.
-The `score` values rank compatibility only within the output; they are not
-probabilities or calibrated confidence. `risk_deg` is deliberately `null`.
+The `score` values are internal, unvalidated diagnostics. Do not use their
+order to select a physical pole. They are not probabilities or calibrated
+confidence. `risk_deg` is deliberately `null`.
 
 ## 4. Hand candidates to physical inversion
 
@@ -69,11 +71,11 @@ reduction for new data.
 
 ```python
 from pathlib import Path
-from lc_pipeline.k3.bundle import K3EnsemblePredictor
+from lc_pipeline.k3.bundle import load_predictor
 from lc_pipeline.k3.predict import read_observations
 
 object_id, period, epochs = read_observations(Path("my_asteroid.json"))
-model = K3EnsemblePredictor("k3-oof-fold-0", device="cpu")
+model = load_predictor("k3-oof-fold-0", device="cpu")
 result = model.predict(epochs, known_period=period, object_id=object_id)
 for candidate in result["axes"]:
     print(candidate["axis_xyz"], candidate["score"])

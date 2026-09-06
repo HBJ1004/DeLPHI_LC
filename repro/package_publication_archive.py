@@ -20,9 +20,9 @@ from typing import Iterable
 
 from lc_pipeline.k3.archive import verify_publication_archive_index
 from lc_pipeline.k3.manifest import sha256_file
-from lc_pipeline.version import __version__
 
 SCHEMA = "delphi.k3-publication-package.v1"
+PUBLICATION_PACKAGE_VERSION = "1.0.0"
 ARCHIVE_NAMES = {
     "artifact-root": "delphi-k3-artifacts-v1.0.0.tar.gz",
     "synthetic-data": "delphi-k3-synthetic-data-v1.0.0.tar.gz",
@@ -159,8 +159,6 @@ def build_package(
     output: Path,
 ) -> dict[str, object]:
     """Build and verify one complete, upload-ready publication package."""
-    if __version__ != "1.0.0":
-        raise PublicationPackageError("publication packager requires DeLPHI version 1.0.0")
     artifact_root = artifact_root.resolve()
     synthetic_data = synthetic_data.resolve()
     v1_comparator = v1_comparator.resolve()
@@ -227,7 +225,7 @@ def build_package(
         ]
         payload: dict[str, object] = {
             "schema": SCHEMA,
-            "software_version": __version__,
+            "software_version": PUBLICATION_PACKAGE_VERSION,
             "source_commit": source_commit,
             "analysis_commit": summary["implementation_commit"],
             "protocol_sha256": summary["protocol_sha256"],

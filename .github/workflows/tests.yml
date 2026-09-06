@@ -18,3 +18,28 @@ jobs:
       - run: delphi-k3 renderer-smoke --cases 8
       - run: python -m build
       - run: python -m twine check dist/*
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: >-
+          python -m pip install
+          'numpy==1.26.4'
+          'astropy==6.0.0'
+          'astropy-healpix==1.0.0'
+          'pandas==2.1.0'
+          'pydantic==2.7.0'
+          'PyYAML==6.0'
+          'safetensors==0.4.3'
+          'scipy==1.11.0'
+          'torch==2.2.0'
+          'tqdm==4.66.0'
+          'pytest==8.2.0'
+          'matplotlib==3.8.0'
+          'coverage==7.5.0'
+          'pytest-cov==5.0.0'
+      - run: python -m pip install -e . --no-deps
+      - run: python -m pytest -q tests/test_axial_metrics.py tests/test_k3_inference_api.py tests/test_k3_bundle.py

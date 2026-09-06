@@ -34,15 +34,33 @@ python -m repro.train_k3_custom \
 
 Use `--device cpu` if no CUDA GPU is available. The command validates every
 row, rejects duplicate/overlapping object IDs, writes an atomic `.pt`
-checkpoint and a hash-bound `training-report.json`. Choose a new output
-directory for each run. The five allowed seeds are 17, 42, 137, 777, and 2027.
+checkpoint, a hash-bound `training-report.json`, and an `inference-bundle/`
+directory containing safe `safetensors` weights. Choose a new output directory
+for each run. The five allowed seeds are 17, 42, 137, 777, and 2027.
 
 The custom command starts from a new K3 scorer. It does not fine-tune published
 safetensors bundles: those are five fold ensembles, not one general-purpose
 training checkpoint. The `.pt` checkpoint is for trusted local use only; it
 uses Python pickle and must not be loaded from an untrusted source.
 
-## 3. Evaluate honestly
+## 3. Predict with the trained model
+
+Use the same observation JSON format as the published weights:
+
+```bash
+delphi-k3-predict \
+  --bundle outputs/custom-k3-seed17/inference-bundle \
+  --input data/my_asteroid.json \
+  --output outputs/my_asteroid_prediction.json \
+  --device cuda
+```
+
+Custom output has `calibration: null` and `risk_deg: null`. Its three axes are
+an unordered proposal set. Internal scores are retained for diagnostics but
+have not been validated as a physical-pole ranking. Establish performance on
+your untouched test objects before using the model scientifically.
+
+## 4. Evaluate honestly
 
 For every held-out object, use three K3 axes and report antipode-aware oracle@3
 error only as candidate coverage. The helper is:

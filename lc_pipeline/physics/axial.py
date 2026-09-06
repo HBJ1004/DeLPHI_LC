@@ -76,7 +76,9 @@ def _unit_vectors_numpy(vectors: object, *, name: str) -> np.ndarray:
     if np.any(scales == 0.0):
         raise ValueError(f"{name} contains a zero vector, which has no axis")
     scaled = array / np.expand_dims(scales, axis=-1)
-    norms = np.linalg.vector_norm(scaled, axis=-1)
+    # ``numpy.linalg.vector_norm`` was introduced in NumPy 2.0.  The project
+    # supports NumPy 1.26, where the equivalent API is ``numpy.linalg.norm``.
+    norms = np.linalg.norm(scaled, axis=-1)
     if not np.all(np.isfinite(norms)):
         raise ValueError(f"{name} has a non-finite vector norm")
     return scaled / np.expand_dims(norms, axis=-1)
@@ -105,7 +107,7 @@ def axial_angular_error_deg(first: object, second: object) -> float | np.ndarray
         first_unit, second_unit = np.broadcast_arrays(first_unit, second_unit)
     except ValueError as exc:
         raise ValueError("first and second must have broadcastable leading dimensions") from exc
-    cross_norm = np.linalg.vector_norm(np.cross(first_unit, second_unit, axis=-1), axis=-1)
+    cross_norm = np.linalg.norm(np.cross(first_unit, second_unit, axis=-1), axis=-1)
     dot = np.sum(first_unit * second_unit, axis=-1)
     result = np.rad2deg(np.arctan2(cross_norm, np.abs(dot)))
     return float(result) if result.ndim == 0 else result

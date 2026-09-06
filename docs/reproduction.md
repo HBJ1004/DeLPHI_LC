@@ -3,8 +3,11 @@
 The measured experiment is bound to training commit
 `7874092b81d9456e5bf52fba9adb699b8218046f` and protocol SHA-256
 `84dee816d08a60b7780a6d1d400add16136fa96c0677e84929700cee8bf22a50`.
-An export commit identifies packaging/interface changes separately from training.
-Do not relabel a new training run as the frozen experiment.
+The training commit records the local analysis state but is not publicly
+resolvable on GitHub. The released source at commit `4d1bf1359` regenerates all
+reported numeric results from the archived artifacts. An export commit
+identifies later packaging/interface changes separately from training. Do not
+relabel a new training run as the frozen experiment.
 
 ## Rebuild from frozen predictions (CPU)
 
@@ -29,6 +32,22 @@ and requires exact matches to the frozen versions. It rebuilds the three primary
 plots plus architecture, descriptive error-property, candidate-sky, perturbation
 and containment plots, exporting object-level CSV and checksums. Descriptive
 plots are not additional confirmatory tests or evidence of causal feature effects.
+
+The maintenance revision also exposes quantities already present in the frozen
+per-object evidence:
+
+```bash
+python -m repro.derive_k3_disclosures \
+  --ensemble /path/to/artifact-root/evaluations/real-oof-ensemble.npz \
+  --controls /path/to/delphi-k3-v1-comparator-v1.0.0.npz \
+  --downstream-rows /path/to/artifact-root/downstream/fixed-period/fixed-period-rows.json \
+  --json-output outputs/publication-disclosures.json \
+  --tex-output outputs/k3-disclosures.tex
+```
+
+The command derives the non-learned-control contrasts, fixed-work timing
+decomposition, absolute recovery, completed-in-both sensitivity, and refinement
+effect. It does not retrain a model or rerun inversion.
 
 ## Train or reevaluate
 
@@ -56,11 +75,10 @@ Interrupted CUDA training is not guaranteed to resume bit-exactly; restart a
 definitive seed from epoch zero if exact uninterrupted provenance is required.
 Do not select checkpoints, hyperparameters or folds on test metrics.
 
-V1 comparator orchestration is in `lc_pipeline.publication.runner`, with model
-implementation in `lc_pipeline.v2.baselines`. The frozen V1 contract also requires
-its external cache files. The shipped cache manifest is provenance metadata,
-not the cache itself. `repro/release_spec.yaml` describes the older V2 experiment;
-K3 uses `repro/k3_redesign_spec.yaml` and its own gates.
+The frozen archive includes broader model-selection controls that are not part
+of the K3-only manuscript. Those retained files are provenance evidence, not
+additional current-model claims. K3 uses `repro/k3_redesign_spec.yaml`; older
+specifications remain only to document the analysis lineage.
 
 ## Export trusted evaluated models
 
@@ -78,19 +96,26 @@ optimizer state or pickle checkpoint files.
 
 ## Scope of reproduced analyses
 
-Historical V1 period-estimation results, K sweeps, low-quality catalog analyses,
-and integrated-gradient illustrations are not K3 benchmarks. The primary K3
+Earlier period-estimation results, K sweeps, low-quality catalog analyses, and
+integrated-gradient illustrations are not K3 benchmarks. The primary K3
 scope fixes K=3 and requires a known period. Old ZTF products lacking verified
 per-observation geometry cannot be passed through K3 with geometry replaced by
 zeros. A valid cross-survey study needs real geometry and each object's held-out
 fold; it would be a new experiment, not reproduction of the frozen result.
+
+The catalog manifest's `release_eligible: false` and `release_blockers` fields
+are frozen internal development gates. They record that an immutable third-party
+data URI, independent custodian review, and a prospective temporal test were
+not completed at the analysis freeze; they do not describe whether the GitHub
+software package can be distributed. The prospective temporal cohort was not
+executed and is not a result of the manuscript.
 
 For scientific interpretation and limitations, cite Jo, Ishiguro and Lee, in prep.
 
 ## Verify the complete release package
 
 The versioned GitHub release package is distributed as separate artifact-root,
-synthetic-data, source, and legacy-comparator files so that each component can
+synthetic-data, source, and retained control-archive files so that each component can
 be checked independently. After downloading the complete deposit, run:
 
 ```bash

@@ -9,10 +9,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
+from safetensors.torch import save_file
 
+from lc_pipeline.k3.bundle import K3CustomPredictor, sha256
 from lc_pipeline.k3.config import K3ScoreModelConfig, K3TrainingConfig
 from lc_pipeline.k3.model import CandidateConditionedScorer
-from lc_pipeline.k3.tokenizer import tokenize_epochs
+from lc_pipeline.k3.tokenizer import K3_TOKENIZER_SCHEMA_SHA256, tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, fit_k3
 from lc_pipeline.v2.preprocessing import KnownPeriod, Observation, ObservationEpoch
 
@@ -66,6 +69,56 @@ def read_examples(path: Path) -> tuple[K3TrainingExample, ...]:
     return tuple(rows)
 
 
+def export_inference_bundle(
+    checkpoint_path: Path,
+    output_directory: Path,
+    *,
+    bundle_id: str,
+    training_report_sha256: str,
+) -> Path:
+    """Convert a trusted local checkpoint into a checksum-bound safe bundle."""
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"cannot read trusted local checkpoint: {exc}") from exc
+    if (
+        not isinstance(checkpoint, dict)
+        or checkpoint.get("schema") != "delphi.k3-checkpoint.v2"
+        or checkpoint.get("stage") != "custom"
+    ):
+        raise ValueError("custom checkpoint identity mismatch")
+    try:
+        config = K3ScoreModelConfig(**checkpoint["model_config"])
+        tensors = {
+            key: value.detach().cpu().contiguous()
+            for key, value in checkpoint["model_state_dict"].items()
+        }
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ValueError("custom checkpoint model data are invalid") from exc
+    output_directory.mkdir()
+    weights = output_directory / "custom-model.safetensors"
+    save_file(tensors, str(weights))
+    manifest = {
+        "schema": "delphi.k3-custom-bundle.v1",
+        "bundle_id": bundle_id,
+        "scope": "user-trained model; accuracy and transfer performance require independent validation",
+        "tokenizer_sha256": K3_TOKENIZER_SCHEMA_SHA256,
+        "model_config": config.as_mapping(),
+        "candidate_semantics": "unordered_axial_set",
+        "score_semantics": "unvalidated diagnostic; not a physical-pole ranking",
+        "calibration": None,
+        "member": {
+            "file": weights.name,
+            "sha256": sha256(weights),
+            "source_checkpoint_sha256": sha256(checkpoint_path),
+        },
+        "training_report_sha256": training_report_sha256,
+    }
+    (output_directory / "bundle.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    K3CustomPredictor(output_directory)
+    return output_directory
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train", type=Path, required=True)
@@ -92,8 +145,16 @@ def main(argv: list[str] | None = None) -> int:
         "train_sha256": _sha256(args.train), "validation_sha256": _sha256(args.validation),
         "model_config": model.config.as_mapping(), "training_config": configuration.as_mapping(),
         "result": {**result.__dict__, "history": list(result.history)},
+        "inference_bundle": "inference-bundle",
     }
-    (args.output_directory / "training-report.json").write_text(json.dumps(report, indent=2) + "\n")
+    report_path = args.output_directory / "training-report.json"
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+    export_inference_bundle(
+        args.output_directory / "custom-model.pt",
+        args.output_directory / "inference-bundle",
+        bundle_id=f"custom-k3-seed-{args.seed}",
+        training_report_sha256=_sha256(report_path),
+    )
     print(json.dumps(report, indent=2))
     return 0
 

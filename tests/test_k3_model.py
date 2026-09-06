@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import torch
 
 from lc_pipeline.k3.config import K3ScoreModelConfig
@@ -28,11 +26,12 @@ def _inputs(batch: int = 2, epochs: int = 3, candidates: int = 5):
     return phase, phase_mask, geometry, epoch_features, epoch_mask, candidate
 
 
-def _rotation_z(angle: float) -> torch.Tensor:
-    cosine, sine = math.cos(angle), math.sin(angle)
-    return torch.tensor(
-        ((cosine, -sine, 0.0), (sine, cosine, 0.0), (0.0, 0.0, 1.0))
-    )
+def _random_rotation(seed: int) -> torch.Tensor:
+    generator = torch.Generator().manual_seed(seed)
+    orthogonal, _ = torch.linalg.qr(torch.randn(3, 3, generator=generator))
+    if torch.linalg.det(orthogonal) < 0:
+        orthogonal[:, 0] *= -1
+    return orthogonal
 
 
 def test_scores_are_antipode_and_shared_rotation_invariant() -> None:
@@ -42,7 +41,8 @@ def test_scores_are_antipode_and_shared_rotation_invariant() -> None:
     with torch.no_grad():
         score = model(*values).scores
         antipode = model(*values[:-1], -values[-1]).scores
-        rotation = _rotation_z(0.73)
+        # A generic SO(3) matrix exercises all axes, not only an azimuthal turn.
+        rotation = _random_rotation(731)
         geometry = values[2].clone()
         geometry[..., :3] = geometry[..., :3] @ rotation.T
         geometry[..., 4:7] = geometry[..., 4:7] @ rotation.T

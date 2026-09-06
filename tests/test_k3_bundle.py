@@ -14,6 +14,7 @@ from lc_pipeline.k3.cli import _smoke_geometry
 from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro.train_k3_custom import export_inference_bundle
 
 
 @pytest.fixture
@@ -57,6 +58,52 @@ def test_known_training_object_is_rejected(ensemble):
     with pytest.raises(ValueError, match="held-out"):
         predictor.predict(_smoke_geometry(), known_period=KnownPeriod(6., "test"),
                           object_id=metadata["object_roles"]["train_ids"][0])
+
+
+@pytest.fixture
+def custom_bundle(tmp_path):
+    config = K3ScoreModelConfig()
+    model = CandidateConditionedScorer(config)
+    checkpoint = tmp_path / "custom-model.pt"
+    torch_data = {
+        "schema": "delphi.k3-checkpoint.v2",
+        "stage": "custom",
+        "model_config": config.as_mapping(),
+        "model_state_dict": model.state_dict(),
+    }
+    import torch
+
+    torch.save(torch_data, checkpoint)
+    root = tmp_path / "inference-bundle"
+    export_inference_bundle(
+        checkpoint,
+        root,
+        bundle_id="custom-test",
+        training_report_sha256="0" * 64,
+    )
+    return root
+
+
+def test_custom_bundle_predicts_without_calibration(custom_bundle, monkeypatch):
+    predictor = bundle.load_predictor(custom_bundle)
+    monkeypatch.setattr(bundle, "score_axial_grid", lambda *args, **kwargs: np.linspace(0, 1, 6144))
+    monkeypatch.setattr(bundle, "refine_axes", lambda model, inputs, axes: (axes, np.ones(3)))
+    result = predictor.predict(
+        _smoke_geometry(), known_period=KnownPeriod(6.0, "test"), object_id="new-object"
+    )
+    assert result["schema"] == "delphi.k3-custom-prediction.v1"
+    assert result["calibration"] is None
+    assert result["risk_deg"] is None
+    assert result["candidate_semantics"] == "unordered axial set"
+    assert "do not use" in result["score_semantics"]
+
+
+def test_tampered_custom_bundle_is_rejected(custom_bundle):
+    data = json.loads((custom_bundle / "bundle.json").read_text())
+    data["member"]["sha256"] = "0" * 64
+    (custom_bundle / "bundle.json").write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="checksum"):
+        bundle.load_predictor(custom_bundle)
 
 
 @pytest.mark.parametrize("mutation", ["seed", "protocol", "split", "roles", "checksum", "path"])

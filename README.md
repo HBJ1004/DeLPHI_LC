@@ -6,11 +6,10 @@ observing geometry, and an externally supplied rotation period. It scores
 refines their directions. Each axis represents both signs; it is not a unique
 directed pole.
 
-This repository contains the DeLPHI v1.0 implementation of the K3 model.
-Here, “v1.0” is the software release and “K3” is the candidate-generation
-architecture; neither term refers to the legacy V1 comparator used in the
-manuscript. For scientific methods and interpretation, cite **Jo, Ishiguro and
-Lee, in prep.** and the versioned v1.0 GitHub release.
+This repository contains the DeLPHI K3 candidate-generation model. “K3” means
+that the model returns three axes; a software release number such as v1.0.1 is
+only a package version. For scientific methods and interpretation, cite **Jo,
+Ishiguro and Lee, in prep.** and the versioned GitHub release.
 
 ## Install and check
 
@@ -78,9 +77,10 @@ and does not select a pole at deployment.
 | Objects within 20° | 74.1% |
 
 In the matched, fixed-period convex-inversion benchmark (six starts per arm,
-50 iterations per start), baseline/guided wall time was **0.947**: guided execution
-was approximately **5.6% slower**, including neural inference. No inversion
-speedup or order-of-magnitude acceleration is demonstrated. Archived model
+50 iterations per start), both arms performed the same 43,200 inversion
+iterations. Baseline/guided wall time was **0.947**: guided execution was
+approximately **5.6% slower**, including neural inference. This fixed-work
+design cannot demonstrate an inversion speedup. Archived model
 scoring/refinement took a median 0.509 s/object; this excludes data loading,
 tokenization, and model loading and is not end-to-end deployment latency.
 
@@ -91,16 +91,22 @@ no useful search-space reduction. These are not individual risk estimates.
 See [training on your data](docs/training-your-data.md) or [reproduction
 instructions](docs/reproduction.md) for the appropriate next step. The GitHub
 release is the public distribution of record; it is versioned, but it is not a
-DOI-backed preservation archive.
+DOI-backed preservation archive. Maintenance changes are listed in the
+[release notes](CHANGELOG.md).
 
 ## Source layout
 
 - `lc_pipeline/k3/`: tokenizer, scorer, training, ensemble inference and evaluation.
-- `lc_pipeline/v2/`: shared data/geometry utilities and legacy V1 comparator implementation;
-  the directory name does not designate a second released model.
+- `lc_pipeline/v2/`: shared data and geometry utilities retained for compatibility;
+  the directory name does not designate a separately released model.
 - `lc_pipeline/publication/`: benchmark contracts and result aggregation.
 - `repro/`: machine-readable frozen specifications, catalog/splits and reproduction tools.
 - `tests/`: numerical, integrity, and interface regression tests.
 
 The source license does not grant rights to third-party photometry or inversion
 software. Obtain those from their providers under their respective terms.
+
+The release parity threshold of 0.001° was established on the reference CUDA
+path. A separate CPU audit reproduced the aggregate mean within 0.004° and the
+20°/30° fractions exactly, while individual objects differed by as much as
+0.80°. Cross-device bitwise identity is therefore not promised.

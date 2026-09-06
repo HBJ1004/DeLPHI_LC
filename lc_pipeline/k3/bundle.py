@@ -1,11 +1,11 @@
-"""Portable evaluated ensembles using JSON metadata and safetensors weights."""
+"""Portable evaluated and custom predictors with safe tensor weights."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
-from typing import Sequence
+from typing import Protocol, Sequence
 
 import numpy as np
 import torch
@@ -14,7 +14,7 @@ from safetensors.torch import load_file
 from ..v2.preprocessing import KnownPeriod, ObservationEpoch
 from .config import K3ScoreModelConfig
 from .evaluation import ensemble_score_grids, modes_from_score_grid
-from .inference import refine_ensemble_axes, score_axial_grid
+from .inference import refine_axes, refine_ensemble_axes, score_axial_grid
 from .model import CandidateConditionedScorer
 from .protocol import K3_PROTOCOL_SHA256, repository_root
 from .tokenizer import K3_TOKENIZER_SCHEMA_SHA256, pad_tokenized_objects, tokenize_epochs
@@ -25,6 +25,46 @@ SEEDS = (17, 42, 137, 777, 2027)
 def sha256(path: Path) -> str:
     with path.open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+class K3Predictor(Protocol):
+    """Common interface implemented by published and custom bundles."""
+
+    def predict(
+        self,
+        epochs: Sequence[ObservationEpoch],
+        *,
+        known_period: KnownPeriod,
+        object_id: str,
+    ) -> dict: ...
+
+
+def _model_inputs(
+    epochs: Sequence[ObservationEpoch], known_period: KnownPeriod, device: torch.device
+) -> dict[str, torch.Tensor]:
+    tokenized = tokenize_epochs(epochs, known_period=known_period)
+    arrays = pad_tokenized_objects((tokenized,))
+    return {
+        key: torch.from_numpy(arrays[key]).to(device)
+        for key in (
+            "phase_features",
+            "phase_mask",
+            "geometry_features",
+            "epoch_features",
+            "epoch_mask",
+        )
+    }
+
+
+def _checked_weight_path(root: Path, member: dict) -> Path:
+    try:
+        path = (root / member["file"]).resolve()
+        expected_sha256 = member["sha256"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError("bundle weight metadata is incomplete") from exc
+    if path.parent != root or sha256(path) != expected_sha256:
+        raise ValueError("weight file path or checksum mismatch")
+    return path
 
 
 class K3EnsemblePredictor:
@@ -68,9 +108,7 @@ class K3EnsemblePredictor:
         self.device = torch.device(device)
         self.models = []
         for member in members:
-            path = (root / member["file"]).resolve()
-            if path.parent != root or sha256(path) != member["sha256"]:
-                raise ValueError("weight file path or checksum mismatch")
+            path = _checked_weight_path(root, member)
             model = CandidateConditionedScorer(config)
             model.load_state_dict(load_file(str(path)), strict=True)
             self.models.append(model.to(self.device).eval())
@@ -83,10 +121,7 @@ class K3EnsemblePredictor:
         if any(object_id in roles[role] for role in
                ("train_ids", "validation_ids", "calibration_ids")):
             raise ValueError("known benchmark object requires its held-out fold bundle")
-        tokenized = tokenize_epochs(epochs, known_period=known_period)
-        arrays = pad_tokenized_objects((tokenized,))
-        inputs = {key: torch.from_numpy(arrays[key]).to(self.device) for key in
-                  ("phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask")}
+        inputs = _model_inputs(epochs, known_period, self.device)
         # Match the chunk size used to generate the archived deployed ensemble.
         maps = [score_axial_grid(model, inputs, chunk_size=1024) for model in self.models]
         mean = ensemble_score_grids(np.stack(maps)[:, None, :])[0]
@@ -106,3 +141,85 @@ class K3EnsemblePredictor:
                             "scope": "archived DAMIT fold; transfer coverage is not established"},
             "risk_deg": None,
         }
+
+
+class K3CustomPredictor:
+    """Load one user-trained scorer without claiming benchmark calibration."""
+
+    def __init__(self, directory: str | Path, *, device: str = "cpu") -> None:
+        root = Path(directory).resolve()
+        try:
+            self.manifest = json.loads((root / "bundle.json").read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"cannot read custom bundle metadata: {exc}") from exc
+        data = self.manifest
+        if (
+            data.get("schema") != "delphi.k3-custom-bundle.v1"
+            or data.get("tokenizer_sha256") != K3_TOKENIZER_SCHEMA_SHA256
+            or data.get("calibration") is not None
+            or data.get("candidate_semantics") != "unordered_axial_set"
+        ):
+            raise ValueError("incompatible custom bundle identity or semantics")
+        if not isinstance(data.get("bundle_id"), str) or not data["bundle_id"].strip():
+            raise ValueError("custom bundle requires a nonempty bundle_id")
+        try:
+            config = K3ScoreModelConfig(**data["model_config"])
+            member = data["member"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("invalid custom model configuration") from exc
+        path = _checked_weight_path(root, member)
+        self.device = torch.device(device)
+        self.model = CandidateConditionedScorer(config)
+        self.model.load_state_dict(load_file(str(path)), strict=True)
+        self.model.to(self.device).eval()
+
+    def predict(
+        self,
+        epochs: Sequence[ObservationEpoch],
+        *,
+        known_period: KnownPeriod,
+        object_id: str,
+    ) -> dict:
+        if not isinstance(object_id, str) or not object_id.strip():
+            raise ValueError("object_id is required")
+        inputs = _model_inputs(epochs, known_period, self.device)
+        score_map = score_axial_grid(self.model, inputs, chunk_size=1024)
+        modes = modes_from_score_grid(score_map)
+        axes, scores = refine_axes(
+            self.model, inputs, np.asarray([mode.axis_xyz for mode in modes])
+        )
+        return {
+            "schema": "delphi.k3-custom-prediction.v1",
+            "status": "ok",
+            "object_id": object_id,
+            "bundle_id": self.manifest["bundle_id"],
+            "tokenizer_sha256": K3_TOKENIZER_SCHEMA_SHA256,
+            "period_provenance": known_period.provenance,
+            "candidate_semantics": "unordered axial set",
+            "score_semantics": "unvalidated diagnostic; do not use to select a physical pole",
+            "axes": [
+                {
+                    "axis_xyz": axis.tolist(),
+                    "score": float(score),
+                    "grid_index": int(mode.grid_index),
+                }
+                for axis, score, mode in zip(axes, scores, modes, strict=True)
+            ],
+            "calibration": None,
+            "risk_deg": None,
+        }
+
+
+def load_predictor(directory: str | Path, *, device: str = "cpu") -> K3Predictor:
+    """Load a published ensemble or a custom bundle from its declared schema."""
+    manifest_path = Path(directory).resolve() / "bundle.json"
+    try:
+        data = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read bundle metadata: {exc}") from exc
+    schema = data.get("schema") if isinstance(data, dict) else None
+    if schema == "delphi.k3-ensemble-bundle.v1":
+        return K3EnsemblePredictor(directory, device=device)
+    if schema == "delphi.k3-custom-bundle.v1":
+        return K3CustomPredictor(directory, device=device)
+    raise ValueError(f"unsupported bundle schema: {schema!r}")

@@ -5,7 +5,7 @@ are read from immutable, schema-validated release manifests so documentation
 cannot drift from per-object evidence.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 
 def get_version() -> str:
