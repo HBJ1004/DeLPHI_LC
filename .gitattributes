@@ -1,0 +1,5 @@
+lc_pipeline/**/*.py text eol=lf
+tests/**/*.py text eol=lf
+*.md text eol=lf
+repro/** -text
+artifacts/** -text
