@@ -47,7 +47,7 @@ conventions, flux conversion, epoch grouping, and pole labels with examples.
 ## Use published weights
 
 Obtain an evaluated `k3-oof-fold-N.tar.gz` bundle and its `SHA256SUMS` from the
-[v1.0 release assets](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0).
+[v1.0.0 scientific-evidence release assets](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0).
 Model weights are not stored in the Git
 source tree. Check the download before extraction:
 

@@ -25,8 +25,9 @@ python -m json.tool my_asteroid.json >/dev/null
 
 ## 2. Download and check a fold bundle
 
-Download one `k3-oof-fold-N.tar.gz` and `SHA256SUMS` from the project’s GitHub
-release assets. Weights are intentionally not in the Git source tree.
+Download one `k3-oof-fold-N.tar.gz` and `SHA256SUMS` from the
+[v1.0.0 scientific-evidence release](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0).
+Weights are intentionally not in the Git source tree.
 
 ```bash
 sha256sum --check SHA256SUMS --ignore-missing
