@@ -1677,6 +1677,7 @@ def _load_reference_targets(
     if sha256_file(catalog_path) != expected_hash:
         raise DownstreamBenchmarkError("reference catalog does not match the frozen study hash")
     targets: dict[str, np.ndarray] = {}
+    requested_ids = set(object_ids)
     try:
         lines = Path(catalog_path).read_text(encoding="utf-8").splitlines()
         for line in lines:
@@ -1684,6 +1685,8 @@ def _load_reference_targets(
                 continue
             row = json.loads(line)
             object_id = str(row["object_id"])
+            if object_id not in requested_ids:
+                continue
             if object_id in targets:
                 raise DownstreamBenchmarkError("reference catalog contains duplicate objects")
             values = np.asarray(

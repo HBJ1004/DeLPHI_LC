@@ -17,6 +17,7 @@ from lc_pipeline.k3.convergence_study import (
     SUBSET_SCHEMA,
     _claim_locked_execution,
     _expected_cohorts,
+    _load_reference_targets,
     _paired_binary_noninferiority,
     _paired_rms_ratio,
     _read_spec,
@@ -28,6 +29,27 @@ from lc_pipeline.k3.convergence_study import (
 )
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
 from lc_pipeline.v2.data import sha256_file
+
+
+def test_reference_loader_ignores_noncohort_quarantined_rows(tmp_path: Path) -> None:
+    catalog = tmp_path / "catalog.jsonl"
+    rows = [
+        {"object_id": "wanted", "solutions": [{"vector": [1.0, 0.0, 0.0]}]},
+        {"object_id": "quarantined", "solutions": []},
+    ]
+    catalog.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    targets = _load_reference_targets(
+        catalog,
+        expected_hash=sha256_file(catalog),
+        object_ids=["wanted"],
+    )
+
+    assert set(targets) == {"wanted"}
+    np.testing.assert_array_equal(targets["wanted"], [[1.0, 0.0, 0.0]])
 
 
 def _frozen_spec() -> dict[str, object]:
