@@ -38,7 +38,7 @@ TEMPORAL_PREPARED_MANIFEST_SCHEMA = "delphi.k3-temporal-prepared-manifest.v1"
 
 
 class TemporalDAMITError(ValueError):
-    """Raised when the strict-temporal source or separation contract fails."""
+    """Raised when the post-cutoff DAMIT-record separation contract fails."""
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -83,13 +83,13 @@ def _strict_identities(spec_path: Path) -> tuple[int, ...]:
             int(str(value).removeprefix("asteroid_")) for value in section["identities"]
         )
     except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as exc:
-        raise TemporalDAMITError(f"cannot read strict-temporal study policy: {exc}") from exc
+        raise TemporalDAMITError(f"cannot read post-cutoff DAMIT-record policy: {exc}") from exc
     if identities != (49, 279, 366):
-        raise TemporalDAMITError("strict-temporal identities must remain 49, 279, and 366")
+        raise TemporalDAMITError("post-cutoff identities must remain 49, 279, and 366")
     try:
         datetime.fromisoformat(cutoff.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise TemporalDAMITError("strict-temporal cutoff is not ISO-8601") from exc
+        raise TemporalDAMITError("post-cutoff record date is not ISO-8601") from exc
     return identities
 
 
@@ -195,7 +195,7 @@ def fetch_temporal_damit_snapshot(
             created = _source_datetime(matches[0]["created"], f"asteroid {number} creation")
             if created <= cutoff:
                 raise TemporalDAMITError(
-                    f"asteroid_{number} is not strictly temporal: {created.isoformat()}"
+                    f"asteroid_{number} DAMIT record is not after cutoff: {created.isoformat()}"
                 )
             asteroids[number] = matches[0]
 
@@ -440,7 +440,7 @@ def prepare_temporal_damit_inputs(
             payload: dict[str, object] = {
                 "schema": EXTERNAL_PREPARED_SCHEMA,
                 "object_id": object_id,
-                "external_role": "strict_temporal_external_case_series",
+                "external_role": "post_cutoff_damit_record_case_series",
                 "known_period_hours": period,
                 "period_provenance": (
                     "official DAMIT model-table period; lowest model ID with quality flag >=3; "

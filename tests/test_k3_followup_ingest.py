@@ -136,7 +136,7 @@ def _fake_horizons(url: str, _timeout: float) -> tuple[bytes, str, str, str]:
     )
     payload = {
         "signature": {"source": "NASA/JPL Horizons API", "version": "test"},
-        "result": f"header\n$$SOE\n{rows}\n$$EOE\nfooter",
+        "result": f"Target body name: 1 Ceres {{source: test}}\n$$SOE\n{rows}\n$$EOE\nfooter",
     }
     return json.dumps(payload).encode(), url, "Thu, 10 Sep 2026 00:00:00 GMT", "application/json"
 
@@ -147,7 +147,10 @@ def test_horizons_parser_accepts_observed_fractional_second_jd_rounding():
     payload = json.dumps(
         {
             "signature": {"source": "NASA/JPL Horizons API", "version": "test"},
-            "result": f"$$SOE\n{returned:.15f}, A.D. fake, 1, 2, 3,\n$$EOE",
+            "result": (
+                "Target body name: 1 Ceres {source: test}\n"
+                f"$$SOE\n{returned:.15f}, A.D. fake, 1, 2, 3,\n$$EOE"
+            ),
         }
     ).encode()
 
@@ -156,7 +159,10 @@ def test_horizons_parser_accepts_observed_fractional_second_jd_rounding():
     shifted = json.dumps(
         {
             "signature": {"source": "NASA/JPL Horizons API", "version": "test"},
-            "result": f"$$SOE\n{requested + 3e-9:.15f}, A.D. fake, 1, 2, 3,\n$$EOE",
+            "result": (
+                "Target body name: 1 Ceres {source: test}\n"
+                f"$$SOE\n{requested + 3e-9:.15f}, A.D. fake, 1, 2, 3,\n$$EOE"
+            ),
         }
     ).encode()
     with pytest.raises(ZTFExternalError, match="epoch mismatch"):

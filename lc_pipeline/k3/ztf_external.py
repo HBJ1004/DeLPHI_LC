@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -35,6 +36,7 @@ FINK_INGEST_MANIFEST_SCHEMA = "delphi.k3-fink-ingest-manifest.v1"
 HORIZONS_API_URL = "https://ssd.jpl.nasa.gov/api/horizons.api"
 HORIZONS_MANIFEST_SCHEMA = "delphi.k3-horizons-directory-manifest.v1"
 HORIZONS_PLAN_SCHEMA = "delphi.k3-horizons-fetch-plan.v1"
+HORIZONS_IDENTITY_AUDIT_SCHEMA = "delphi.k3-horizons-identity-audit.v1"
 HORIZONS_JD_TOLERANCE_DAYS = 2e-9
 HttpFetcher = Callable[[str, float], tuple[bytes, str, str | None, str | None]]
 
@@ -462,6 +464,63 @@ def _parse_horizons_vectors(payload: bytes, expected_jds: Sequence[float]) -> tu
     return tuple(parsed)
 
 
+def _parse_horizons_target_identity(payload: bytes) -> dict[str, object]:
+    """Extract the resolved numbered target from an official Horizons response."""
+    try:
+        document = json.loads(payload)
+        result = str(document["result"])
+    except (UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ZTFExternalError(f"invalid JPL Horizons JSON response: {exc}") from exc
+    match = re.search(r"^Target body name:\s*(\d+)\s+(.+?)\s+\{source:", result, re.MULTILINE)
+    if match is None:
+        raise ZTFExternalError("JPL Horizons response lacks a numbered target identity")
+    number = int(match.group(1))
+    descriptor = match.group(2).strip()
+    primary_name = re.sub(r"\s+\([^()]*\)\s*$", "", descriptor).strip()
+    if number <= 0 or not primary_name:
+        raise ZTFExternalError("JPL Horizons returned an invalid target identity")
+    return {
+        "asteroid_number": number,
+        "primary_name": primary_name,
+        "target_descriptor": descriptor,
+    }
+
+
+def _validate_resolved_target(
+    normalized: Mapping[str, object], identities: Sequence[Mapping[str, object]]
+) -> dict[str, object]:
+    object_id = normalized.get("object_id")
+    number = _number_from_object_id(object_id)
+    if not identities:
+        raise ZTFExternalError(f"no Horizons target identities for {object_id}")
+    first = dict(identities[0])
+    if any(dict(identity) != first for identity in identities[1:]):
+        raise ZTFExternalError(f"inconsistent Horizons target identities for {object_id}")
+    if first.get("asteroid_number") != number:
+        raise ZTFExternalError(
+            f"Horizons target mismatch for {object_id}: {first.get('asteroid_number')}"
+        )
+    primary_name = str(first["primary_name"])
+    rows = normalized.get("rows")
+    if not isinstance(rows, list):
+        raise ZTFExternalError(f"normalized Fink object has no rows: {object_id}")
+    named = {
+        str(row["fink_ssnamenr"]).strip()
+        for row in rows
+        if isinstance(row, Mapping)
+        and isinstance(row.get("fink_ssnamenr"), str)
+        and not str(row["fink_ssnamenr"]).strip().isdecimal()
+    }
+    if any(value.casefold() != primary_name.casefold() for value in named):
+        raise ZTFExternalError(
+            f"Fink named designation does not match Horizons for {object_id}: "
+            f"{sorted(named)!r} versus {primary_name!r}"
+        )
+    first["fink_named_designations"] = sorted(named, key=str.casefold)
+    first["validation_authority"] = "JPL Horizons resolved Target body name"
+    return first
+
+
 def fetch_horizons_cache(
     *,
     normalized_object_path: str | Path,
@@ -501,6 +560,7 @@ def fetch_horizons_cache(
     active_fetcher = fetcher or _default_http_fetcher
     raw_manifest: list[dict[str, object]] = []
     merged_rows: list[dict[str, object]] = []
+    resolved_identities: list[dict[str, object]] = []
     try:
         batches = [jds[index : index + batch_size] for index in range(0, len(jds), batch_size)]
         request_index = 0
@@ -518,6 +578,7 @@ def fetch_horizons_cache(
                 raw_path.parent.mkdir(parents=True, exist_ok=True)
                 raw_path.write_bytes(body)
                 vectors[role] = _parse_horizons_vectors(body, batch)
+                resolved_identities.append(_parse_horizons_target_identity(body))
                 raw_manifest.append(
                     {
                         "batch": batch_index,
@@ -546,11 +607,13 @@ def fetch_horizons_cache(
                         "asteroid_to_earth_ecliptic_j2000_au": earth,
                     }
                 )
+        resolved_target = _validate_resolved_target(normalized, resolved_identities)
         metadata: dict[str, object] = {
             "endpoint": HORIZONS_API_URL,
             "api": "JPL Horizons query-parameter API",
             "asteroid_number": asteroid_number,
             "object_id": object_id,
+            "resolved_target_identity": resolved_target,
             "normalized_object_sha256": _sha256_file(source_path),
             "query_policy": {
                 "target": f"{asteroid_number};",
@@ -767,6 +830,121 @@ def plan_horizons_directory(
     }
 
 
+def _safe_child(root: Path, relative: object, role: str) -> Path:
+    if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ZTFExternalError(f"unsafe {role} path")
+    value = (root / relative).resolve()
+    try:
+        value.relative_to(root.resolve())
+    except ValueError as exc:
+        raise ZTFExternalError(f"{role} path escapes its root") from exc
+    return value
+
+
+def audit_horizons_directory_identities(
+    *,
+    normalized_manifest_path: str | Path,
+    horizons_manifest_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, object]:
+    """Bind every Fink designation to the identity resolved by raw Horizons bytes."""
+    normalized_path = Path(normalized_manifest_path)
+    horizons_path = Path(horizons_manifest_path)
+    destination = Path(output_path)
+    if destination.exists():
+        raise ZTFExternalError("Horizons identity-audit output must not already exist")
+    try:
+        normalized_manifest = json.loads(normalized_path.read_text(encoding="utf-8"))
+        horizons_manifest = json.loads(horizons_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ZTFExternalError(f"cannot load Horizons audit input: {exc}") from exc
+    if normalized_manifest.get("schema") != FINK_INGEST_MANIFEST_SCHEMA:
+        raise ZTFExternalError("normalized Fink manifest schema mismatch")
+    if horizons_manifest.get("schema") != HORIZONS_MANIFEST_SCHEMA:
+        raise ZTFExternalError("Horizons directory manifest schema mismatch")
+    if horizons_manifest.get("normalized_manifest_sha256") != _sha256_file(normalized_path):
+        raise ZTFExternalError("Horizons manifest is not bound to the normalized Fink manifest")
+    normalized_rows = {
+        str(row["object_id"]): row
+        for row in normalized_manifest.get("objects", [])
+        if row.get("status") == "ready"
+    }
+    horizons_rows = {
+        str(row["object_id"]): row for row in horizons_manifest.get("objects", [])
+    }
+    if (
+        len(normalized_rows) != 169
+        or len(horizons_rows) != 169
+        or set(normalized_rows) != set(horizons_rows)
+    ):
+        raise ZTFExternalError("identity audit requires the same complete 169-object cohort")
+    horizons_root = horizons_path.parent
+    audited: list[dict[str, object]] = []
+    for object_id in sorted(normalized_rows, key=_number_from_object_id):
+        normalized_row = normalized_rows[object_id]
+        horizons_row = horizons_rows[object_id]
+        object_path = _safe_child(
+            normalized_path.parent, normalized_row["normalized_path"], "normalized object"
+        )
+        if _sha256_file(object_path) != normalized_row["normalized_sha256"]:
+            raise ZTFExternalError(f"normalized object hash mismatch: {object_id}")
+        normalized = json.loads(object_path.read_text(encoding="utf-8"))
+        cache_path = _safe_child(horizons_root, horizons_row["cache_path"], "Horizons cache")
+        if _sha256_file(cache_path) != horizons_row["cache_sha256"]:
+            raise ZTFExternalError(f"Horizons cache hash mismatch: {object_id}")
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        parsed = HorizonsCache.from_mapping(cache)
+        if parsed.query_metadata.get("normalized_object_sha256") != normalized_row["normalized_sha256"]:
+            raise ZTFExternalError(f"Horizons cache source mismatch: {object_id}")
+        raw_records = parsed.query_metadata.get("raw_responses")
+        if not isinstance(raw_records, list) or not raw_records:
+            raise ZTFExternalError(f"Horizons cache lacks raw responses: {object_id}")
+        identities: list[dict[str, object]] = []
+        evidence: list[dict[str, object]] = []
+        for raw_record in raw_records:
+            if not isinstance(raw_record, Mapping):
+                raise ZTFExternalError(f"invalid raw Horizons record: {object_id}")
+            raw_path = _safe_child(cache_path.parent, raw_record.get("path"), "raw response")
+            raw_bytes = raw_path.read_bytes()
+            raw_hash = hashlib.sha256(raw_bytes).hexdigest()
+            if raw_hash != raw_record.get("sha256") or len(raw_bytes) != raw_record.get("bytes"):
+                raise ZTFExternalError(f"raw Horizons response mismatch: {object_id}")
+            identities.append(_parse_horizons_target_identity(raw_bytes))
+            evidence.append(
+                {
+                    "batch": int(raw_record["batch"]),
+                    "role": str(raw_record["role"]),
+                    "sha256": raw_hash,
+                }
+            )
+        target = _validate_resolved_target(normalized, identities)
+        embedded = parsed.query_metadata.get("resolved_target_identity")
+        if embedded is not None and embedded != target:
+            raise ZTFExternalError(f"embedded Horizons target identity mismatch: {object_id}")
+        audited.append(
+            {
+                "object_id": object_id,
+                "normalized_sha256": normalized_row["normalized_sha256"],
+                "cache_path": horizons_row["cache_path"],
+                "cache_sha256": horizons_row["cache_sha256"],
+                "row_count": int(horizons_row["row_count"]),
+                "resolved_target_identity": target,
+                "raw_identity_evidence": evidence,
+            }
+        )
+    result: dict[str, object] = {
+        "schema": HORIZONS_IDENTITY_AUDIT_SCHEMA,
+        "source": "retained official JPL Horizons API response bytes",
+        "selection_uses_labels": False,
+        "normalized_manifest_sha256": _sha256_file(normalized_path),
+        "horizons_manifest_sha256": _sha256_file(horizons_path),
+        "object_count": len(audited),
+        "objects": audited,
+    }
+    _write_new_json(destination, result)
+    return result
+
+
 def fink_rows_to_epoch(
     object_id: str, rows: Sequence[Mapping[str, object]], horizons_cache: Mapping[str, object], *,
     norm_relative_tolerance: float = .02, phase_tolerance_deg: float = 2.0,
@@ -839,4 +1017,4 @@ def fink_rows_to_epoch(
 def prepared_ztf_object(object_id: str, rows: Sequence[Mapping[str, object]], horizons_cache: Mapping[str, object], *, known_period_hours: float, period_provenance: str) -> dict[str, object]:
     """Create a label-free frozen external object document; never queries a service."""
     epoch = fink_rows_to_epoch(object_id, rows, horizons_cache)
-    return {"schema": "delphi.k3-ztf-prepared.v1", "object_id": object_id, "known_period_hours": known_period_hours, "period_provenance": period_provenance, "epochs": [{"epoch_id": epoch.epoch_id, "observations": [observation.__dict__ for observation in epoch.observations]}], "horizons_query_metadata_sha256": HorizonsCache.from_mapping(horizons_cache).query_metadata_sha256, "horizons_rows_sha256": HorizonsCache.from_mapping(horizons_cache).rows_sha256}
+    return {"schema": "delphi.k3-ztf-prepared.v1", "object_id": object_id, "known_period_hours": known_period_hours, "period_provenance": period_provenance, "epochs": [{"epoch_id": epoch.epoch_id, "observations": [observation.__dict__ for observation in epoch.observations]}], "observer_geometry": {"target": "Earth center (Horizons 500@399)", "approximation": "geocenter substitutes for the individual ZTF observatory position"}, "horizons_query_metadata_sha256": HorizonsCache.from_mapping(horizons_cache).query_metadata_sha256, "horizons_rows_sha256": HorizonsCache.from_mapping(horizons_cache).rows_sha256}

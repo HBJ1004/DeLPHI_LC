@@ -292,9 +292,14 @@ def _parser() -> argparse.ArgumentParser:
     external_predict = commands.add_parser("predict-ztf-external")
     external_predict.add_argument("--prepared", type=Path, required=True)
     external_predict.add_argument("--model-directory", type=Path, required=True)
+    external_predict.add_argument("--model-manifest", type=Path, required=True)
     external_predict.add_argument("--splits", type=Path, required=True)
     external_predict.add_argument("--output", type=Path, required=True)
-    external_predict.add_argument("--policy", choices=("existing_identity", "strict_temporal_new"), required=True)
+    external_predict.add_argument(
+        "--policy",
+        choices=("existing_identity", "post_cutoff_damit_record"),
+        required=True,
+    )
     external_predict.add_argument("--device", default="cpu")
     external_score = commands.add_parser("score-ztf-external")
     external_score.add_argument("--prediction", type=Path, required=True)
@@ -668,7 +673,15 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "predict-ztf-external":
         from .ztf_prediction import predict_prepared_ztf_object
 
-        result = predict_prepared_ztf_object(arguments.prepared, arguments.model_directory, arguments.splits, arguments.output, policy=arguments.policy, device=arguments.device)
+        result = predict_prepared_ztf_object(
+            arguments.prepared,
+            arguments.model_directory,
+            arguments.splits,
+            arguments.output,
+            model_manifest_path=arguments.model_manifest,
+            policy=arguments.policy,
+            device=arguments.device,
+        )
         print(json.dumps(result, sort_keys=True))
         return 0
     if arguments.command == "score-ztf-external":

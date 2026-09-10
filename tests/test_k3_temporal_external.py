@@ -165,7 +165,7 @@ def test_temporal_fetch_fails_closed_when_an_object_is_not_after_cutoff(tmp_path
         return responses[url], url, "Thu, 10 Sep 2026 00:00:00 GMT", "text/plain"
 
     output = tmp_path / "snapshot"
-    with pytest.raises(TemporalDAMITError, match="not strictly temporal"):
+    with pytest.raises(TemporalDAMITError, match="not after cutoff"):
         fetch_temporal_damit_snapshot(
             study_spec_path=_spec(tmp_path / "spec.yaml"),
             output_directory=output,

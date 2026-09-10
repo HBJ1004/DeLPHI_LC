@@ -49,11 +49,49 @@ retained for every batch, with URLs, HTTP dates, content types, and SHA-256
 hashes. The exact query requests uncorrected ecliptic-J2000 vectors at each
 retained Fink `i:jd`. Horizons returns center-to-asteroid vectors; the cache
 records their deterministic negation to asteroid-to-Sun and asteroid-to-Earth.
+The observer vector uses the Earth center (`500@399`), not each exposure's ZTF
+observatory location. This geocentric approximation is explicit in every
+prepared object and must be disclosed when interpreting cross-survey results.
 
-## Strict-temporal DAMIT objects
+Once all 169 cache directories and the final Horizons manifest exist, bind the
+raw Horizons target headers to the Fink numeric/name designations and export
+the externally supplied period only:
 
-The frozen case series contains asteroids 49, 279, and 366, whose official DAMIT
-records were created after the 2025-06-10 cutoff. Fetch a raw snapshot from the
+```bash
+python -m repro.prepare_k3_followup_inputs audit-horizons \
+  --normalized-manifest /path/to/run/fink-normalized/manifest.json \
+  --horizons-manifest /path/to/run/horizons/manifest.json \
+  --output /path/to/run/horizons-identity-audit.json
+
+python -m repro.prepare_k3_followup_inputs build-ztf-period-manifest \
+  --normalized-manifest /path/to/run/fink-normalized/manifest.json \
+  --catalog repro/data/damit-20250610T000301Z/catalog.jsonl \
+  --spec repro/k3_followup_study_spec.yaml \
+  --output /path/to/run/ztf-periods.json
+```
+
+The period export chooses the first frozen catalog solution in catalog order,
+records its model/hash provenance, and emits no pole coordinates, vectors, or
+solution array. Bulk preparation refuses to run unless the normalized, final
+Horizons, identity-audit, period, and current study-spec hashes agree and all
+contain exactly the same 169 identities.
+
+```bash
+python -m repro.prepare_k3_followup_inputs prepare-ztf \
+  --normalized-manifest /path/to/run/fink-normalized/manifest.json \
+  --horizons-manifest /path/to/run/horizons/manifest.json \
+  --horizons-identity-audit /path/to/run/horizons-identity-audit.json \
+  --period-manifest /path/to/run/ztf-periods.json \
+  --spec repro/k3_followup_study_spec.yaml \
+  --output-directory /path/to/run/ztf-prepared
+```
+
+## Post-cutoff DAMIT records
+
+The descriptive case series contains asteroids 49, 279, and 366, whose official
+DAMIT records were created after the 2025-06-10 cutoff. This is a post-cutoff
+DAMIT-record case series, not evidence that the asteroid identities themselves
+were previously unseen. Fetch a raw snapshot from the
 official DAMIT export, lightcurve, and generated-file endpoints:
 
 ```bash
@@ -75,7 +113,7 @@ The snapshot separates material by access role:
 DAMIT export timestamps do not include a timezone suffix. The receipt preserves
 the source strings and the validator records its UTC interpretation. These three
 records are more than a month after the cutoff, so ordinary timezone ambiguity
-does not change their strict-temporal classification.
+does not change their post-cutoff record classification.
 
 Create prediction-ready input documents in a separate offline step:
 
@@ -89,3 +127,20 @@ Preparation opens only `input-index.json` and its hash-bound lightcurves. Tests
 verify that it still succeeds when both reference directories are absent. The
 result uses the existing external prediction loader but does not expose or score
 any reference axis.
+
+Before any external prediction, verify all 25 publication models against both
+the release archive index and checkpoint audit:
+
+```bash
+python -m repro.prepare_k3_followup_inputs bind-models \
+  --artifact-root /path/to/k3-definitive-7874092 \
+  --archive-index /path/to/k3-definitive-7874092/release/archive-index.json \
+  --publication-package-manifest /path/to/publication-archive-manifest.json \
+  --output /path/to/run/external-models.json
+```
+
+Prediction requires this manifest. Existing Fink/DAMIT identities receive only
+the five seeds from their unique held-out fold; each post-cutoff DAMIT record
+uses all five folds and five seeds (25 checkpoints). Checkpoint bytes, filename,
+fold, seed, training commit, protocol, and synthetic-parent provenance are
+revalidated before any model is deserialized for inference.
