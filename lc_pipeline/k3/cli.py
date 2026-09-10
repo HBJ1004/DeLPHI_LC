@@ -285,6 +285,9 @@ def _parser() -> argparse.ArgumentParser:
     convergence.add_argument("--output-directory", type=Path, required=True)
     convergence.add_argument("--convergence-tolerance", type=float, required=True)
     convergence.add_argument("--timeout-seconds", type=float, default=3600.0)
+    convergence.add_argument("--repeat-count", type=int, default=3)
+    convergence.add_argument("--repeat-order-seed", type=int, default=20260910)
+    convergence.add_argument("--bootstrap-seed", type=int, default=20260911)
     convergence.add_argument("--repository-root", type=Path, default=Path.cwd())
     release = commands.add_parser("build-publication-release")
     release.add_argument("--artifact-root", type=Path, required=True)
@@ -643,6 +646,9 @@ def main(argv: list[str] | None = None) -> int:
             output_directory=arguments.output_directory,
             convergence_tolerance=arguments.convergence_tolerance,
             timeout_seconds=arguments.timeout_seconds,
+            repeat_count=arguments.repeat_count,
+            repeat_order_seed=arguments.repeat_order_seed,
+            bootstrap_seed=arguments.bootstrap_seed,
         )
         print(json.dumps({"summary": summary, "protocol_sha256": K3_PROTOCOL_SHA256}, sort_keys=True))
         return 0

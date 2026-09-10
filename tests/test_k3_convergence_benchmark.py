@@ -10,6 +10,7 @@ import pytest
 
 from lc_pipeline.k3.convergence_benchmark import (
     CONVERGENCE_ITERATION_CAP,
+    evaluate_convergence_gate,
     run_convergence_benchmark,
 )
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
@@ -52,25 +53,26 @@ def test_convergence_runner_propagates_tolerance_selects_by_residual_and_keeps_f
         }}
     monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
     result = run_convergence_benchmark(**_inputs(tmp_path), convergence_tolerance=1e-4)
-    assert len(calls) == 60
+    assert len(calls) == 180
     assert all(call["convergence_tolerance"] == 1e-4 for call in calls)
-    # Each object gets a deterministic six-then-six ordering, rather than
-    # interleaving starts or letting failures change the arm ordering.
+    # Each repeat has paired AB/BA execution for every start.  Failures do not
+    # change the deterministic paired order.
     assert all(
-        len({call["arm"] for call in calls[offset : offset + 6]}) == 1
-        and len({call["arm"] for call in calls[offset + 6 : offset + 12]}) == 1
-        and calls[offset]["arm"] != calls[offset + 6]["arm"]
-        for offset in range(0, len(calls), 12)
+        calls[offset]["repeat_index"] == calls[offset + 1]["repeat_index"]
+        and calls[offset]["start_index"] == calls[offset + 1]["start_index"]
+        and calls[offset]["arm"] != calls[offset + 1]["arm"]
+        for offset in range(0, len(calls), 2)
     )
     payload = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
     first = payload["rows"][0]
-    assert first["candidate"]["wall_seconds"] == 8.05  # six attempts plus warm neural overhead
-    assert first["candidate"]["completion_counts"]["timeout"] == 1
-    assert first["candidate"]["completion_counts"]["iteration-cap"] == 1
-    assert first["candidate"]["best_start_index"] == 1
-    assert first["candidate"]["success"] is False  # recovery is evaluated after residual selection
+    assert first["candidate"]["wall_seconds"] == pytest.approx(24.15)  # three repeats, each plus warm neural overhead
+    assert first["repetitions"][0]["candidate"]["completion_counts"]["timeout"] == 1
+    assert first["repetitions"][0]["candidate"]["completion_counts"]["iteration-cap"] == 1
+    assert first["repetitions"][0]["candidate"]["best_start_index"] == 1
+    assert first["repetitions"][0]["candidate"]["success"] is False  # recovery is evaluated after residual selection
     assert first["neural_inference_cold_wall_seconds"] == .4
     assert result["convergence_tolerance"] == 1e-4
+    assert result["repeat_count"] == 3
 
 
 @pytest.mark.parametrize("tolerance", [0.0, -1e-4, 1.0, 2.0, float("nan")])
@@ -102,3 +104,20 @@ def test_convexinv_adapter_retains_partial_timeout_logs(tmp_path, monkeypatch):
     assert result.timed_out is True
     assert (tmp_path / "run" / "stdout.log").read_bytes() == b"partial stdout"
     assert (tmp_path / "run" / "stderr.log").read_bytes() == b"partial stderr"
+
+
+def test_convergence_gate_is_deterministic_and_enforces_one_sided_boundaries():
+    shape = (4, 3)
+    baseline_wall = np.full(shape, 2.0); candidate_wall = np.full(shape, 1.5)
+    recovery = np.ones(shape, dtype=int); completion = np.ones(shape, dtype=int)
+    baseline_rms = np.ones(shape); candidate_rms = np.full(shape, 1.005)
+    first = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
+    second = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
+    assert first == second
+    assert first["passed"] is True
+    # Exactly one is not a runtime improvement, and a completion loss below
+    # the noninferiority boundary is rejected.
+    at_one = evaluate_convergence_gate(baseline_wall, baseline_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
+    assert "runtime ratio lower confidence bound is not strictly above one" in at_one["failures"]
+    no_completion = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, np.zeros(shape, dtype=int), baseline_rms, candidate_rms, seed=19)
+    assert "guided completion lower confidence bound is below -0.02" in no_completion["failures"]
