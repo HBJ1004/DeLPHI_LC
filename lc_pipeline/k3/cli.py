@@ -288,6 +288,7 @@ def _parser() -> argparse.ArgumentParser:
     convergence.add_argument("--repeat-count", type=int, default=3)
     convergence.add_argument("--repeat-order-seed", type=int, default=20260910)
     convergence.add_argument("--bootstrap-seed", type=int, default=20260911)
+    convergence.add_argument("--object-ids-path", type=Path)
     convergence.add_argument("--repository-root", type=Path, default=Path.cwd())
     release = commands.add_parser("build-publication-release")
     release.add_argument("--artifact-root", type=Path, required=True)
@@ -649,6 +650,7 @@ def main(argv: list[str] | None = None) -> int:
             repeat_count=arguments.repeat_count,
             repeat_order_seed=arguments.repeat_order_seed,
             bootstrap_seed=arguments.bootstrap_seed,
+            object_ids_path=arguments.object_ids_path,
         )
         print(json.dumps({"summary": summary, "protocol_sha256": K3_PROTOCOL_SHA256}, sort_keys=True))
         return 0

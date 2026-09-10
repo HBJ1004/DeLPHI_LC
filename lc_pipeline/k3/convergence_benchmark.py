@@ -31,6 +31,7 @@ CONVERGENCE_ITERATION_CAP = 1000
 DEFAULT_REPEAT_COUNT = 3
 DEFAULT_REPEAT_ORDER_SEED = 20260910
 DEFAULT_BOOTSTRAP_SEED = 20260911
+OBJECT_SUBSET_SCHEMA = "delphi.k3-convergence-object-subset.v1"
 
 
 def _validate_tolerance(value: float) -> float:
@@ -45,6 +46,43 @@ def _validate_repeat_count(value: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise DownstreamBenchmarkError("repeat_count must be a positive integer")
     return value
+
+
+def _select_object_subset(
+    object_ids_path: str | Path | None, full_object_ids: tuple[str, ...], split_path: str | Path,
+) -> tuple[tuple[int, ...], dict[str, object]]:
+    """Validate an optional cohort manifest against already-validated full inputs."""
+    if object_ids_path is None:
+        return tuple(range(len(full_object_ids))), {
+            "subset_manifest_sha256": None, "subset_role": "full_ensemble",
+        }
+    path = Path(object_ids_path)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DownstreamBenchmarkError(f"cannot read object subset manifest: {exc}") from exc
+    if not isinstance(document, dict) or set(document) != {
+        "schema", "role", "source_full_split_sha256", "object_ids",
+    }:
+        raise DownstreamBenchmarkError("object subset manifest has an invalid schema or fields")
+    if document["schema"] != OBJECT_SUBSET_SCHEMA:
+        raise DownstreamBenchmarkError("object subset manifest schema is invalid")
+    if document["role"] not in {"development", "locked_evaluation"}:
+        raise DownstreamBenchmarkError("object subset manifest role must be development or locked_evaluation")
+    if document["source_full_split_sha256"] != sha256_file(split_path):
+        raise DownstreamBenchmarkError("object subset manifest does not match the full split")
+    selected = document["object_ids"]
+    if not isinstance(selected, list) or not selected or any(not isinstance(value, str) or not value for value in selected):
+        raise DownstreamBenchmarkError("object subset manifest must contain nonempty object IDs")
+    if len(selected) != len(set(selected)):
+        raise DownstreamBenchmarkError("object subset manifest contains duplicate object IDs")
+    lookup = {object_id: index for index, object_id in enumerate(full_object_ids)}
+    unknown = [object_id for object_id in selected if object_id not in lookup]
+    if unknown:
+        raise DownstreamBenchmarkError("object subset manifest contains unknown object IDs")
+    return tuple(lookup[object_id] for object_id in selected), {
+        "subset_manifest_sha256": sha256_file(path), "subset_role": document["role"],
+    }
 
 
 def _repeat_arm_order(object_id: str, repeat_index: int, seed: int) -> tuple[str, str]:
@@ -236,6 +274,7 @@ def run_convergence_benchmark(
     timeout_seconds: float = 3600.0, repeat_count: int = DEFAULT_REPEAT_COUNT,
     repeat_order_seed: int = DEFAULT_REPEAT_ORDER_SEED,
     bootstrap_seed: int = DEFAULT_BOOTSTRAP_SEED,
+    object_ids_path: str | Path | None = None,
     compiler_command: Sequence[str] = ("cc", "--version"),
 ) -> dict[str, object]:
     """Run paired, repeated six-start arms, stopping each DAMIT fit on convergence."""
@@ -250,8 +289,17 @@ def run_convergence_benchmark(
         raise DownstreamBenchmarkError("refusing to overwrite completed convergence benchmark outputs")
     if not binary.is_file() or not source.is_dir() or not archive.is_file():
         raise DownstreamBenchmarkError("convexinv executable, source root, and downloaded archive must exist")
-    object_ids, axes, inference, catalog = _load_benchmark_inputs(ensemble_path, catalog_path, dump_root, split_path)
-    cold, warm = _timing_fields(ensemble_path, len(object_ids))
+    full_object_ids, full_axes, full_inference, catalog = _load_benchmark_inputs(ensemble_path, catalog_path, dump_root, split_path)
+    # Full ensemble/split/catalog alignment is deliberately checked before any
+    # optional development or locked-evaluation cohort is selected.
+    selected_indices, subset = _select_object_subset(object_ids_path, full_object_ids, split_path)
+    object_ids = tuple(full_object_ids[index] for index in selected_indices)
+    axes, inference = full_axes[list(selected_indices)], full_inference[list(selected_indices)]
+    cold, warm = _timing_fields(ensemble_path, len(full_object_ids))
+    if cold is not None:
+        cold = cold[list(selected_indices)]
+    if warm is not None:
+        warm = warm[list(selected_indices)]
     baseline_times: list[list[float]] = []; candidate_times: list[list[float]] = []
     baseline_rms: list[list[float]] = []; candidate_rms: list[list[float]] = []
     baseline_success: list[list[int]] = []; candidate_success: list[list[int]] = []
@@ -329,9 +377,9 @@ def run_convergence_benchmark(
         baseline_completion.append(per_arm["baseline"]["completion"]); candidate_completion.append(per_arm["candidate"]["completion"])
         rows.append(object_row)
     verdict = evaluate_convergence_gate(np.asarray(baseline_times), np.asarray(candidate_times), np.asarray(baseline_success), np.asarray(candidate_success), np.asarray(baseline_completion), np.asarray(candidate_completion), np.asarray(baseline_rms), np.asarray(candidate_rms), seed=bootstrap_seed)
-    rows_sha = _atomic_json(rows_path, {"schema": "delphi.k3-convergence-rows.v2", "convergence_tolerance": tolerance, "iteration_cap": CONVERGENCE_ITERATION_CAP, "repeat_count": repeats, "repeat_order_seed": repeat_order_seed, "object_ids": list(object_ids), "rows": rows})
+    rows_sha = _atomic_json(rows_path, {"schema": "delphi.k3-convergence-rows.v2", "convergence_tolerance": tolerance, "iteration_cap": CONVERGENCE_ITERATION_CAP, "repeat_count": repeats, "repeat_order_seed": repeat_order_seed, **subset, "object_ids": list(object_ids), "rows": rows})
     summary: dict[str, object] = {
-        "schema": "delphi.k3-convergence-summary.v2", "object_count": len(object_ids), "starts_per_arm": 6, "repeat_count": repeats,
+        "schema": "delphi.k3-convergence-summary.v2", "object_count": len(object_ids), "starts_per_arm": 6, "repeat_count": repeats, **subset,
         "convergence_tolerance": tolerance, "iteration_cap": CONVERGENCE_ITERATION_CAP,
         "cap_semantics": "1000 iterations is treated as nonconverged because DAMIT emits no termination reason",
         "timeout_seconds": timeout_seconds, "neural_time_included": True, "repeat_order_seed": repeat_order_seed, "bootstrap_seed": bootstrap_seed,

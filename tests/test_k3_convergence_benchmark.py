@@ -10,10 +10,13 @@ import pytest
 
 from lc_pipeline.k3.convergence_benchmark import (
     CONVERGENCE_ITERATION_CAP,
+    OBJECT_SUBSET_SCHEMA,
+    _select_object_subset,
     evaluate_convergence_gate,
     run_convergence_benchmark,
 )
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
+from lc_pipeline.v2.data import sha256_file
 from lc_pipeline.v2.convexinv import ConvexinvParameters, run_convexinv, write_convexinv_parameters
 
 
@@ -87,6 +90,47 @@ def test_convergence_runner_refuses_existing_summary_or_rows(tmp_path):
     (values["output_directory"] / "convergence-summary.json").write_text("{}")
     with pytest.raises(DownstreamBenchmarkError, match="refusing to overwrite"):
         run_convergence_benchmark(**values, convergence_tolerance=1e-4)
+
+
+def test_convergence_runner_slices_only_after_full_alignment_and_records_subset(tmp_path, monkeypatch):
+    values = _inputs(tmp_path)
+    manifest = tmp_path / "subset.json"
+    manifest.write_text(json.dumps({
+        "schema": OBJECT_SUBSET_SCHEMA, "role": "development",
+        "source_full_split_sha256": sha256_file(values["split_path"]),
+        "object_ids": ["object-3", "object-1"],
+    }))
+    def fake_record(**kwargs):
+        return {"identity": {"start_index": kwargs["start_index"]}, "completion": "converged", "result": {
+            "return_code": 0, "timed_out": False, "wall_time_seconds": 1.0,
+            "process_cpu_time_seconds": .1, "iterations": 5, "relative_rms_from_output": 1.0,
+            "final_lambda_deg": 0.0, "final_beta_deg": 0.0,
+        }}
+    monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
+    result = run_convergence_benchmark(**values, convergence_tolerance=1e-4, object_ids_path=manifest)
+    rows = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
+    assert rows["object_ids"] == ["object-3", "object-1"]
+    assert rows["subset_role"] == result["subset_role"] == "development"
+    assert rows["subset_manifest_sha256"] == result["subset_manifest_sha256"] == sha256_file(manifest)
+
+
+@pytest.mark.parametrize("object_ids,role,split_hash,error", [
+    ([], "development", "valid", "nonempty"),
+    (["object-0", "object-0"], "development", "valid", "duplicate"),
+    (["unknown"], "development", "valid", "unknown"),
+    (["object-0"], "other", "valid", "role"),
+    (["object-0"], "development", "bad", "full split"),
+])
+def test_object_subset_manifest_rejects_invalid_cohorts(tmp_path, object_ids, role, split_hash, error):
+    values = _inputs(tmp_path)
+    manifest = tmp_path / "subset.json"
+    manifest.write_text(json.dumps({
+        "schema": OBJECT_SUBSET_SCHEMA, "role": role,
+        "source_full_split_sha256": sha256_file(values["split_path"]) if split_hash == "valid" else "0" * 64,
+        "object_ids": object_ids,
+    }))
+    with pytest.raises(DownstreamBenchmarkError, match=error):
+        _select_object_subset(manifest, tuple(f"object-{index}" for index in range(5)), values["split_path"])
 
 
 def test_convexinv_adapter_retains_partial_timeout_logs(tmp_path, monkeypatch):
