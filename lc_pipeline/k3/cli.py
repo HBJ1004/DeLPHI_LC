@@ -274,6 +274,18 @@ def _parser() -> argparse.ArgumentParser:
     downstream.add_argument("--output-directory", type=Path, required=True)
     downstream.add_argument("--timeout-seconds", type=float, default=3600.0)
     downstream.add_argument("--repository-root", type=Path, default=Path.cwd())
+    convergence = commands.add_parser("run-publication-convergence-benchmark")
+    convergence.add_argument("--executable", type=Path, required=True)
+    convergence.add_argument("--source-root", type=Path, required=True)
+    convergence.add_argument("--source-archive", type=Path, required=True)
+    convergence.add_argument("--ensemble", type=Path, required=True)
+    convergence.add_argument("--catalog", type=Path, required=True)
+    convergence.add_argument("--dump-root", type=Path, required=True)
+    convergence.add_argument("--splits", type=Path, required=True)
+    convergence.add_argument("--output-directory", type=Path, required=True)
+    convergence.add_argument("--convergence-tolerance", type=float, required=True)
+    convergence.add_argument("--timeout-seconds", type=float, default=3600.0)
+    convergence.add_argument("--repository-root", type=Path, default=Path.cwd())
     release = commands.add_parser("build-publication-release")
     release.add_argument("--artifact-root", type=Path, required=True)
     release.add_argument("--comparators", type=Path, required=True)
@@ -612,6 +624,24 @@ def main(argv: list[str] | None = None) -> int:
             dump_root=arguments.dump_root,
             split_path=arguments.splits,
             output_directory=arguments.output_directory,
+            timeout_seconds=arguments.timeout_seconds,
+        )
+        print(json.dumps({"summary": summary, "protocol_sha256": K3_PROTOCOL_SHA256}, sort_keys=True))
+        return 0
+    if arguments.command == "run-publication-convergence-benchmark":
+        require_clean_repository(arguments.repository_root)
+        from .convergence_benchmark import run_convergence_benchmark
+
+        summary = run_convergence_benchmark(
+            executable=arguments.executable,
+            source_root=arguments.source_root,
+            source_archive=arguments.source_archive,
+            ensemble_path=arguments.ensemble,
+            catalog_path=arguments.catalog,
+            dump_root=arguments.dump_root,
+            split_path=arguments.splits,
+            output_directory=arguments.output_directory,
+            convergence_tolerance=arguments.convergence_tolerance,
             timeout_seconds=arguments.timeout_seconds,
         )
         print(json.dumps({"summary": summary, "protocol_sha256": K3_PROTOCOL_SHA256}, sort_keys=True))

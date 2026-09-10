@@ -337,6 +337,7 @@ def run_convexinv(
     *, executable: str | Path, source_root: str | Path, lightcurve_file: str | Path,
     parameter_file: str | Path, output_directory: str | Path, timeout_seconds: float = 3600.0,
     compiler_command: Sequence[str] = ("cc", "--version"),
+    stdout_log_path: str | Path | None = None, stderr_log_path: str | Path | None = None,
 ) -> ConvexinvResult:
     """Run documented ``convexinv`` once with auditable inputs and outputs."""
     binary = _require_file(executable, "convexinv executable")
@@ -360,6 +361,13 @@ def run_convexinv(
     return_code, timed_out, elapsed, cpu, stdout, stderr = _run_external(
         command, stdin_path=lightcurve, cwd=output, timeout_seconds=timeout_seconds
     )
+    # Keep raw streams when a caller needs an auditable convergence trace.  In
+    # particular, TimeoutExpired can contain useful partial output.
+    for path, stream in ((stdout_log_path, stdout), (stderr_log_path, stderr)):
+        if path is not None:
+            destination = Path(path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(stream)
     decoded_stdout = stdout.decode("utf-8", errors="replace")
     iterations, final = list(_ITERATION.finditer(decoded_stdout)), _FINAL.search(decoded_stdout)
     modelled_hash = _file_hash_or_none(out_lcs)
