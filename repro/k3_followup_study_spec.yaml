@@ -41,6 +41,14 @@ temporal_external_case_series:
 convergence_acceleration:
   role: preregistered_followup_with_internally_locked_evaluation
   full_cohort: frozen_170_object_damit_oof_cohort
+  frozen_inputs:
+    publication_split_sha256: 1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4
+    reference_catalog_sha256: acf96aed4a25ce8e772327cd640177686fa777ad8227a2de5337349ef3806e03
+    oof_ensemble_sha256: 54d2f1ebb0f0e8993dc61d0e2a090a19eb1fefcbd170f7a9741ad8fbf9acbc05
+    blind_execution_inputs_sha256: 10f310f9ba735ccdf154105ad8d11a3c698f44046f5c33a55f256a846157ba1f
+    official_solver_archive_sha256: b1bc2402732e8fd4d1bfe56973a3693bf7ceb6f3bb31e8b5f03926fac59c410c
+    neural_timing_schema: delphi.k3-convergence-neural-timing.v1
+    solver_binary_source_tree_compiler_and_timing: frozen_in_pre_execution_study_lock
   split:
     method: six_development_objects_per_original_outer_fold_by_sha256_rank
     salt: delphi-k3-convergence-followup-20260910
@@ -61,26 +69,35 @@ convergence_acceleration:
     bootstrap_seed: 20260911
     include_warm_neural_inference_time: true
     report_cold_neural_inference_sensitivity: true
+    compiler_version_command: [cc, --version]
   development_selection:
     eligible_tolerance_requires:
-      guided_minus_baseline_recovery_point_difference_minimum: -0.02
-      guided_minus_baseline_completion_point_difference_minimum: -0.02
+      guided_minus_baseline_recovery_point_difference_minimum: -0.05
+      guided_minus_baseline_completion_point_difference_minimum: -0.05
       guided_to_baseline_geometric_mean_rms_ratio_maximum: 1.01
     choose: largest_runtime_ratio_lower_bound
     tie_break: smaller_convergence_tolerance
     no_eligible_tolerance: stop_without_locked_acceleration_test
   locked_evaluation_gate:
-    runtime_baseline_to_guided_ratio_ci95_lower_strictly_greater_than: 1.0
-    guided_minus_baseline_recovery_ci95_lower_minimum: -0.02
-    guided_minus_baseline_completion_ci95_lower_minimum: -0.02
-    guided_to_baseline_geometric_mean_rms_ratio_ci95_upper_strictly_less_than: 1.01
+    runtime_ratio_stratified_bootstrap_acceptance_lower_strictly_greater_than: 1.0
+    recovery_simultaneous_exact_lower_minimum: -0.05
+    completion_simultaneous_exact_lower_minimum: -0.05
+    rms_ratio_stratified_bootstrap_acceptance_upper_strictly_less_than: 1.01
     decision: all_four_conditions_must_pass
   analysis:
     inference_unit: asteroid
-    resampling: object_clustered_preserving_all_starts_and_repeats
+    timing_resampling: object_clustered_stratified_by_original_outer_fold
+    timing_bounds: prespecified_empirical_acceptance_bounds_not_confidence_intervals
     fit_selection: minimum_final_relative_rms_without_reference_axis_access
     recovery: selected_fit_within_20_axial_degrees_of_any_frozen_catalog_axis
+    binary_repeat_aggregation: object_success_requires_at_least_two_of_three_repeats
+    binary_noninferiority_interval: simultaneous_conservative_exact_clopper_pearson
     failures: retained_in_completion_and_recovery_denominators
+    rms_population: jointly_completed_and_selectable_pairs_without_reference_conditioning
+    rms_minimum_joint_repeats_per_object: 2
+    rms_required_object_support: {development: 30, locked_evaluation: 140}
+    execution_cells: all_six_starts_both_arms_all_three_repeats_recorded
+    phase_separation: blind_execution_and_fit_selection_then_hash_bound_reference_scoring
   maximum_positive_claim: >-
     K3-guided initialization accelerated this convex-inversion solver under
     known-period, six-start, convergence-stopped conditions on a retrospective
@@ -90,5 +107,7 @@ convergence_acceleration:
 disclosures:
   - The fixed-work benchmark and its negative timing result were known before this follow-up.
   - Development tolerance selection is isolated from the locked evaluation subset.
+  - The binary noninferiority margin is five percentage points because the original two-point margin was infeasible for a conservative exact 140-object paired analysis.
+  - Bootstrap bounds are prespecified empirical acceptance bounds and are not labelled confidence intervals.
   - The strict temporal cohort has only three objects and is descriptive.
   - Cross-survey ZTF objects are not new identities and may have influenced pipeline development.

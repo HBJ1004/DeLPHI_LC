@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-import resource
 import subprocess
 import time
 from dataclasses import dataclass
@@ -18,6 +17,11 @@ from pathlib import Path
 from typing import Sequence
 
 import numpy as np
+
+try:  # ``resource`` is unavailable on Windows, where parsing/tests still run.
+    import resource
+except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
+    resource = None  # type: ignore[assignment]
 
 from ..physics.axial import axial_angular_error_deg
 from .data import canonical_json, sha256_file
@@ -194,6 +198,7 @@ class ConvexinvResult:
     output_lightcurve_sha256: str | None = None
     output_parameter_sha256: str | None = None
     output_area_sha256: str | None = None
+    output_validation_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -264,7 +269,7 @@ def _run_external(
 ) -> tuple[int | None, bool, float, float, bytes, bytes]:
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ConvexinvError("timeout_seconds must be finite and positive")
-    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    before = None if resource is None else resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
     try:
         with stdin_path.open("rb") as handle:
@@ -280,8 +285,15 @@ def _run_external(
         stdout = exc.stdout if isinstance(exc.stdout, bytes) else (exc.stdout or "").encode()
         stderr = exc.stderr if isinstance(exc.stderr, bytes) else (exc.stderr or "").encode()
     elapsed = time.monotonic() - started
-    after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu = (after.ru_utime + after.ru_stime) - (before.ru_utime + before.ru_stime)
+    if resource is None:
+        # The official benchmark is run on the frozen Linux environment.  The
+        # Windows fallback keeps the adapter usable for parser/unit tests and
+        # clearly marks unavailable child CPU accounting.
+        cpu = float("nan")
+    else:
+        after = resource.getrusage(resource.RUSAGE_CHILDREN)
+        assert before is not None
+        cpu = (after.ru_utime + after.ru_stime) - (before.ru_utime + before.ru_stime)
     return return_code, timed_out, elapsed, cpu, stdout, stderr
 
 
@@ -371,6 +383,16 @@ def run_convexinv(
     decoded_stdout = stdout.decode("utf-8", errors="replace")
     iterations, final = list(_ITERATION.finditer(decoded_stdout)), _FINAL.search(decoded_stdout)
     modelled_hash = _file_hash_or_none(out_lcs)
+    relative_rms: float | None = None
+    output_validation_error: str | None = None
+    if return_code == 0 and not timed_out and modelled_hash:
+        try:
+            relative_rms = relative_rms_from_modelled_lightcurve(lightcurve, out_lcs)
+        except ConvexinvError as exc:
+            # A malformed/non-finite solver product is a run outcome, not an
+            # infrastructure exception.  Callers can retain it in prespecified
+            # failure denominators and audit the raw output and logs.
+            output_validation_error = str(exc)
     return ConvexinvResult(
         return_code=return_code, timed_out=timed_out, wall_time_seconds=elapsed,
         process_cpu_time_seconds=cpu,
@@ -380,13 +402,11 @@ def run_convexinv(
         final_lambda_deg=float(final.group(1)) if final else None,
         final_beta_deg=float(final.group(2)) if final else None,
         final_period_hours=float(final.group(3)) if final else None,
-        relative_rms_from_output=(
-            relative_rms_from_modelled_lightcurve(lightcurve, out_lcs)
-            if return_code == 0 and not timed_out and modelled_hash else None
-        ),
+        relative_rms_from_output=relative_rms,
         stdout_sha256=hashlib.sha256(stdout).hexdigest(), stderr_sha256=hashlib.sha256(stderr).hexdigest(),
         output_lightcurve_sha256=modelled_hash, output_parameter_sha256=_file_hash_or_none(out_par),
         output_area_sha256=_file_hash_or_none(out_areas), provenance=provenance,
+        output_validation_error=output_validation_error,
     )
 
 

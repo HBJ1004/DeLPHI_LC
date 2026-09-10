@@ -73,61 +73,13 @@ def _inputs(tmp_path):
     )
 
 
-def test_convergence_runner_propagates_tolerance_selects_by_residual_and_keeps_failures(
-    tmp_path, monkeypatch
-):
-    calls = []
-
-    def fake_record(**kwargs):
-        calls.append(kwargs)
-        start = kwargs["start_index"]
-        # The timeout and cap must still be included in aggregate work.
-        completion = "timeout" if start == 4 else ("iteration-cap" if start == 5 else "converged")
-        arm = kwargs["arm"]
-        return {
-            "identity": {"start_index": start},
-            "completion": completion,
-            "result": {
-                "return_code": None if completion == "timeout" else 0,
-                "timed_out": completion == "timeout",
-                "wall_time_seconds": 3.0 if completion == "timeout" else 1.0,
-                "process_cpu_time_seconds": 0.5,
-                "iterations": CONVERGENCE_ITERATION_CAP if completion == "iteration-cap" else 10,
-                # Start one is chosen by residual even though its pole fails recovery.
-                "relative_rms_from_output": 0.5 if start == 1 else 1.0,
-                "final_lambda_deg": 90.0
-                if (start == 1 and arm == "candidate" and kwargs["object_id"] == "object-0")
-                else 0.0,
-                "final_beta_deg": 0.0,
-            },
-        }
-
-    monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
-    result = run_convergence_benchmark(**_inputs(tmp_path), convergence_tolerance=1e-4)
-    assert len(calls) == 180
-    assert all(call["convergence_tolerance"] == 1e-4 for call in calls)
-    # Each repeat has paired AB/BA execution for every start.  Failures do not
-    # change the deterministic paired order.
-    assert all(
-        calls[offset]["repeat_index"] == calls[offset + 1]["repeat_index"]
-        and calls[offset]["start_index"] == calls[offset + 1]["start_index"]
-        and calls[offset]["arm"] != calls[offset + 1]["arm"]
-        for offset in range(0, len(calls), 2)
+def test_legacy_convergence_runner_fails_closed_before_solver_execution(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "lc_pipeline.k3.convergence_benchmark._run_convergence_record",
+        lambda **_kwargs: pytest.fail("disabled legacy runner reached solver execution"),
     )
-    payload = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
-    first = payload["rows"][0]
-    assert first["candidate"]["wall_seconds"] == pytest.approx(
-        24.15
-    )  # three repeats, each plus warm neural overhead
-    assert first["repetitions"][0]["candidate"]["completion_counts"]["timeout"] == 1
-    assert first["repetitions"][0]["candidate"]["completion_counts"]["iteration-cap"] == 1
-    assert first["repetitions"][0]["candidate"]["best_start_index"] == 1
-    assert (
-        first["repetitions"][0]["candidate"]["success"] is False
-    )  # recovery is evaluated after residual selection
-    assert first["neural_inference_cold_wall_seconds"] == 0.4
-    assert result["convergence_tolerance"] == 1e-4
-    assert result["repeat_count"] == 3
+    with pytest.raises(DownstreamBenchmarkError, match="legacy convergence runner is disabled"):
+        run_convergence_benchmark(**_inputs(tmp_path), convergence_tolerance=1e-4)
 
 
 @pytest.mark.parametrize("tolerance", [0.0, -1e-4, 1.0, 2.0, float("nan")])
@@ -144,9 +96,7 @@ def test_convergence_runner_refuses_existing_summary_or_rows(tmp_path):
         run_convergence_benchmark(**values, convergence_tolerance=1e-4)
 
 
-def test_convergence_runner_slices_only_after_full_alignment_and_records_subset(
-    tmp_path, monkeypatch
-):
+def test_legacy_convergence_runner_rejects_subset_execution(tmp_path):
     values = _inputs(tmp_path)
     manifest = tmp_path / "subset.json"
     manifest.write_text(
@@ -163,32 +113,10 @@ def test_convergence_runner_slices_only_after_full_alignment_and_records_subset(
         )
     )
 
-    def fake_record(**kwargs):
-        return {
-            "identity": {"start_index": kwargs["start_index"]},
-            "completion": "converged",
-            "result": {
-                "return_code": 0,
-                "timed_out": False,
-                "wall_time_seconds": 1.0,
-                "process_cpu_time_seconds": 0.1,
-                "iterations": 5,
-                "relative_rms_from_output": 1.0,
-                "final_lambda_deg": 0.0,
-                "final_beta_deg": 0.0,
-            },
-        }
-
-    monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
-    result = run_convergence_benchmark(
-        **values, convergence_tolerance=1e-4, object_ids_path=manifest
-    )
-    rows = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
-    assert rows["object_ids"] == ["object-3", "object-1"]
-    assert rows["subset_role"] == result["subset_role"] == "development"
-    assert (
-        rows["subset_manifest_sha256"] == result["subset_manifest_sha256"] == sha256_file(manifest)
-    )
+    with pytest.raises(DownstreamBenchmarkError, match="legacy convergence runner is disabled"):
+        run_convergence_benchmark(
+            **values, convergence_tolerance=1e-4, object_ids_path=manifest
+        )
 
 
 @pytest.mark.parametrize(

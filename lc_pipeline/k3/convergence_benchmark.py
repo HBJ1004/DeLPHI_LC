@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -17,8 +18,13 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from ..physics.axial import axial_angular_error_deg
-from ..v2.convexinv import ConvexinvParameters, run_convexinv, write_convexinv_parameters
-from ..v2.data import sha256_file
+from ..v2.convexinv import (
+    ConvexinvError,
+    ConvexinvParameters,
+    run_convexinv,
+    write_convexinv_parameters,
+)
+from ..v2.data import canonical_json, sha256_file
 from .downstream import (
     DAMIT_STANDARD_STARTS_DEG,
     DownstreamBenchmarkError,
@@ -260,9 +266,18 @@ def _timing_fields(
         raise DownstreamBenchmarkError(f"cannot load optional neural timings: {exc}") from exc
 
 
-def _completion(result: Mapping[str, object]) -> str:
+def _completion(result: Mapping[str, object], *, expected_period_hours: float) -> str:
+    """Classify one official-v0.2.1 run from its explicit trace and products.
+
+    For the hash-verified solver, a successful run below its 1000-iteration
+    guard can only leave the loop through the requested dev-improvement
+    tolerance.  We nevertheless require the final trace and all numerical
+    products so a NaN/parse failure cannot be called convergence.
+    """
     if result.get("timed_out") is True:
         return "timeout"
+    if result.get("adapter_error") is not None:
+        return "adapter-error"
     if result.get("return_code") != 0:
         return "exit-nonzero"
     iterations = result.get("iterations")
@@ -272,6 +287,40 @@ def _completion(result: Mapping[str, object]) -> str:
     # iteration guard we conservatively do not claim tolerance convergence.
     if iterations >= CONVERGENCE_ITERATION_CAP:
         return "iteration-cap"
+    numeric = (
+        "chi2",
+        "deviation",
+        "final_lambda_deg",
+        "final_beta_deg",
+        "final_period_hours",
+        "relative_rms_from_output",
+    )
+    if result.get("output_validation_error") is not None or not all(
+        isinstance(result.get(key), (int, float)) and math.isfinite(float(result[key]))
+        for key in numeric
+    ):
+        return "numerical-output-failure"
+    if (
+        float(result["chi2"]) < 0
+        or float(result["deviation"]) < 0
+        or float(result["relative_rms_from_output"]) <= 0
+        or not -90.0 <= float(result["final_beta_deg"]) <= 90.0
+        or not math.isclose(
+            float(result["final_period_hours"]),
+            expected_period_hours,
+            rel_tol=1e-7,
+            abs_tol=1e-9,
+        )
+        or any(
+            not isinstance(result.get(key), str) or len(str(result[key])) != 64
+            for key in (
+                "output_lightcurve_sha256",
+                "output_parameter_sha256",
+                "output_area_sha256",
+            )
+        )
+    ):
+        return "numerical-output-failure"
     return "converged"
 
 
@@ -302,6 +351,8 @@ def _run_convergence_record(
     convergence_tolerance: float,
     timeout_seconds: float,
     compiler_command: Sequence[str],
+    execution_contract: Mapping[str, object],
+    arm_order: Sequence[str],
 ) -> dict[str, object]:
     run_directory = (
         output_root / "runs" / object_id / f"repeat-{repeat_index}" / arm / f"start-{start_index}"
@@ -317,6 +368,7 @@ def _run_convergence_record(
         free_period=False,
         iteration_stop_condition=convergence_tolerance,
     )
+    contract_sha256 = hashlib.sha256(canonical_json(dict(execution_contract)).encode()).hexdigest()
     identity = {
         "object_id": object_id,
         "arm": arm,
@@ -326,6 +378,10 @@ def _run_convergence_record(
         "beta_deg": start.beta_deg,
         "period_hours": start.period_hours,
         "convergence_tolerance": convergence_tolerance,
+        "timeout_seconds": timeout_seconds,
+        "compiler_command": list(compiler_command),
+        "repeat_arm_order": list(arm_order),
+        "execution_contract_sha256": contract_sha256,
     }
     if record_path.exists():
         try:
@@ -349,6 +405,7 @@ def _run_convergence_record(
             or provenance.get("executable_sha256") != sha256_file(executable)
             or provenance.get("input_sha256") != sha256_file(lightcurve)
             or provenance.get("parameter_sha256") != sha256_file(parameter_path)
+            or record.get("execution_contract") != dict(execution_contract)
         ):
             raise DownstreamBenchmarkError(
                 f"existing convergence record does not match this run: {record_path}"
@@ -359,23 +416,49 @@ def _run_convergence_record(
             f"incomplete convergence directory requires manual audit: {run_directory}"
         )
     write_convexinv_parameters(parameter_path, parameters)
-    result = run_convexinv(
-        executable=executable,
-        source_root=source_root,
-        lightcurve_file=lightcurve,
-        parameter_file=parameter_path,
-        output_directory=run_directory,
-        timeout_seconds=timeout_seconds,
-        compiler_command=compiler_command,
-        stdout_log_path=stdout_path,
-        stderr_log_path=stderr_path,
-    )
-    result_mapping = asdict(result)
+    started = time.monotonic()
+    try:
+        result = run_convexinv(
+            executable=executable,
+            source_root=source_root,
+            lightcurve_file=lightcurve,
+            parameter_file=parameter_path,
+            output_directory=run_directory,
+            timeout_seconds=timeout_seconds,
+            compiler_command=compiler_command,
+            stdout_log_path=stdout_path,
+            stderr_log_path=stderr_path,
+        )
+        result_mapping = asdict(result)
+    except (ConvexinvError, OSError, ValueError) as exc:
+        # Preserve an isolated adapter/numerical failure as one prespecified
+        # start outcome.  Missing paths are materialized so the record remains
+        # hash-auditable and its paired arm/subsequent starts still execute.
+        for path in (stdout_path, stderr_path):
+            if not path.exists():
+                path.write_bytes(b"")
+        result_mapping = {
+            "return_code": None,
+            "timed_out": False,
+            "wall_time_seconds": time.monotonic() - started,
+            "process_cpu_time_seconds": None,
+            "iterations": None,
+            "chi2": None,
+            "deviation": None,
+            "final_lambda_deg": None,
+            "final_beta_deg": None,
+            "final_period_hours": None,
+            "relative_rms_from_output": None,
+            "output_validation_error": None,
+            "adapter_error": f"{type(exc).__name__}: {exc}",
+            "provenance": dict(execution_contract),
+        }
     payload: dict[str, object] = {
         "schema": "delphi.k3-convergence-convexinv-run.v1",
         "identity": identity,
-        "completion": _completion(result_mapping),
+        "completion": _completion(result_mapping, expected_period_hours=start.period_hours),
         "result": result_mapping,
+        "execution_contract": dict(execution_contract),
         "logs": {
             "stdout": "stdout.log",
             "stderr": "stderr.log",
@@ -405,7 +488,13 @@ def run_convergence_benchmark(
     object_ids_path: str | Path | None = None,
     compiler_command: Sequence[str] = ("cc", "--version"),
 ) -> dict[str, object]:
-    """Run paired, repeated six-start arms, stopping each DAMIT fit on convergence."""
+    """Refuse the superseded, label-aware convergence workflow.
+
+    The original implementation opened reference poles before fit execution,
+    accepted loosely specified subsets/settings, and could reuse partial-repeat
+    timing.  It is retained below only to preserve review history; publication
+    execution must go through :mod:`lc_pipeline.k3.convergence_study`.
+    """
     tolerance = _validate_tolerance(convergence_tolerance)
     repeats = _validate_repeat_count(repeat_count)
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
@@ -427,6 +516,9 @@ def run_convergence_benchmark(
         raise DownstreamBenchmarkError(
             "refusing to overwrite completed convergence benchmark outputs"
         )
+    raise DownstreamBenchmarkError(
+        "legacy convergence runner is disabled; use the frozen phase-separated study orchestrator"
+    )
     if not binary.is_file() or not source.is_dir() or not archive.is_file():
         raise DownstreamBenchmarkError(
             "convexinv executable, source root, and downloaded archive must exist"

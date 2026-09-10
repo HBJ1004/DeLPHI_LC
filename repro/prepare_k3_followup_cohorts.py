@@ -17,7 +17,7 @@ def _sha256(path: Path) -> str:
 def _write(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def prepare(spec_path: Path, splits_path: Path, output_directory: Path) -> None:
