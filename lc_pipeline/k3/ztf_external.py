@@ -34,6 +34,8 @@ FINK_NORMALIZED_SCHEMA = "delphi.k3-fink-normalized.v1"
 FINK_INGEST_MANIFEST_SCHEMA = "delphi.k3-fink-ingest-manifest.v1"
 HORIZONS_API_URL = "https://ssd.jpl.nasa.gov/api/horizons.api"
 HORIZONS_MANIFEST_SCHEMA = "delphi.k3-horizons-directory-manifest.v1"
+HORIZONS_PLAN_SCHEMA = "delphi.k3-horizons-fetch-plan.v1"
+HORIZONS_JD_TOLERANCE_DAYS = 2e-9
 HttpFetcher = Callable[[str, float], tuple[bytes, str, str | None, str | None]]
 
 
@@ -450,7 +452,10 @@ def _parse_horizons_vectors(payload: bytes, expected_jds: Sequence[float]) -> tu
             f"JPL Horizons returned {len(parsed)} epochs; expected {len(expected_jds)}"
         )
     for expected, returned in zip(expected_jds, returned_jds, strict=True):
-        if abs(float(expected) - returned) > 5e-10:
+        # Horizons' fractional-second JD serialization has shown about 1e-9 d
+        # quantization at JD ~2.46e6.  Two nanodays (0.173 ms) accepts that
+        # documented representation loss while still rejecting a shifted epoch.
+        if abs(float(expected) - returned) > HORIZONS_JD_TOLERANCE_DAYS:
             raise ZTFExternalError(
                 f"JPL Horizons epoch mismatch: requested {expected}, returned {returned}"
             )
@@ -461,7 +466,7 @@ def fetch_horizons_cache(
     *,
     normalized_object_path: str | Path,
     output_directory: str | Path,
-    batch_size: int = 200,
+    batch_size: int = 20,
     timeout_seconds: float = 120.0,
     request_interval_seconds: float = 0.25,
     fetcher: HttpFetcher | None = None,
@@ -581,7 +586,7 @@ def fetch_horizons_directory(
     *,
     normalized_manifest_path: str | Path,
     output_directory: str | Path,
-    batch_size: int = 200,
+    batch_size: int = 20,
     timeout_seconds: float = 120.0,
     request_interval_seconds: float = 0.25,
     fetcher: HttpFetcher | None = None,
@@ -693,6 +698,73 @@ class HorizonsCache:
         if value["query_metadata_sha256"] != _hash(metadata) or value["rows_sha256"] != _hash(rows):
             raise ZTFExternalError("Horizons cache metadata or vector hash mismatch")
         return cls(metadata, tuple(rows), str(value["query_metadata_sha256"]), str(value["rows_sha256"]))
+
+
+def plan_horizons_directory(
+    *,
+    normalized_manifest_path: str | Path,
+    output_directory: str | Path,
+    batch_size: int = 20,
+) -> dict[str, object]:
+    """Audit resume state and estimate requests without network access or writes."""
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+        raise ZTFExternalError("batch_size must be a positive integer")
+    manifest_path = Path(normalized_manifest_path)
+    output = Path(output_directory)
+    try:
+        source = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ZTFExternalError(f"cannot load normalized Fink manifest: {exc}") from exc
+    if source.get("schema") != FINK_INGEST_MANIFEST_SCHEMA:
+        raise ZTFExternalError("normalized Fink manifest schema mismatch")
+    rows: list[dict[str, object]] = []
+    for row in source.get("objects", []):
+        if row.get("status") != "ready":
+            continue
+        object_id = str(row["object_id"])
+        normalized_path = manifest_path.parent / str(row["normalized_path"])
+        if _sha256_file(normalized_path) != row["normalized_sha256"]:
+            raise ZTFExternalError(f"normalized object hash mismatch: {object_id}")
+        retained_count = int(row["retained_row_count"])
+        estimated_requests = 2 * math.ceil(retained_count / batch_size)
+        object_output = output / object_id
+        cache_path = object_output / "cache.json"
+        status = "pending"
+        if object_output.exists():
+            try:
+                cached = json.loads(cache_path.read_text(encoding="utf-8"))
+                parsed = HorizonsCache.from_mapping(cached)
+            except (OSError, json.JSONDecodeError, ZTFExternalError) as exc:
+                raise ZTFExternalError(
+                    f"incomplete existing Horizons cache for {object_id}: {exc}"
+                ) from exc
+            if parsed.query_metadata.get("normalized_object_sha256") != row["normalized_sha256"]:
+                raise ZTFExternalError(f"stale Horizons cache for {object_id}")
+            if len(parsed.rows) != retained_count:
+                raise ZTFExternalError(f"Horizons row-count mismatch for {object_id}")
+            status = "cached"
+            estimated_requests = 0
+        rows.append(
+            {
+                "object_id": object_id,
+                "status": status,
+                "retained_observation_count": retained_count,
+                "estimated_request_count": estimated_requests,
+            }
+        )
+    return {
+        "schema": HORIZONS_PLAN_SCHEMA,
+        "network_accessed": False,
+        "filesystem_modified": False,
+        "normalized_manifest_sha256": _sha256_file(manifest_path),
+        "output_directory": output.as_posix(),
+        "batch_size": batch_size,
+        "ready_object_count": len(rows),
+        "cached_object_count": sum(row["status"] == "cached" for row in rows),
+        "pending_object_count": sum(row["status"] == "pending" for row in rows),
+        "estimated_request_count": sum(int(row["estimated_request_count"]) for row in rows),
+        "objects": rows,
+    }
 
 
 def fink_rows_to_epoch(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -12,10 +13,12 @@ import yaml
 from lc_pipeline.k3.ztf_external import (
     HorizonsCache,
     ZTFExternalError,
+    _parse_horizons_vectors,
     fetch_horizons_cache,
     fink_rows_to_epoch,
     ingest_fink_directory,
     normalize_fink_rows,
+    plan_horizons_directory,
 )
 
 
@@ -138,6 +141,28 @@ def _fake_horizons(url: str, _timeout: float) -> tuple[bytes, str, str, str]:
     return json.dumps(payload).encode(), url, "Thu, 10 Sep 2026 00:00:00 GMT", "application/json"
 
 
+def test_horizons_parser_accepts_observed_fractional_second_jd_rounding():
+    requested = 2460195.0118981
+    returned = 2460195.011898099
+    payload = json.dumps(
+        {
+            "signature": {"source": "NASA/JPL Horizons API", "version": "test"},
+            "result": f"$$SOE\n{returned:.15f}, A.D. fake, 1, 2, 3,\n$$EOE",
+        }
+    ).encode()
+
+    assert _parse_horizons_vectors(payload, [requested]) == ((1.0, 2.0, 3.0),)
+
+    shifted = json.dumps(
+        {
+            "signature": {"source": "NASA/JPL Horizons API", "version": "test"},
+            "result": f"$$SOE\n{requested + 3e-9:.15f}, A.D. fake, 1, 2, 3,\n$$EOE",
+        }
+    ).encode()
+    with pytest.raises(ZTFExternalError, match="epoch mismatch"):
+        _parse_horizons_vectors(shifted, [requested])
+
+
 def test_horizons_fetch_retains_raw_bytes_hashes_and_builds_usable_cache(tmp_path: Path):
     normalized = tmp_path / "asteroid_1.json"
     normalized.write_text(
@@ -180,3 +205,65 @@ def test_horizons_fetch_retains_raw_bytes_hashes_and_builds_usable_cache(tmp_pat
     )
     assert len(epoch.observations) == 1
     assert epoch.observations[0].relative_brightness == 1.0
+
+
+def test_horizons_dry_run_reports_pending_then_validated_resume_cache(tmp_path: Path):
+    normalized_root = tmp_path / "normalized"
+    object_path = normalized_root / "objects" / "asteroid_1.json"
+    object_path.parent.mkdir(parents=True)
+    object_path.write_text(
+        json.dumps(
+            {
+                "schema": "delphi.k3-fink-normalized.v1",
+                "object_id": "asteroid_1",
+                "rows": [{"jd": 2450000.25}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    object_hash = hashlib.sha256(object_path.read_bytes()).hexdigest()
+    manifest_path = normalized_root / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema": "delphi.k3-fink-ingest-manifest.v1",
+                "objects": [
+                    {
+                        "object_id": "asteroid_1",
+                        "status": "ready",
+                        "normalized_path": "objects/asteroid_1.json",
+                        "normalized_sha256": object_hash,
+                        "retained_row_count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cache_root = tmp_path / "horizons"
+
+    pending = plan_horizons_directory(
+        normalized_manifest_path=manifest_path,
+        output_directory=cache_root,
+        batch_size=20,
+    )
+
+    assert pending["pending_object_count"] == 1
+    assert pending["cached_object_count"] == 0
+    assert pending["estimated_request_count"] == 2
+    assert not cache_root.exists()
+
+    fetch_horizons_cache(
+        normalized_object_path=object_path,
+        output_directory=cache_root / "asteroid_1",
+        request_interval_seconds=0,
+        fetcher=_fake_horizons,
+    )
+    resumed = plan_horizons_directory(
+        normalized_manifest_path=manifest_path,
+        output_directory=cache_root,
+        batch_size=20,
+    )
+    assert resumed["pending_object_count"] == 0
+    assert resumed["cached_object_count"] == 1
+    assert resumed["estimated_request_count"] == 0
