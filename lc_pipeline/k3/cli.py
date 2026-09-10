@@ -289,6 +289,17 @@ def _parser() -> argparse.ArgumentParser:
     convergence.add_argument("--repeat-order-seed", type=int, default=20260910)
     convergence.add_argument("--bootstrap-seed", type=int, default=20260911)
     convergence.add_argument("--object-ids-path", type=Path)
+    external_predict = commands.add_parser("predict-ztf-external")
+    external_predict.add_argument("--prepared", type=Path, required=True)
+    external_predict.add_argument("--model-directory", type=Path, required=True)
+    external_predict.add_argument("--splits", type=Path, required=True)
+    external_predict.add_argument("--output", type=Path, required=True)
+    external_predict.add_argument("--policy", choices=("existing_identity", "strict_temporal_new"), required=True)
+    external_predict.add_argument("--device", default="cpu")
+    external_score = commands.add_parser("score-ztf-external")
+    external_score.add_argument("--prediction", type=Path, required=True)
+    external_score.add_argument("--references", type=Path, required=True)
+    external_score.add_argument("--output", type=Path, required=True)
     convergence.add_argument("--repository-root", type=Path, default=Path.cwd())
     release = commands.add_parser("build-publication-release")
     release.add_argument("--artifact-root", type=Path, required=True)
@@ -653,6 +664,18 @@ def main(argv: list[str] | None = None) -> int:
             object_ids_path=arguments.object_ids_path,
         )
         print(json.dumps({"summary": summary, "protocol_sha256": K3_PROTOCOL_SHA256}, sort_keys=True))
+        return 0
+    if arguments.command == "predict-ztf-external":
+        from .ztf_prediction import predict_prepared_ztf_object
+
+        result = predict_prepared_ztf_object(arguments.prepared, arguments.model_directory, arguments.splits, arguments.output, policy=arguments.policy, device=arguments.device)
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if arguments.command == "score-ztf-external":
+        from .ztf_prediction import score_external_prediction
+
+        result = score_external_prediction(arguments.prediction, arguments.references, arguments.output)
+        print(json.dumps(result, sort_keys=True))
         return 0
     if arguments.command == "build-publication-release":
         require_clean_repository(arguments.repository_root)
