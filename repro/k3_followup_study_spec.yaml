@@ -1,0 +1,94 @@
+schema: delphi.k3-followup-study-spec.v1
+spec_version: 1.0.0
+status: frozen_before_ztf_prediction_and_convergence_execution
+frozen_date: "2026-09-10"
+title: Cross-survey transport and convergence-stopped inversion follow-up
+
+scope:
+  model: frozen_delphi_k3_v1.0_weights
+  period: externally_supplied_fixed_period
+  candidate_semantics: unordered_three_axis_set
+  reference_access: forbidden_until_predictions_or_fit_selection_are_saved
+  allowed_outcomes: [positive, negative, inconclusive]
+
+ztf_cross_survey:
+  role: retrospective_cross_survey_cross_fitted_transport
+  identities: existing_damit_20250610_objects_with_ztf_photometry
+  model_policy: average_the_five_seed_score_grids_from_the_identity_held_out_fold
+  photometry:
+    filter: ztf_r
+    maximum_sigma_magnitude: 0.2
+    epoch_policy: one_source_epoch_per_ztf_object
+    primary_brightness: object_relative_flux_from_observed_magnitude
+  geometry:
+    source: frozen_jpl_horizons_vector_queries
+    frame: asteroid_centric_ecliptic_j2000
+    vectors: [asteroid_to_sun, asteroid_to_earth]
+    validation: [dhelio_norm, dobs_norm, phase_angle, optional_radec_projection]
+  reporting:
+    unit: asteroid
+    metrics: [oracle_at_3_mean, oracle_at_3_median, fraction_within_20_deg, fraction_within_30_deg, prediction_failures]
+    interval: object_bootstrap_95_percent
+    forbidden_terms: [prospective_validation, unseen_identity_validation, deployment_accuracy]
+
+temporal_external_case_series:
+  cutoff_utc: "2025-06-10T00:03:01Z"
+  identities: [asteroid_49, asteroid_279, asteroid_366]
+  model_policy: average_all_25_real_fold_seed_score_grids
+  reporting: all_objects_individually_without_population_interval_or_gate
+  permitted_description: strict_temporal_external_case_series
+
+convergence_acceleration:
+  role: preregistered_followup_with_internally_locked_evaluation
+  full_cohort: frozen_170_object_damit_oof_cohort
+  split:
+    method: six_development_objects_per_original_outer_fold_by_sha256_rank
+    salt: delphi-k3-convergence-followup-20260910
+    development_count: 30
+    locked_evaluation_count: 140
+  arms:
+    baseline: six_damit_standard_signed_starts
+    guided: three_frozen_oof_k3_axes_expanded_to_six_signed_starts
+  shared_conditions:
+    solver: damit_convexinv_0.2.1
+    period: first_frozen_catalog_solution_fixed_in_both_arms
+    convergence_tolerance_grid: [0.01, 0.003, 0.001, 0.0003, 0.0001]
+    iteration_cap: 1000
+    timeout_seconds_per_start: 300
+    timing_repeats: 3
+    repeat_order_seed: 20260910
+    bootstrap_resamples: 10000
+    bootstrap_seed: 20260911
+    include_warm_neural_inference_time: true
+    report_cold_neural_inference_sensitivity: true
+  development_selection:
+    eligible_tolerance_requires:
+      guided_minus_baseline_recovery_point_difference_minimum: -0.02
+      guided_minus_baseline_completion_point_difference_minimum: -0.02
+      guided_to_baseline_geometric_mean_rms_ratio_maximum: 1.01
+    choose: largest_runtime_ratio_lower_bound
+    tie_break: smaller_convergence_tolerance
+    no_eligible_tolerance: stop_without_locked_acceleration_test
+  locked_evaluation_gate:
+    runtime_baseline_to_guided_ratio_ci95_lower_strictly_greater_than: 1.0
+    guided_minus_baseline_recovery_ci95_lower_minimum: -0.02
+    guided_minus_baseline_completion_ci95_lower_minimum: -0.02
+    guided_to_baseline_geometric_mean_rms_ratio_ci95_upper_strictly_less_than: 1.01
+    decision: all_four_conditions_must_pass
+  analysis:
+    inference_unit: asteroid
+    resampling: object_clustered_preserving_all_starts_and_repeats
+    fit_selection: minimum_final_relative_rms_without_reference_axis_access
+    recovery: selected_fit_within_20_axial_degrees_of_any_frozen_catalog_axis
+    failures: retained_in_completion_and_recovery_denominators
+  maximum_positive_claim: >-
+    K3-guided initialization accelerated this convex-inversion solver under
+    known-period, six-start, convergence-stopped conditions on a retrospective
+    DAMIT out-of-fold benchmark without exceeding the prespecified recovery,
+    RMS, or completion noninferiority margins.
+
+disclosures:
+  - The fixed-work benchmark and its negative timing result were known before this follow-up.
+  - Development tolerance selection is isolated from the locked evaluation subset.
+  - The strict temporal cohort has only three objects and is descriptive.
+  - Cross-survey ZTF objects are not new identities and may have influenced pipeline development.
