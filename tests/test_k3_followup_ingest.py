@@ -6,13 +6,16 @@ import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 import yaml
 
 from lc_pipeline.k3.ztf_external import (
     HorizonsCache,
+    ZTFExternalError,
     fetch_horizons_cache,
     fink_rows_to_epoch,
     ingest_fink_directory,
+    normalize_fink_rows,
 )
 
 
@@ -90,10 +93,33 @@ def test_ingest_fink_directory_normalizes_filters_and_never_copies_labels(tmp_pa
     assert prepared["rows"][0]["phase"] == 90.0
     assert prepared["rejected_row_counts"] == {
         "invalid_photometry": 0,
+        "named_designation_rows": 0,
         "sigma_rejected": 1,
         "wrong_filter": 1,
     }
     assert "pole_label" not in json.dumps(prepared)
+
+
+def test_fink_named_designation_is_retained_but_numeric_identity_remains_strict():
+    numeric = _raw_row(**{"i:ssnamenr": "1", "sso_name": "Ceres"})
+    named = _raw_row(
+        **{
+            "i:ssnamenr": "Ceres",
+            "sso_name": "Ceres",
+            "i:jd": 2450001.25,
+        }
+    )
+
+    rows, counts = normalize_fink_rows("asteroid_1", [numeric, named])
+
+    assert [row["fink_ssnamenr"] for row in rows] == ["1", "Ceres"]
+    assert counts["named_designation_rows"] == 1
+    with pytest.raises(ZTFExternalError, match="identity mismatch"):
+        normalize_fink_rows("asteroid_1", [_raw_row(**{"i:ssnamenr": "2"})])
+    with pytest.raises(ZTFExternalError, match="named designation mismatch"):
+        normalize_fink_rows(
+            "asteroid_1", [_raw_row(**{"i:ssnamenr": "Ceres", "sso_name": "Pallas"})]
+        )
 
 
 def _fake_horizons(url: str, _timeout: float) -> tuple[bytes, str, str, str]:

@@ -115,6 +115,51 @@ def _finite_float(row: Mapping[str, object], key: str, *, positive: bool = False
     return value
 
 
+def _fink_designation(
+    row: Mapping[str, object], source_index: int, asteroid_number: int
+) -> tuple[str, bool]:
+    """Validate a Fink identity token without assuming it is always numeric.
+
+    Historical Fink responses can switch ``i:ssnamenr`` between the numbered
+    designation (for example ``"107"``) and the stable name (``"Camilla"``)
+    within one response.  File selection from the frozen split is authoritative;
+    every numeric token must still agree with it.  Named tokens are retained and,
+    when Fink also supplies ``sso_name``, checked against that alias.
+    """
+    try:
+        raw = row["i:ssnamenr"]
+    except KeyError as exc:
+        raise ZTFExternalError(
+            f"Fink source row {source_index} lacks i:ssnamenr"
+        ) from exc
+    if isinstance(raw, bool):
+        raise ZTFExternalError(f"Fink source row {source_index} has invalid i:ssnamenr")
+    if isinstance(raw, int):
+        numeric = raw
+        designation = str(raw)
+    elif isinstance(raw, float) and math.isfinite(raw) and raw.is_integer():
+        numeric = int(raw)
+        designation = str(numeric)
+    elif isinstance(raw, str) and raw.strip():
+        designation = raw.strip()
+        numeric = int(designation) if designation.isdecimal() else None
+    else:
+        raise ZTFExternalError(f"Fink source row {source_index} has invalid i:ssnamenr")
+    if numeric is not None:
+        if numeric != asteroid_number:
+            raise ZTFExternalError(
+                f"Fink identity mismatch: expected {asteroid_number}, row reports {numeric}"
+            )
+        return designation, False
+    alias = row.get("sso_name")
+    if isinstance(alias, str) and alias.strip() and alias.strip().casefold() != designation.casefold():
+        raise ZTFExternalError(
+            f"Fink named designation mismatch at row {source_index}: "
+            f"i:ssnamenr={designation!r}, sso_name={alias!r}"
+        )
+    return designation, True
+
+
 def normalize_fink_rows(
     object_id: str,
     rows: Sequence[Mapping[str, object]],
@@ -130,21 +175,24 @@ def normalize_fink_rows(
     if not math.isfinite(maximum_sigma_magnitude) or maximum_sigma_magnitude <= 0:
         raise ZTFExternalError("maximum_sigma_magnitude must be finite and positive")
     retained: list[dict[str, object]] = []
-    counts = {"wrong_filter": 0, "invalid_photometry": 0, "sigma_rejected": 0}
+    counts = {
+        "wrong_filter": 0,
+        "invalid_photometry": 0,
+        "sigma_rejected": 0,
+        "named_designation_rows": 0,
+    }
+    named_designations: set[str] = set()
     for source_index, row in enumerate(rows):
         if not isinstance(row, Mapping):
             raise ZTFExternalError(f"Fink source row {source_index} is not an object")
+        designation, is_named = _fink_designation(row, source_index, asteroid_number)
+        if is_named:
+            counts["named_designation_rows"] += 1
+            named_designations.add(designation.casefold())
         try:
-            source_number = int(row["i:ssnamenr"])
             fid = int(row["i:fid"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ZTFExternalError(
-                f"Fink source row {source_index} lacks integer identity/filter fields"
-            ) from exc
-        if source_number != asteroid_number:
-            raise ZTFExternalError(
-                f"Fink identity mismatch for {object_id}: row reports {source_number}"
-            )
+            raise ZTFExternalError(f"Fink source row {source_index} lacks integer fid") from exc
         if fid != 2:
             counts["wrong_filter"] += 1
             continue
@@ -165,6 +213,7 @@ def normalize_fink_rows(
             raise ZTFExternalError(f"Fink source row {source_index} has invalid phase angle")
         normalized: dict[str, object] = {
             "source_row_index": source_index,
+            "fink_ssnamenr": designation,
             "jd": jd,
             "fid": fid,
             "magpsf": magnitude,
@@ -185,6 +234,10 @@ def normalize_fink_rows(
         if "sso_name" in row and isinstance(row["sso_name"], str):
             normalized["sso_name"] = row["sso_name"]
         retained.append(normalized)
+    if len(named_designations) > 1:
+        raise ZTFExternalError(
+            f"Fink response for {object_id} contains multiple named designations"
+        )
     retained.sort(key=lambda row: (float(row["jd"]), int(row["source_row_index"])))
     jds = [float(row["jd"]) for row in retained]
     if len(jds) != len(set(jds)):
@@ -255,6 +308,11 @@ def ingest_fink_directory(
                 "source_filename": raw_path.name,
                 "source_sha256": _sha256_file(raw_path),
                 "study_spec_sha256": _sha256_file(spec_path),
+                "identity_binding": {
+                    "authority": "frozen_split_identity_and_numbered_source_filename",
+                    "numeric_i_ssnamenr_must_match": True,
+                    "stable_named_i_ssnamenr_permitted_and_retained": True,
+                },
                 "filter": {
                     "fid": 2,
                     "band": "ztf_r",
