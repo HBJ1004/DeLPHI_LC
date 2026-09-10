@@ -490,6 +490,7 @@ def prepare_temporal_damit_inputs(
             )
         manifest: dict[str, object] = {
             "schema": TEMPORAL_PREPARED_MANIFEST_SCHEMA,
+            "study_spec_sha256": index["study_spec_sha256"],
             "input_index_sha256": _sha256_file(index_path),
             "selection_uses_reference_axes": False,
             "reference_directory_access_required": False,

@@ -53,6 +53,12 @@ The observer vector uses the Earth center (`500@399`), not each exposure's ZTF
 observatory location. This geocentric approximation is explicit in every
 prepared object and must be disclosed when interpreting cross-survey results.
 
+If the study specification is refrozen while a long Horizons acquisition is
+already running, do not silently relabel its caches. `rebind-horizons` accepts a
+complete source manifest only, verifies all 169 normalized objects are identical
+apart from their study-spec hash, copies raw responses/vector rows unchanged,
+and records both old and final hashes in every rebound cache.
+
 Once all 169 cache directories and the final Horizons manifest exist, bind the
 raw Horizons target headers to the Fink numeric/name designations and export
 the externally supplied period only:

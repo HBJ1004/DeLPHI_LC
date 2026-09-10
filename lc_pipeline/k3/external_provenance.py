@@ -359,12 +359,15 @@ def prepare_ztf_followup_directory(
         raise ZTFExternalError("ZTF period manifest schema mismatch")
     normalized_hash = _sha256_file(normalized_path)
     horizons_hash = _sha256_file(horizons_path)
+    spec_hash = _sha256_file(spec_path)
     if (
         horizons.get("normalized_manifest_sha256") != normalized_hash
+        or horizons.get("study_spec_sha256") != spec_hash
         or audit.get("normalized_manifest_sha256") != normalized_hash
+        or audit.get("study_spec_sha256") != spec_hash
         or audit.get("horizons_manifest_sha256") != horizons_hash
         or periods.get("normalized_manifest_sha256") != normalized_hash
-        or periods.get("study_spec_sha256") != _sha256_file(spec_path)
+        or periods.get("study_spec_sha256") != spec_hash
     ):
         raise ZTFExternalError("ZTF preparation manifests are not hash-bound to one another")
     normalized_rows = {
@@ -464,7 +467,7 @@ def prepare_ztf_followup_directory(
             )
         result: dict[str, object] = {
             "schema": ZTF_PREPARED_MANIFEST_SCHEMA,
-            "study_spec_sha256": _sha256_file(spec_path),
+            "study_spec_sha256": spec_hash,
             "normalized_manifest_sha256": normalized_hash,
             "horizons_manifest_sha256": horizons_hash,
             "horizons_identity_audit_sha256": _sha256_file(audit_path),

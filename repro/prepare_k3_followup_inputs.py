@@ -25,6 +25,7 @@ from lc_pipeline.k3.ztf_external import (
     fetch_horizons_directory,
     ingest_fink_directory,
     plan_horizons_directory,
+    rebind_horizons_directory,
 )
 
 
@@ -51,6 +52,14 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--normalized-manifest", type=Path, required=True)
     audit.add_argument("--horizons-manifest", type=Path, required=True)
     audit.add_argument("--output", type=Path, required=True)
+
+    rebind = commands.add_parser(
+        "rebind-horizons", help="rebind complete caches after a metadata-only spec refreeze"
+    )
+    rebind.add_argument("--source-normalized-manifest", type=Path, required=True)
+    rebind.add_argument("--final-normalized-manifest", type=Path, required=True)
+    rebind.add_argument("--source-horizons-manifest", type=Path, required=True)
+    rebind.add_argument("--output-directory", type=Path, required=True)
 
     horizons = commands.add_parser(
         "fetch-horizons", help="fetch missing vectors from the official JPL API"
@@ -145,6 +154,13 @@ def main(argv: Sequence[str] | None = None) -> None:
             normalized_manifest_path=args.normalized_manifest,
             horizons_manifest_path=args.horizons_manifest,
             output_path=args.output,
+        )
+    elif args.command == "rebind-horizons":
+        result = rebind_horizons_directory(
+            source_normalized_manifest_path=args.source_normalized_manifest,
+            final_normalized_manifest_path=args.final_normalized_manifest,
+            source_horizons_manifest_path=args.source_horizons_manifest,
+            output_directory=args.output_directory,
         )
     elif args.command == "fetch-horizons":
         result = fetch_horizons_directory(

@@ -709,6 +709,7 @@ def fetch_horizons_directory(
     result: dict[str, object] = {
         "schema": HORIZONS_MANIFEST_SCHEMA,
         "source": "JPL Horizons",
+        "study_spec_sha256": source["study_spec_sha256"],
         "normalized_manifest_sha256": _sha256_file(manifest_path),
         "selection_uses_labels": False,
         "object_count": len(results),
@@ -935,6 +936,7 @@ def audit_horizons_directory_identities(
     result: dict[str, object] = {
         "schema": HORIZONS_IDENTITY_AUDIT_SCHEMA,
         "source": "retained official JPL Horizons API response bytes",
+        "study_spec_sha256": normalized_manifest["study_spec_sha256"],
         "selection_uses_labels": False,
         "normalized_manifest_sha256": _sha256_file(normalized_path),
         "horizons_manifest_sha256": _sha256_file(horizons_path),
@@ -943,6 +945,154 @@ def audit_horizons_directory_identities(
     }
     _write_new_json(destination, result)
     return result
+
+
+def rebind_horizons_directory(
+    *,
+    source_normalized_manifest_path: str | Path,
+    final_normalized_manifest_path: str | Path,
+    source_horizons_manifest_path: str | Path,
+    output_directory: str | Path,
+) -> dict[str, object]:
+    """Rebind complete caches after a metadata-only study-spec refreeze.
+
+    Raw Horizons bytes and vector rows are copied unchanged. Every old/new
+    normalized object must be identical after removing only its recorded study
+    spec hash; any scientific or selection change fails closed.
+    """
+    old_path = Path(source_normalized_manifest_path)
+    new_path = Path(final_normalized_manifest_path)
+    horizons_path = Path(source_horizons_manifest_path)
+    destination = Path(output_directory)
+    if destination.exists():
+        raise ZTFExternalError("rebound Horizons output directory must not already exist")
+    try:
+        old_manifest = json.loads(old_path.read_text(encoding="utf-8"))
+        new_manifest = json.loads(new_path.read_text(encoding="utf-8"))
+        horizons_manifest = json.loads(horizons_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ZTFExternalError(f"cannot load Horizons rebind input: {exc}") from exc
+    if (
+        old_manifest.get("schema") != FINK_INGEST_MANIFEST_SCHEMA
+        or new_manifest.get("schema") != FINK_INGEST_MANIFEST_SCHEMA
+        or horizons_manifest.get("schema") != HORIZONS_MANIFEST_SCHEMA
+        or horizons_manifest.get("normalized_manifest_sha256") != _sha256_file(old_path)
+    ):
+        raise ZTFExternalError("Horizons rebind input schemas or source binding are invalid")
+    old_rows = {
+        str(row["object_id"]): row
+        for row in old_manifest.get("objects", [])
+        if row.get("status") == "ready"
+    }
+    new_rows = {
+        str(row["object_id"]): row
+        for row in new_manifest.get("objects", [])
+        if row.get("status") == "ready"
+    }
+    horizon_rows = {
+        str(row["object_id"]): row for row in horizons_manifest.get("objects", [])
+    }
+    if (
+        len(old_rows) != 169
+        or set(new_rows) != set(old_rows)
+        or set(horizon_rows) != set(old_rows)
+        or horizons_manifest.get("object_count") != 169
+    ):
+        raise ZTFExternalError("Horizons rebind requires a complete identical 169-object cohort")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", dir=destination.parent))
+    rebound_rows: list[dict[str, object]] = []
+    try:
+        for object_id in sorted(old_rows, key=_number_from_object_id):
+            old_row = old_rows[object_id]
+            new_row = new_rows[object_id]
+            old_object_path = _safe_child(
+                old_path.parent, old_row["normalized_path"], "old normalized object"
+            )
+            new_object_path = _safe_child(
+                new_path.parent, new_row["normalized_path"], "final normalized object"
+            )
+            if (
+                _sha256_file(old_object_path) != old_row["normalized_sha256"]
+                or _sha256_file(new_object_path) != new_row["normalized_sha256"]
+            ):
+                raise ZTFExternalError(f"normalized object hash mismatch: {object_id}")
+            old_object = json.loads(old_object_path.read_text(encoding="utf-8"))
+            new_object = json.loads(new_object_path.read_text(encoding="utf-8"))
+            old_spec_hash = old_object.pop("study_spec_sha256", None)
+            new_spec_hash = new_object.pop("study_spec_sha256", None)
+            if (
+                old_object != new_object
+                or old_spec_hash == new_spec_hash
+                or new_spec_hash != new_manifest.get("study_spec_sha256")
+            ):
+                raise ZTFExternalError(
+                    f"normalized science changed; metadata-only rebind forbidden: {object_id}"
+                )
+            source_cache_path = _safe_child(
+                horizons_path.parent, horizon_rows[object_id]["cache_path"], "source cache"
+            )
+            if _sha256_file(source_cache_path) != horizon_rows[object_id]["cache_sha256"]:
+                raise ZTFExternalError(f"source Horizons cache hash mismatch: {object_id}")
+            source_cache = json.loads(source_cache_path.read_text(encoding="utf-8"))
+            parsed = HorizonsCache.from_mapping(source_cache)
+            if parsed.query_metadata.get("normalized_object_sha256") != old_row["normalized_sha256"]:
+                raise ZTFExternalError(f"source Horizons cache is stale: {object_id}")
+            output_object_root = staging / object_id
+            shutil.copytree(source_cache_path.parent, output_object_root)
+            rebound_cache = dict(source_cache)
+            metadata = dict(parsed.query_metadata)
+            metadata["normalized_object_sha256"] = new_row["normalized_sha256"]
+            metadata["normalization_rebind"] = {
+                "source_normalized_manifest_sha256": _sha256_file(old_path),
+                "final_normalized_manifest_sha256": _sha256_file(new_path),
+                "source_normalized_object_sha256": old_row["normalized_sha256"],
+                "final_normalized_object_sha256": new_row["normalized_sha256"],
+                "final_study_spec_sha256": new_manifest["study_spec_sha256"],
+                "only_study_spec_hash_changed": True,
+                "raw_responses_and_vector_rows_unchanged": True,
+            }
+            rebound_cache["query_metadata"] = metadata
+            rebound_cache["query_metadata_sha256"] = _hash(metadata)
+            output_cache_path = output_object_root / "cache.json"
+            output_cache_path.write_text(
+                json.dumps(rebound_cache, indent=2, sort_keys=True, allow_nan=False) + "\n",
+                encoding="utf-8",
+            )
+            HorizonsCache.from_mapping(rebound_cache)
+            rebound_rows.append(
+                {
+                    "object_id": object_id,
+                    "normalized_sha256": new_row["normalized_sha256"],
+                    "cache_path": f"{object_id}/cache.json",
+                    "cache_sha256": _sha256_file(output_cache_path),
+                    "query_metadata_sha256": rebound_cache["query_metadata_sha256"],
+                    "rows_sha256": rebound_cache["rows_sha256"],
+                    "row_count": len(rebound_cache["rows"]),
+                }
+            )
+        result: dict[str, object] = {
+            "schema": HORIZONS_MANIFEST_SCHEMA,
+            "source": "JPL Horizons",
+            "study_spec_sha256": new_manifest["study_spec_sha256"],
+            "normalized_manifest_sha256": _sha256_file(new_path),
+            "selection_uses_labels": False,
+            "object_count": len(rebound_rows),
+            "row_count": sum(int(row["row_count"]) for row in rebound_rows),
+            "offline_rebind": {
+                "source_horizons_manifest_sha256": _sha256_file(horizons_path),
+                "source_normalized_manifest_sha256": _sha256_file(old_path),
+                "final_normalized_manifest_sha256": _sha256_file(new_path),
+                "only_study_spec_hash_changed": True,
+            },
+            "objects": rebound_rows,
+        }
+        _write_new_json(staging / "manifest.json", result)
+        os.replace(staging, destination)
+        return result
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
 
 def fink_rows_to_epoch(
