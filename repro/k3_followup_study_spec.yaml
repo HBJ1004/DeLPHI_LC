@@ -45,7 +45,7 @@ convergence_acceleration:
   full_cohort: frozen_170_object_damit_oof_cohort
   frozen_inputs:
     publication_split_sha256: 1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4
-    reference_catalog_sha256: acf96aed4a25ce8e772327cd640177686fa777ad8227a2de5337349ef3806e03
+    reference_catalog_sha256: ac1abdab62453fca6e3d7473af0ad3b7de1bcb04cee9b947fb7079d340613679
     oof_ensemble_sha256: 54d2f1ebb0f0e8993dc61d0e2a090a19eb1fefcbd170f7a9741ad8fbf9acbc05
     blind_execution_inputs_sha256: 10f310f9ba735ccdf154105ad8d11a3c698f44046f5c33a55f256a846157ba1f
     official_solver_archive_sha256: b1bc2402732e8fd4d1bfe56973a3693bf7ceb6f3bb31e8b5f03926fac59c410c
