@@ -110,6 +110,10 @@ not completed at the analysis freeze; they do not describe whether the GitHub
 software package can be distributed. The prospective temporal cohort was not
 executed and is not a result of the manuscript.
 
+Input-only acquisition and label-separation procedures for the frozen follow-up
+are documented in [K3 follow-up external data](followup-data.md). These commands
+do not score the follow-up or change the frozen manuscript results.
+
 For scientific interpretation and limitations, cite Jo, Ishiguro and Lee, in prep.
 
 ## Verify the complete release package

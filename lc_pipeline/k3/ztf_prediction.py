@@ -27,7 +27,10 @@ class ZTFPredictionError(ValueError):
 def _load_prepared(path: str | Path) -> tuple[str, KnownPeriod, tuple[ObservationEpoch, ...]]:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
-        if value.get("schema") != "delphi.k3-ztf-prepared.v1":
+        if value.get("schema") not in {
+            "delphi.k3-ztf-prepared.v1",
+            "delphi.k3-external-prepared.v1",
+        }:
             raise ZTFPredictionError("prepared object schema is invalid")
         period = KnownPeriod(float(value["known_period_hours"]), str(value["period_provenance"]))
         epochs = tuple(ObservationEpoch(row["epoch_id"], tuple(Observation(**item) for item in row["observations"])) for row in value["epochs"])
@@ -60,7 +63,9 @@ def _fold_policy(object_id: str, split_path: str | Path, policy: Literal["existi
 
 
 def _load_models(model_directory: str | Path, folds: Sequence[int], device: str) -> tuple[list[CandidateConditionedScorer], list[str]]:
-    models: list[CandidateConditionedScorer] = []; names: list[str] = []; config: K3ScoreModelConfig | None = None
+    models: list[CandidateConditionedScorer] = []
+    names: list[str] = []
+    config: K3ScoreModelConfig | None = None
     root = Path(model_directory)
     for fold in folds:
         for seed in K3_OOF_SEEDS:
@@ -73,12 +78,14 @@ def _load_models(model_directory: str | Path, folds: Sequence[int], device: str)
                 if config is not None and current != config:
                     raise ZTFPredictionError("external ensemble checkpoints have incompatible configurations")
                 config = current
-                model = CandidateConditionedScorer(current); model.load_state_dict(checkpoint["model_state_dict"])
+                model = CandidateConditionedScorer(current)
+                model.load_state_dict(checkpoint["model_state_dict"])
             except ZTFPredictionError:
                 raise
             except (OSError, KeyError, TypeError, ValueError, RuntimeError) as exc:
                 raise ZTFPredictionError(f"cannot load checkpoint {path.name}: {exc}") from exc
-            models.append(model.to(device).eval()); names.append(path.name)
+            models.append(model.to(device).eval())
+            names.append(path.name)
     return models, names
 
 
@@ -113,7 +120,8 @@ def score_external_prediction(prediction_path: str | Path, reference_path: str |
     object_id = prediction.get("object_id")
     if prediction.get("schema") != "delphi.k3-ztf-external-prediction.v1" or not isinstance(references, Mapping) or object_id not in references:
         raise ZTFPredictionError("prediction/reference identities do not align")
-    targets = np.asarray(references[object_id], dtype=float); axes = np.asarray([row["axis_xyz"] for row in prediction["axes"]], dtype=float)
+    targets = np.asarray(references[object_id], dtype=float)
+    axes = np.asarray([row["axis_xyz"] for row in prediction["axes"]], dtype=float)
     if targets.ndim != 2 or targets.shape[1] != 3 or axes.shape != (3, 3) or not np.all(np.isfinite(targets)):
         raise ZTFPredictionError("reference axes are invalid")
     error = float(np.min(axial_angular_error_deg(axes[:, None, :], targets[None, :, :])))

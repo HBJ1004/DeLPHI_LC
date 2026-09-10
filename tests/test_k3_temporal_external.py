@@ -19,6 +19,8 @@ from lc_pipeline.k3.temporal_external import (
     fetch_temporal_damit_snapshot,
     prepare_temporal_damit_inputs,
 )
+from lc_pipeline.k3.ztf_prediction import _load_prepared
+from repro.prepare_k3_followup_inputs import _parser
 
 
 def _csv_bytes(fieldnames: list[str], rows: list[dict[str, object]]) -> bytes:
@@ -145,6 +147,12 @@ def test_temporal_snapshot_retains_sources_and_prepares_without_references(tmp_p
     prepared_text = (prepared_root / "objects" / "asteroid_49.json").read_text().lower()
     assert '"lambda_deg"' not in prepared_text
     assert '"beta_deg"' not in prepared_text
+    object_id, period, epochs = _load_prepared(
+        prepared_root / "objects" / "asteroid_49.json"
+    )
+    assert object_id == "asteroid_49"
+    assert period.hours == 20.70802
+    assert sum(len(epoch.observations) for epoch in epochs) == 2
 
 
 def test_temporal_fetch_fails_closed_when_an_object_is_not_after_cutoff(tmp_path: Path):
@@ -165,3 +173,19 @@ def test_temporal_fetch_fails_closed_when_an_object_is_not_after_cutoff(tmp_path
             fetcher=fetcher,
         )
     assert not output.exists()
+
+
+def test_followup_cli_freezes_safe_horizons_batch_and_has_no_scoring_command():
+    parser = _parser()
+    args = parser.parse_args(
+        [
+            "plan-horizons",
+            "--normalized-manifest",
+            "normalized/manifest.json",
+            "--output-directory",
+            "horizons",
+        ]
+    )
+    assert args.batch_size == 20
+    with pytest.raises(SystemExit):
+        parser.parse_args(["score-temporal"])
