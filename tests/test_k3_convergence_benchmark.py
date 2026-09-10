@@ -16,44 +16,92 @@ from lc_pipeline.k3.convergence_benchmark import (
     run_convergence_benchmark,
 )
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
-from lc_pipeline.v2.data import sha256_file
 from lc_pipeline.v2.convexinv import ConvexinvParameters, run_convexinv, write_convexinv_parameters
+from lc_pipeline.v2.data import sha256_file
 
 
 def _inputs(tmp_path):
     object_ids = [f"object-{number}" for number in range(5)]
     split = tmp_path / "splits.json"
-    split.write_text(json.dumps({"folds": [{"fold": i, "test_ids": [object_ids[i]]} for i in range(5)]}), encoding="utf-8")
-    dump = tmp_path / "dump"; records = []
+    split.write_text(
+        json.dumps({"folds": [{"fold": i, "test_ids": [object_ids[i]]} for i in range(5)]}),
+        encoding="utf-8",
+    )
+    dump = tmp_path / "dump"
+    records = []
     for object_id in object_ids:
-        lightcurve = dump / "files" / object_id / "lc.txt"; lightcurve.parent.mkdir(parents=True)
+        lightcurve = dump / "files" / object_id / "lc.txt"
+        lightcurve.parent.mkdir(parents=True)
         lightcurve.write_text("test\n", encoding="ascii")
-        records.append({"object_id": object_id, "lightcurve": {"source_path": f"files/{object_id}/lc.txt", "source_sha256": hashlib.sha256(lightcurve.read_bytes()).hexdigest()}, "solutions": [{"period_hours": 8.0, "vector": [1.0, 0.0, 0.0]}]})
-    catalog = tmp_path / "catalog.jsonl"; catalog.write_text("".join(json.dumps(row) + "\n" for row in records), encoding="utf-8")
+        records.append(
+            {
+                "object_id": object_id,
+                "lightcurve": {
+                    "source_path": f"files/{object_id}/lc.txt",
+                    "source_sha256": hashlib.sha256(lightcurve.read_bytes()).hexdigest(),
+                },
+                "solutions": [{"period_hours": 8.0, "vector": [1.0, 0.0, 0.0]}],
+            }
+        )
+    catalog = tmp_path / "catalog.jsonl"
+    catalog.write_text("".join(json.dumps(row) + "\n" for row in records), encoding="utf-8")
     ensemble = tmp_path / "ensemble.npz"
-    np.savez_compressed(ensemble, schema=np.asarray("delphi.k3-real-oof-ensemble.v1"), object_ids=np.asarray(object_ids), refined_axes=np.repeat(np.eye(3)[None, :, :], 5, axis=0), inference_wall_seconds=np.full(5, .1), inference_cold_wall_seconds=np.full(5, .4), inference_warm_wall_seconds=np.full(5, .05))
-    executable = tmp_path / "convexinv"; executable.write_text("binary", encoding="ascii")
-    source = tmp_path / "source"; source.mkdir()
-    archive = tmp_path / "source.tar.gz"; archive.write_text("archive", encoding="ascii")
-    return dict(executable=executable, source_root=source, source_archive=archive, ensemble_path=ensemble, catalog_path=catalog, dump_root=dump, split_path=split, output_directory=tmp_path / "out")
+    np.savez_compressed(
+        ensemble,
+        schema=np.asarray("delphi.k3-real-oof-ensemble.v1"),
+        object_ids=np.asarray(object_ids),
+        refined_axes=np.repeat(np.eye(3)[None, :, :], 5, axis=0),
+        inference_wall_seconds=np.full(5, 0.1),
+        inference_cold_wall_seconds=np.full(5, 0.4),
+        inference_warm_wall_seconds=np.full(5, 0.05),
+    )
+    executable = tmp_path / "convexinv"
+    executable.write_text("binary", encoding="ascii")
+    source = tmp_path / "source"
+    source.mkdir()
+    archive = tmp_path / "source.tar.gz"
+    archive.write_text("archive", encoding="ascii")
+    return dict(
+        executable=executable,
+        source_root=source,
+        source_archive=archive,
+        ensemble_path=ensemble,
+        catalog_path=catalog,
+        dump_root=dump,
+        split_path=split,
+        output_directory=tmp_path / "out",
+    )
 
 
-def test_convergence_runner_propagates_tolerance_selects_by_residual_and_keeps_failures(tmp_path, monkeypatch):
+def test_convergence_runner_propagates_tolerance_selects_by_residual_and_keeps_failures(
+    tmp_path, monkeypatch
+):
     calls = []
+
     def fake_record(**kwargs):
         calls.append(kwargs)
         start = kwargs["start_index"]
         # The timeout and cap must still be included in aggregate work.
         completion = "timeout" if start == 4 else ("iteration-cap" if start == 5 else "converged")
         arm = kwargs["arm"]
-        return {"identity": {"start_index": start}, "completion": completion, "result": {
-            "return_code": None if completion == "timeout" else 0, "timed_out": completion == "timeout",
-            "wall_time_seconds": 3.0 if completion == "timeout" else 1.0,
-            "process_cpu_time_seconds": .5, "iterations": CONVERGENCE_ITERATION_CAP if completion == "iteration-cap" else 10,
-            # Start one is chosen by residual even though its pole fails recovery.
-            "relative_rms_from_output": .5 if start == 1 else 1.0,
-            "final_lambda_deg": 90.0 if (start == 1 and arm == "candidate" and kwargs["object_id"] == "object-0") else 0.0, "final_beta_deg": 0.0,
-        }}
+        return {
+            "identity": {"start_index": start},
+            "completion": completion,
+            "result": {
+                "return_code": None if completion == "timeout" else 0,
+                "timed_out": completion == "timeout",
+                "wall_time_seconds": 3.0 if completion == "timeout" else 1.0,
+                "process_cpu_time_seconds": 0.5,
+                "iterations": CONVERGENCE_ITERATION_CAP if completion == "iteration-cap" else 10,
+                # Start one is chosen by residual even though its pole fails recovery.
+                "relative_rms_from_output": 0.5 if start == 1 else 1.0,
+                "final_lambda_deg": 90.0
+                if (start == 1 and arm == "candidate" and kwargs["object_id"] == "object-0")
+                else 0.0,
+                "final_beta_deg": 0.0,
+            },
+        }
+
     monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
     result = run_convergence_benchmark(**_inputs(tmp_path), convergence_tolerance=1e-4)
     assert len(calls) == 180
@@ -68,12 +116,16 @@ def test_convergence_runner_propagates_tolerance_selects_by_residual_and_keeps_f
     )
     payload = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
     first = payload["rows"][0]
-    assert first["candidate"]["wall_seconds"] == pytest.approx(24.15)  # three repeats, each plus warm neural overhead
+    assert first["candidate"]["wall_seconds"] == pytest.approx(
+        24.15
+    )  # three repeats, each plus warm neural overhead
     assert first["repetitions"][0]["candidate"]["completion_counts"]["timeout"] == 1
     assert first["repetitions"][0]["candidate"]["completion_counts"]["iteration-cap"] == 1
     assert first["repetitions"][0]["candidate"]["best_start_index"] == 1
-    assert first["repetitions"][0]["candidate"]["success"] is False  # recovery is evaluated after residual selection
-    assert first["neural_inference_cold_wall_seconds"] == .4
+    assert (
+        first["repetitions"][0]["candidate"]["success"] is False
+    )  # recovery is evaluated after residual selection
+    assert first["neural_inference_cold_wall_seconds"] == 0.4
     assert result["convergence_tolerance"] == 1e-4
     assert result["repeat_count"] == 3
 
@@ -92,58 +144,111 @@ def test_convergence_runner_refuses_existing_summary_or_rows(tmp_path):
         run_convergence_benchmark(**values, convergence_tolerance=1e-4)
 
 
-def test_convergence_runner_slices_only_after_full_alignment_and_records_subset(tmp_path, monkeypatch):
+def test_convergence_runner_slices_only_after_full_alignment_and_records_subset(
+    tmp_path, monkeypatch
+):
     values = _inputs(tmp_path)
     manifest = tmp_path / "subset.json"
-    manifest.write_text(json.dumps({
-        "schema": OBJECT_SUBSET_SCHEMA, "role": "development",
-        "source_full_split_sha256": sha256_file(values["split_path"]),
-        "object_ids": ["object-3", "object-1"],
-    }))
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": OBJECT_SUBSET_SCHEMA,
+                "role": "development",
+                "source_full_split_sha256": sha256_file(values["split_path"]),
+                "object_ids": ["object-3", "object-1"],
+                "study_spec_sha256": "a" * 64,
+                "selection": "frozen test selection",
+                "salt": "frozen-test-salt",
+            }
+        )
+    )
+
     def fake_record(**kwargs):
-        return {"identity": {"start_index": kwargs["start_index"]}, "completion": "converged", "result": {
-            "return_code": 0, "timed_out": False, "wall_time_seconds": 1.0,
-            "process_cpu_time_seconds": .1, "iterations": 5, "relative_rms_from_output": 1.0,
-            "final_lambda_deg": 0.0, "final_beta_deg": 0.0,
-        }}
+        return {
+            "identity": {"start_index": kwargs["start_index"]},
+            "completion": "converged",
+            "result": {
+                "return_code": 0,
+                "timed_out": False,
+                "wall_time_seconds": 1.0,
+                "process_cpu_time_seconds": 0.1,
+                "iterations": 5,
+                "relative_rms_from_output": 1.0,
+                "final_lambda_deg": 0.0,
+                "final_beta_deg": 0.0,
+            },
+        }
+
     monkeypatch.setattr("lc_pipeline.k3.convergence_benchmark._run_convergence_record", fake_record)
-    result = run_convergence_benchmark(**values, convergence_tolerance=1e-4, object_ids_path=manifest)
+    result = run_convergence_benchmark(
+        **values, convergence_tolerance=1e-4, object_ids_path=manifest
+    )
     rows = json.loads((tmp_path / "out" / "convergence-rows.json").read_text())
     assert rows["object_ids"] == ["object-3", "object-1"]
     assert rows["subset_role"] == result["subset_role"] == "development"
-    assert rows["subset_manifest_sha256"] == result["subset_manifest_sha256"] == sha256_file(manifest)
+    assert (
+        rows["subset_manifest_sha256"] == result["subset_manifest_sha256"] == sha256_file(manifest)
+    )
 
 
-@pytest.mark.parametrize("object_ids,role,split_hash,error", [
-    ([], "development", "valid", "nonempty"),
-    (["object-0", "object-0"], "development", "valid", "duplicate"),
-    (["unknown"], "development", "valid", "unknown"),
-    (["object-0"], "other", "valid", "role"),
-    (["object-0"], "development", "bad", "full split"),
-])
-def test_object_subset_manifest_rejects_invalid_cohorts(tmp_path, object_ids, role, split_hash, error):
+@pytest.mark.parametrize(
+    "object_ids,role,split_hash,error",
+    [
+        ([], "development", "valid", "nonempty"),
+        (["object-0", "object-0"], "development", "valid", "duplicate"),
+        (["unknown"], "development", "valid", "unknown"),
+        (["object-0"], "other", "valid", "role"),
+        (["object-0"], "development", "bad", "full split"),
+    ],
+)
+def test_object_subset_manifest_rejects_invalid_cohorts(
+    tmp_path, object_ids, role, split_hash, error
+):
     values = _inputs(tmp_path)
     manifest = tmp_path / "subset.json"
-    manifest.write_text(json.dumps({
-        "schema": OBJECT_SUBSET_SCHEMA, "role": role,
-        "source_full_split_sha256": sha256_file(values["split_path"]) if split_hash == "valid" else "0" * 64,
-        "object_ids": object_ids,
-    }))
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": OBJECT_SUBSET_SCHEMA,
+                "role": role,
+                "source_full_split_sha256": sha256_file(values["split_path"])
+                if split_hash == "valid"
+                else "0" * 64,
+                "object_ids": object_ids,
+            }
+        )
+    )
     with pytest.raises(DownstreamBenchmarkError, match=error):
-        _select_object_subset(manifest, tuple(f"object-{index}" for index in range(5)), values["split_path"])
+        _select_object_subset(
+            manifest, tuple(f"object-{index}" for index in range(5)), values["split_path"]
+        )
 
 
 def test_convexinv_adapter_retains_partial_timeout_logs(tmp_path, monkeypatch):
-    executable = tmp_path / "convexinv"; executable.write_bytes(b"binary")
-    source = tmp_path / "source"; source.mkdir(); (source / "main.c").write_text("x")
-    lightcurve = tmp_path / "lightcurve.txt"; lightcurve.write_text("not parsed on timeout")
+    executable = tmp_path / "convexinv"
+    executable.write_bytes(b"binary")
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "main.c").write_text("x")
+    lightcurve = tmp_path / "lightcurve.txt"
+    lightcurve.write_text("not parsed on timeout")
     parameters = tmp_path / "parameters.txt"
-    write_convexinv_parameters(parameters, ConvexinvParameters(0, 0, 8, iteration_stop_condition=1e-4))
-    monkeypatch.setattr("lc_pipeline.v2.convexinv._run_external", lambda *args, **kwargs: (None, True, 3.0, 1.5, b"partial stdout", b"partial stderr"))
+    write_convexinv_parameters(
+        parameters, ConvexinvParameters(0, 0, 8, iteration_stop_condition=1e-4)
+    )
+    monkeypatch.setattr(
+        "lc_pipeline.v2.convexinv._run_external",
+        lambda *args, **kwargs: (None, True, 3.0, 1.5, b"partial stdout", b"partial stderr"),
+    )
     result = run_convexinv(
-        executable=executable, source_root=source, lightcurve_file=lightcurve,
-        parameter_file=parameters, output_directory=tmp_path / "run", timeout_seconds=5,
-        stdout_log_path=tmp_path / "run" / "stdout.log", stderr_log_path=tmp_path / "run" / "stderr.log",
+        executable=executable,
+        source_root=source,
+        lightcurve_file=lightcurve,
+        parameter_file=parameters,
+        output_directory=tmp_path / "run",
+        timeout_seconds=5,
+        stdout_log_path=tmp_path / "run" / "stdout.log",
+        stderr_log_path=tmp_path / "run" / "stderr.log",
     )
     assert result.timed_out is True
     assert (tmp_path / "run" / "stdout.log").read_bytes() == b"partial stdout"
@@ -152,16 +257,59 @@ def test_convexinv_adapter_retains_partial_timeout_logs(tmp_path, monkeypatch):
 
 def test_convergence_gate_is_deterministic_and_enforces_one_sided_boundaries():
     shape = (4, 3)
-    baseline_wall = np.full(shape, 2.0); candidate_wall = np.full(shape, 1.5)
-    recovery = np.ones(shape, dtype=int); completion = np.ones(shape, dtype=int)
-    baseline_rms = np.ones(shape); candidate_rms = np.full(shape, 1.005)
-    first = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
-    second = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
+    baseline_wall = np.full(shape, 2.0)
+    candidate_wall = np.full(shape, 1.5)
+    recovery = np.ones(shape, dtype=int)
+    completion = np.ones(shape, dtype=int)
+    baseline_rms = np.ones(shape)
+    candidate_rms = np.full(shape, 1.005)
+    first = evaluate_convergence_gate(
+        baseline_wall,
+        candidate_wall,
+        recovery,
+        recovery,
+        completion,
+        completion,
+        baseline_rms,
+        candidate_rms,
+        seed=19,
+    )
+    second = evaluate_convergence_gate(
+        baseline_wall,
+        candidate_wall,
+        recovery,
+        recovery,
+        completion,
+        completion,
+        baseline_rms,
+        candidate_rms,
+        seed=19,
+    )
     assert first == second
     assert first["passed"] is True
     # Exactly one is not a runtime improvement, and a completion loss below
     # the noninferiority boundary is rejected.
-    at_one = evaluate_convergence_gate(baseline_wall, baseline_wall, recovery, recovery, completion, completion, baseline_rms, candidate_rms, seed=19)
+    at_one = evaluate_convergence_gate(
+        baseline_wall,
+        baseline_wall,
+        recovery,
+        recovery,
+        completion,
+        completion,
+        baseline_rms,
+        candidate_rms,
+        seed=19,
+    )
     assert "runtime ratio lower confidence bound is not strictly above one" in at_one["failures"]
-    no_completion = evaluate_convergence_gate(baseline_wall, candidate_wall, recovery, recovery, completion, np.zeros(shape, dtype=int), baseline_rms, candidate_rms, seed=19)
+    no_completion = evaluate_convergence_gate(
+        baseline_wall,
+        candidate_wall,
+        recovery,
+        recovery,
+        completion,
+        np.zeros(shape, dtype=int),
+        baseline_rms,
+        candidate_rms,
+        seed=19,
+    )
     assert "guided completion lower confidence bound is below -0.02" in no_completion["failures"]
