@@ -26,6 +26,7 @@ from ..physics.axial import axial_angular_error_deg
 from ..v2.convexinv import _tree_sha256
 from ..v2.data import canonical_json, sha256_file
 from .convergence_benchmark import (
+    _completion,
     _repeat_arm_order,
     _run_convergence_record,
     _selectable,
@@ -37,7 +38,6 @@ from .downstream import (
     _atomic_json,
     signed_starts_from_axes,
 )
-
 
 SPEC_SCHEMA = "delphi.k3-followup-study-spec.v1"
 SUBSET_SCHEMA = "delphi.k3-convergence-object-subset.v1"

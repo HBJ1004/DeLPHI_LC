@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from lc_pipeline.k3.convergence_benchmark import (
-    CONVERGENCE_ITERATION_CAP,
     OBJECT_SUBSET_SCHEMA,
     _select_object_subset,
     evaluate_convergence_gate,

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import numpy as np
 
-
 SCHEMA = "delphi.k3-convergence-blind-inputs.v1"
 
 

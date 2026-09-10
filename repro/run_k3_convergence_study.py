@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 SELECTION_SCHEMA = "delphi.k3-convergence-development-selection.v1"
 
 
