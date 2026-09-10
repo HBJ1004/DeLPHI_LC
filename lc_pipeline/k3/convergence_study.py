@@ -43,6 +43,19 @@ SPEC_SCHEMA = "delphi.k3-followup-study-spec.v1"
 SUBSET_SCHEMA = "delphi.k3-convergence-object-subset.v1"
 BLIND_INPUT_SCHEMA = "delphi.k3-convergence-blind-inputs.v1"
 TIMING_SCHEMA = "delphi.k3-convergence-neural-timing.v1"
+TIMING_PROVENANCE_SCHEMA = "delphi.k3-convergence-neural-timing-provenance.v1"
+TIMING_WARM_DEFINITION = (
+    "persistent_held_out_fold_five_model_bundle_after_one_same_object_warmup;"
+    "times_tokenization_grid_scoring_mode_extraction_and_joint_refinement;"
+    "excludes_lightcurve_io_and_model_loading"
+)
+TIMING_COLD_DEFINITION = (
+    "fresh_held_out_fold_five_model_bundle_load_plus_first_inference_in_an_"
+    "already_initialized_process;excludes_lightcurve_io;not_os_page_cache_or_process_cold"
+)
+TIMING_GRID_NORMALIZED_RMS_MAXIMUM = 1e-3
+TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM = 1e-4
+TIMING_REFINED_SCORE_DIFFERENCE_MAXIMUM = 1e-4
 LOCK_SCHEMA = "delphi.k3-convergence-study-lock.v1"
 EXECUTION_SCHEMA = "delphi.k3-convergence-blind-execution.v1"
 SCORE_SCHEMA = "delphi.k3-convergence-score.v1"
@@ -253,7 +266,11 @@ def _load_timing(
     path: str | Path,
     *,
     object_ids: Sequence[str],
+    folds: Sequence[int],
     ensemble_sha256: str,
+    spec_sha256: str,
+    split_sha256: str,
+    blind_inputs_sha256: str,
 ) -> tuple[dict[str, tuple[float, float]], str]:
     document = _read_json(path, "neural timing artifact")
     if (
@@ -264,12 +281,209 @@ def _load_timing(
             "object_ids",
             "warm_wall_seconds",
             "cold_wall_seconds",
+            "provenance",
         }
         or document.get("schema") != TIMING_SCHEMA
         or document.get("source_ensemble_sha256") != ensemble_sha256
+        or len(object_ids) != 170
         or tuple(document.get("object_ids", ())) != tuple(object_ids)
+        or len(folds) != 170
     ):
         raise DownstreamBenchmarkError("neural timing artifact is not aligned to the frozen ensemble")
+    provenance = document.get("provenance")
+    required_provenance = {
+        "schema",
+        "source_spec_sha256",
+        "source_split_sha256",
+        "source_blind_inputs_sha256",
+        "source_ensemble_sha256",
+        "object_count",
+        "seeds",
+        "measurement",
+        "device",
+        "bundle_set_sha256",
+        "bundles",
+        "parity_rows",
+    }
+    if (
+        not isinstance(provenance, Mapping)
+        or set(provenance) != required_provenance
+        or provenance.get("schema") != TIMING_PROVENANCE_SCHEMA
+        or provenance.get("source_spec_sha256") != spec_sha256
+        or provenance.get("source_split_sha256") != split_sha256
+        or provenance.get("source_blind_inputs_sha256") != blind_inputs_sha256
+        or provenance.get("source_ensemble_sha256") != ensemble_sha256
+        or provenance.get("object_count") != 170
+        or provenance.get("seeds") != [17, 42, 137, 777, 2027]
+    ):
+        raise DownstreamBenchmarkError("neural timing provenance is not bound to the frozen study")
+    measurement = provenance.get("measurement")
+    expected_measurement = {
+        "clock": "time.perf_counter",
+        "warm_definition": TIMING_WARM_DEFINITION,
+        "cold_definition": TIMING_COLD_DEFINITION,
+        "warmup_runs_per_object": 1,
+        "timed_runs_per_object": 1,
+        "score_grid_centered_normalized_rms_maximum": (
+            TIMING_GRID_NORMALIZED_RMS_MAXIMUM
+        ),
+        "axis_component_difference_maximum": (
+            TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM
+        ),
+        "refined_score_absolute_difference_maximum": (
+            TIMING_REFINED_SCORE_DIFFERENCE_MAXIMUM
+        ),
+    }
+    if measurement != expected_measurement:
+        raise DownstreamBenchmarkError("neural timing measurement semantics are not frozen")
+    device = provenance.get("device")
+    required_device = {
+        "requested",
+        "resolved",
+        "type",
+        "index",
+        "name",
+        "torch_version",
+        "torch_cuda_version",
+        "cudnn_version",
+        "numpy_version",
+        "python_version",
+        "platform",
+        "cpu_threads",
+    }
+    if (
+        not isinstance(device, Mapping)
+        or set(device) != required_device
+        or not isinstance(device.get("requested"), str)
+        or not device["requested"]
+        or not isinstance(device.get("resolved"), str)
+        or not device["resolved"]
+        or device.get("type") not in {"cpu", "cuda"}
+        or not isinstance(device.get("name"), str)
+        or not device["name"]
+        or not isinstance(device.get("torch_version"), str)
+        or not device["torch_version"]
+        or not isinstance(device.get("numpy_version"), str)
+        or not device["numpy_version"]
+        or not isinstance(device.get("python_version"), str)
+        or not device["python_version"]
+        or not isinstance(device.get("platform"), str)
+        or not device["platform"]
+        or isinstance(device.get("cpu_threads"), bool)
+        or not isinstance(device.get("cpu_threads"), int)
+        or int(device["cpu_threads"]) <= 0
+    ):
+        raise DownstreamBenchmarkError("neural timing device provenance is invalid")
+    bundles = provenance.get("bundles")
+    digest_characters = set("0123456789abcdef")
+    if not isinstance(bundles, list) or len(bundles) != 5:
+        raise DownstreamBenchmarkError("neural timing must bind exactly five fold bundles")
+    for fold, bundle in enumerate(bundles):
+        required_bundle = {
+            "fold",
+            "bundle_id",
+            "manifest_sha256",
+            "model_config_sha256",
+            "members",
+        }
+        if (
+            not isinstance(bundle, Mapping)
+            or set(bundle) != required_bundle
+            or bundle.get("fold") != fold
+            or not isinstance(bundle.get("bundle_id"), str)
+            or not bundle["bundle_id"]
+        ):
+            raise DownstreamBenchmarkError("neural timing fold-bundle provenance is invalid")
+        for digest_key in ("manifest_sha256", "model_config_sha256"):
+            digest = bundle.get(digest_key)
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or set(digest) - digest_characters
+            ):
+                raise DownstreamBenchmarkError("neural timing bundle digest is invalid")
+        members = bundle.get("members")
+        if not isinstance(members, list) or len(members) != 5:
+            raise DownstreamBenchmarkError("neural timing bundle must bind five model members")
+        for seed, member in zip((17, 42, 137, 777, 2027), members, strict=True):
+            if (
+                not isinstance(member, Mapping)
+                or set(member)
+                != {
+                    "seed",
+                    "file",
+                    "safetensors_sha256",
+                    "source_checkpoint_name",
+                    "source_checkpoint_sha256",
+                }
+                or member.get("seed") != seed
+                or member.get("source_checkpoint_name")
+                != f"real-fold-{fold}-seed-{seed}.pt"
+                or not isinstance(member.get("file"), str)
+                or not member["file"]
+            ):
+                raise DownstreamBenchmarkError("neural timing model-member provenance is invalid")
+            for digest_key in ("safetensors_sha256", "source_checkpoint_sha256"):
+                digest = member.get(digest_key)
+                if (
+                    not isinstance(digest, str)
+                    or len(digest) != 64
+                    or set(digest) - digest_characters
+                ):
+                    raise DownstreamBenchmarkError("neural timing model digest is invalid")
+    bundle_set_sha256 = provenance.get("bundle_set_sha256")
+    if (
+        not isinstance(bundle_set_sha256, str)
+        or bundle_set_sha256
+        != hashlib.sha256(canonical_json(bundles).encode("utf-8")).hexdigest()
+    ):
+        raise DownstreamBenchmarkError("neural timing bundle-set identity is invalid")
+    parity_rows = provenance.get("parity_rows")
+    if not isinstance(parity_rows, list) or len(parity_rows) != 170:
+        raise DownstreamBenchmarkError("neural timing parity must cover all 170 objects")
+    for index, (object_id, expected_fold, parity_row) in enumerate(
+        zip(object_ids, folds, parity_rows, strict=True)
+    ):
+        if (
+            not isinstance(parity_row, Mapping)
+            or set(parity_row) != {"object_id", "fold", "cold", "warm"}
+            or parity_row.get("object_id") != object_id
+            or isinstance(parity_row.get("fold"), bool)
+            or not isinstance(parity_row.get("fold"), int)
+            or parity_row.get("fold") != expected_fold
+        ):
+            raise DownstreamBenchmarkError(
+                f"neural timing parity row {index} is not aligned"
+            )
+        for condition in ("cold", "warm"):
+            result = parity_row.get(condition)
+            if (
+                not isinstance(result, Mapping)
+                or set(result)
+                != {
+                    "grid_centered_normalized_rms",
+                    "mode_indices_match",
+                    "max_axis_component_difference",
+                    "max_refined_score_absolute_difference",
+                    "passed",
+                }
+                or result.get("mode_indices_match") is not True
+                or result.get("passed") is not True
+            ):
+                raise DownstreamBenchmarkError("neural timing contains unverified model output")
+            metrics = (
+                result.get("grid_centered_normalized_rms"),
+                result.get("max_axis_component_difference"),
+                result.get("max_refined_score_absolute_difference"),
+            )
+            if (
+                any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in metrics)
+                or not all(math.isfinite(float(value)) and float(value) >= 0 for value in metrics)
+                or float(metrics[0]) > TIMING_GRID_NORMALIZED_RMS_MAXIMUM
+                or float(metrics[1]) > TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM
+                or float(metrics[2]) > TIMING_REFINED_SCORE_DIFFERENCE_MAXIMUM
+            ):
+                raise DownstreamBenchmarkError("neural timing parity threshold was not met")
     warm = np.asarray(document.get("warm_wall_seconds"), dtype=np.float64)
     cold = np.asarray(document.get("cold_wall_seconds"), dtype=np.float64)
     if (
@@ -488,8 +702,15 @@ def _current_lock_payload(
     )
     _, split_rows = _split_rows(split_path)
     full_ids = tuple(str(value) for row in split_rows for value in row["test_ids"])
+    full_folds = tuple(int(row["fold"]) for row in split_rows for _ in row["test_ids"])
     timing, timing_hash = _load_timing(
-        neural_timing_path, object_ids=full_ids, ensemble_sha256=ensemble_hash
+        neural_timing_path,
+        object_ids=full_ids,
+        folds=full_folds,
+        ensemble_sha256=ensemble_hash,
+        spec_sha256=spec_hash,
+        split_sha256=split_hash,
+        blind_inputs_sha256=sha256_file(blind_inputs_path),
     )
     if tuple(blind_lookup) != full_ids or set(timing) != set(blind_lookup):
         raise DownstreamBenchmarkError("locked execution inputs are not exactly aligned")
