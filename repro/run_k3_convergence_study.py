@@ -79,6 +79,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
 
+    timing = commands.add_parser(
+        "capture-neural-timing",
+        help="measure label-blind warm and fresh-bundle neural inference timings",
+    )
+    _add_spec_arguments(timing)
+    timing.add_argument("--splits", type=Path, required=True)
+    timing.add_argument("--blind-inputs", type=Path, required=True)
+    timing.add_argument(
+        "--frozen-ensemble", dest="ensemble_path", type=Path, required=True
+    )
+    timing.add_argument("--bundle-root", type=Path, required=True)
+    timing.add_argument("--dump-root", type=Path, required=True)
+    timing.add_argument("--output", type=Path, required=True)
+    timing.add_argument("--device", required=True)
+
     lock = commands.add_parser(
         "lock", help="freeze and verify all execution identities before any solver run"
     )
@@ -163,6 +178,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run(arguments: argparse.Namespace) -> dict[str, Any]:
+    if arguments.command == "capture-neural-timing":
+        from lc_pipeline.k3.convergence_timing import capture_neural_timing
+
+        return capture_neural_timing(
+            spec_path=arguments.spec,
+            spec_checksum_path=arguments.spec_checksum,
+            split_path=arguments.splits,
+            blind_inputs_path=arguments.blind_inputs,
+            ensemble_path=arguments.ensemble_path,
+            bundle_root=arguments.bundle_root,
+            dump_root=arguments.dump_root,
+            output_path=arguments.output,
+            device=arguments.device,
+        )
+
     from lc_pipeline.k3.convergence_study import (
         create_development_selection,
         create_study_lock,

@@ -149,8 +149,25 @@ cohort manifests, frozen split and ensemble, official solver archive, matching s
 payload and source-tree hash, compiler identity, executable hash, and timing
 artifact before accepting work.
 
-Before phase 1, prepare one label-free neural-timing JSON object with exactly
-these fields:
+Before phase 1, capture the label-blind neural timings from the frozen input
+artifact and exported model bundles. This command never accepts a catalog or
+reference-label path:
+
+```bash
+python -m repro.run_k3_convergence_study capture-neural-timing \
+  --spec repro/k3_followup_study_spec.yaml \
+  --spec-checksum repro/k3_followup_study_spec.sha256 \
+  --splits repro/data/damit-20250610T000301Z/publication-splits-v2.3.json \
+  --blind-inputs repro/data/k3-followup-20260910/convergence-blind-inputs.json \
+  --frozen-ensemble /path/to/k3-definitive-7874092/evaluations/real-oof-ensemble.npz \
+  --bundle-root /path/to/exported/model-bundles \
+  --dump-root /path/to/damit-20250610T000301Z \
+  --output /path/to/frozen-neural-timing.json \
+  --device cpu
+```
+
+The output is one JSON object with exactly six top-level fields (the
+provenance object is abbreviated here):
 
 ```json
 {
@@ -158,15 +175,29 @@ these fields:
   "source_ensemble_sha256": "<SHA-256 of the frozen OOF ensemble>",
   "object_ids": ["<all 170 IDs in frozen split order>"],
   "warm_wall_seconds": ["<170 finite positive values>"],
-  "cold_wall_seconds": ["<170 finite positive values>"]
+  "cold_wall_seconds": ["<170 finite positive values>"],
+  "provenance": {"...": "<hash-bound capture and parity evidence>"}
 }
 ```
 
 Both vectors are seconds and must be aligned element-for-element with
-`object_ids`. Warm timings are used in the primary guided-arm runtime;
-cold-start timings are reported as the prespecified sensitivity. Neither this
-artifact nor any execution command may contain reference axes or recovery
-labels.
+`object_ids`. For each object, warm timing uses a persistent five-model
+predictor, performs an untimed same-object warmup, and then times end-to-end
+inference while excluding input-file and model loading. Cold timing loads a
+fresh five-model bundle and includes its first inference within an already
+initialized process. It is not an OS-, page-cache-, or process-cold
+measurement. Warm timings are primary; the fresh-bundle timings are the
+prespecified sensitivity. Neither this artifact nor any execution command may
+contain reference axes or recovery labels.
+
+The required provenance binds the specification, split, blind-input and
+frozen-ensemble hashes; requested and resolved device and runtime identities;
+the exact five bundle manifests; all 25 safetensor and source-checkpoint
+hashes; and the warm/cold measurement definitions. It also retains, for every
+object and both paths, a parity audit against the frozen score map, mode
+indices, refined axes and refined scores. The study-lock loader rejects an
+absent, extra or unverifiable provenance field rather than accepting a bare
+timing vector.
 
 For the examples below, define the common, immutable resources once:
 
