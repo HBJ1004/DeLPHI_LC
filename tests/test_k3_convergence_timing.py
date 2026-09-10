@@ -24,7 +24,6 @@ from lc_pipeline.k3.convergence_study import (
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
 from lc_pipeline.v2.data import canonical_json, sha256_file
 
-
 SPEC_HASH = "1" * 64
 SPLIT_HASH = "2" * 64
 BLIND_HASH = "3" * 64
