@@ -23,6 +23,7 @@ ztf_cross_survey:
   geometry:
     source: frozen_jpl_horizons_vector_queries
     frame: asteroid_centric_ecliptic_j2000
+    observer: earth_center_approximation_for_ztf_horizons_geometry
     vectors: [asteroid_to_sun, asteroid_to_earth]
     validation: [dhelio_norm, dobs_norm, phase_angle, optional_radec_projection]
   reporting:
@@ -34,9 +35,10 @@ ztf_cross_survey:
 temporal_external_case_series:
   cutoff_utc: "2025-06-10T00:03:01Z"
   identities: [asteroid_49, asteroid_279, asteroid_366]
+  period: deterministically_selected_from_damit_model_records_and_externally_supplied_fixed_before_prediction
   model_policy: average_all_25_real_fold_seed_score_grids
   reporting: all_objects_individually_without_population_interval_or_gate
-  permitted_description: strict_temporal_external_case_series
+  permitted_description: post_cutoff_damit_record_case_series
 
 convergence_acceleration:
   role: preregistered_followup_with_internally_locked_evaluation
@@ -109,5 +111,5 @@ disclosures:
   - Development tolerance selection is isolated from the locked evaluation subset.
   - The binary noninferiority margin is five percentage points because the original two-point margin was infeasible for a conservative exact 140-object paired analysis.
   - Bootstrap bounds are prespecified empirical acceptance bounds and are not labelled confidence intervals.
-  - The strict temporal cohort has only three objects and is descriptive.
+  - The post-cutoff DAMIT-record cohort has only three objects and is descriptive.
   - Cross-survey ZTF objects are not new identities and may have influenced pipeline development.

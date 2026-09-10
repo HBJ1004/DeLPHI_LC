@@ -36,5 +36,5 @@
   "schema": "delphi.k3-convergence-object-subset.v1",
   "selection": "six_development_objects_per_original_outer_fold_by_sha256_rank",
   "source_full_split_sha256": "1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4",
-  "study_spec_sha256": "a614dc469964197b523930342ff1629d778af96e2ea984316449d5ffdf48683d"
+  "study_spec_sha256": "629c680664dcda7a60d5cd8e79e741e6c29d21c880baeb50d2f7754d323e4e83"
 }

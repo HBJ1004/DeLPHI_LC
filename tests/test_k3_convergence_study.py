@@ -11,15 +11,19 @@ import pytest
 import yaml
 
 from lc_pipeline.k3.convergence_study import (
+    LOCK_SCHEMA,
+    SCORE_SCHEMA,
     SPEC_SCHEMA,
     SUBSET_SCHEMA,
     _expected_cohorts,
+    _claim_locked_execution,
     _paired_binary_noninferiority,
     _paired_rms_ratio,
     _read_spec,
     _stratified_ratio_bootstrap,
     _study_section,
     _validate_subset_manifest,
+    create_development_selection,
     execute_blind_cohort,
 )
 from lc_pipeline.k3.downstream import DownstreamBenchmarkError
@@ -54,6 +58,22 @@ def _frozen_spec() -> dict[str, object]:
                     "development": 30,
                     "locked_evaluation": 140,
                 },
+            },
+            "development_selection": {
+                "eligible_tolerance_requires": {
+                    "guided_minus_baseline_recovery_point_difference_minimum": -0.05,
+                    "guided_minus_baseline_completion_point_difference_minimum": -0.05,
+                    "guided_to_baseline_geometric_mean_rms_ratio_maximum": 1.01,
+                },
+                "choose": "largest_runtime_ratio_lower_bound",
+                "tie_break": "smaller_convergence_tolerance",
+            },
+            "locked_evaluation_gate": {
+                "runtime_ratio_stratified_bootstrap_acceptance_lower_strictly_greater_than": 1.0,
+                "recovery_simultaneous_exact_lower_minimum": -0.05,
+                "completion_simultaneous_exact_lower_minimum": -0.05,
+                "rms_ratio_stratified_bootstrap_acceptance_upper_strictly_less_than": 1.01,
+                "decision": "all_four_conditions_must_pass",
             },
         },
     }
@@ -258,3 +278,94 @@ def test_locked_execution_refuses_missing_development_selection_before_any_run(
 
     with pytest.raises(DownstreamBenchmarkError, match="development selection"):
         execute_blind_cohort(**_locked_call_kwargs(tmp_path))
+
+
+def test_development_selection_uses_all_five_and_breaks_ties_to_smaller_tolerance(
+    tmp_path: Path,
+):
+    spec_path, checksum_path, spec_hash = _write_spec(tmp_path / "study.yaml")
+    lock_path = tmp_path / "lock.json"
+    lock_path.write_text(
+        json.dumps(
+            {
+                "schema": LOCK_SCHEMA,
+                "study_spec_sha256": spec_hash,
+                "reference_catalog_sha256": "c" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    score_paths = []
+    tolerances = [0.01, 0.003, 0.001, 0.0003, 0.0001]
+    runtime_bounds = [1.1, 2.0, 2.0, 1.5, 9.0]
+    for index, (tolerance, runtime) in enumerate(zip(tolerances, runtime_bounds, strict=True)):
+        recovery = -0.10 if tolerance == 0.0001 else 0.0
+        failures = ["recovery_point_difference"] if recovery < -0.05 else []
+        path = tmp_path / f"score-{index}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": SCORE_SCHEMA,
+                    "role": "development",
+                    "study_lock_sha256": sha256_file(lock_path),
+                    "study_spec_sha256": spec_hash,
+                    "reference_catalog_sha256": "c" * 64,
+                    "object_count": 30,
+                    "convergence_tolerance": tolerance,
+                    "execution_sha256": f"{index:064x}",
+                    "metrics": {
+                        "runtime_warm": {
+                            "empirical_acceptance_lower_5pct": runtime,
+                        },
+                        "recovery": {"point_difference": recovery},
+                        "completion": {"point_difference": 0.0},
+                        "rms": {"object_support": 30, "point_ratio": 1.0},
+                    },
+                    "decision": {
+                        "eligible_for_selection": not failures,
+                        "failed_criteria": failures,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        score_paths.append(path)
+    output = tmp_path / "development-selection.json"
+    result = create_development_selection(
+        score_paths=score_paths,
+        lock_path=lock_path,
+        spec_path=spec_path,
+        spec_checksum_path=checksum_path,
+        output_path=output,
+    )
+    assert result["status"] == "selected"
+    assert result["selected_tolerance"] == 0.001
+    assert len(result["score_artifacts"]) == 5
+
+
+def test_locked_execution_claim_is_exclusive_and_directory_bound(tmp_path: Path):
+    selection_path = tmp_path / "development-selection.json"
+    selection_path.write_text("{}", encoding="utf-8")
+    locked_directory = (tmp_path / "locked-evaluation").resolve()
+    selection = {
+        "locked_execution_directory": str(locked_directory),
+        "one_shot_claim_path": str(tmp_path / "locked-execution-claim.json"),
+        "selected_tolerance": 0.001,
+    }
+    _claim_locked_execution(
+        selection=selection,
+        selection_path=selection_path,
+        output_directory=locked_directory,
+    )
+    with pytest.raises(DownstreamBenchmarkError, match="already claimed"):
+        _claim_locked_execution(
+            selection=selection,
+            selection_path=selection_path,
+            output_directory=locked_directory,
+        )
+    with pytest.raises(DownstreamBenchmarkError, match="canonical directory"):
+        _claim_locked_execution(
+            selection={**selection, "one_shot_claim_path": str(tmp_path / "other-claim.json")},
+            selection_path=selection_path,
+            output_directory=(tmp_path / "other").resolve(),
+        )
