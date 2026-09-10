@@ -107,6 +107,24 @@ def _write_split(path: Path) -> Path:
     return path
 
 
+def test_committed_followup_binds_the_canonical_catalog_bytes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    spec, _ = _read_spec(
+        root / "repro/k3_followup_study_spec.yaml",
+        root / "repro/k3_followup_study_spec.sha256",
+    )
+    frozen = spec["convergence_acceleration"]["frozen_inputs"]
+    catalog = root / "repro/data/damit-20250610T000301Z/catalog.jsonl"
+    blind = json.loads(
+        (root / "repro/data/k3-followup-20260910/convergence-blind-inputs.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert frozen["reference_catalog_sha256"] == sha256_file(catalog)
+    assert blind["source_catalog_sha256"] == sha256_file(catalog)
+
+
 def test_paired_binary_bound_is_exact_simultaneous_and_object_level():
     baseline = np.asarray([0] * 3 + [1] + [1] * 26, dtype=np.int8)
     guided = np.asarray([1] * 3 + [0] + [1] * 26, dtype=np.int8)
