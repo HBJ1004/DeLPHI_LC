@@ -1,5 +1,26 @@
 # K3 follow-up external data
 
+## Correction: the original ZTF identity join is invalid
+
+The 2026-09-10 identity audit found that all 169 original ZTF prepared objects
+were joined using an internal DAMIT database ID as though it were an MPC
+asteroid number. For example, DAMIT ID 101 is (2) Pallas, whereas the original
+follow-up fetched (101) Helena. A correct Fink-to-Horizons match did not check
+the missing DAMIT-to-MPC join. The previous ZTF errors therefore do not measure
+generalization. The original files remain preserved for audit, not for claims.
+
+`repro/audit_k3_survey_identity.py` reproduces the identity check using the
+official DAMIT asteroid table, without opening pole coordinates. New ZTF
+prediction inputs must carry a hash-bound explicit DAMIT-to-MPC identity
+mapping; the inference loader rejects old unbound ZTF prepared inputs.
+`repro/k3_generalization_identity_revision.yaml` records this correction.
+The legacy commands below document the original acquisition and must not be
+used to create a new external-validation cohort by suffix-based identity joins.
+The original within-DAMIT publication evaluation uses the same internal ID
+namespace for inputs and references; this cross-survey defect does not itself
+invalidate those results. The separate post-cutoff case series also requires
+namespace-aware exposure auditing before any unseen-identity claim.
+
 `repro/k3_followup_study_spec.yaml` freezes the cohort and label-access policy.
 The commands below acquire or prepare inputs only. They do not run prediction,
 fit selection, or reference scoring. Every output directory must be new.

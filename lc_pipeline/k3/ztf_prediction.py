@@ -31,9 +31,14 @@ def _load_prepared(path: str | Path) -> tuple[str, KnownPeriod, tuple[Observatio
         value = json.loads(Path(path).read_text(encoding="utf-8"))
         if value.get("schema") not in {
             "delphi.k3-ztf-prepared.v1",
+            "delphi.k3-mapped-ztf-prepared.v1",
             "delphi.k3-external-prepared.v1",
         }:
             raise ZTFPredictionError("prepared object schema is invalid")
+        if value.get("schema") in {"delphi.k3-ztf-prepared.v1", "delphi.k3-mapped-ztf-prepared.v1"}:
+            from .survey_identity import validate_survey_binding
+
+            validate_survey_binding(value)
         period = KnownPeriod(float(value["known_period_hours"]), str(value["period_provenance"]))
         epochs = tuple(ObservationEpoch(row["epoch_id"], tuple(Observation(**item) for item in row["observations"])) for row in value["epochs"])
         object_id = value["object_id"]

@@ -80,17 +80,18 @@ def test_external_fold_policy_isolated_and_new_ids_use_all_folds(tmp_path):
 def test_prediction_is_label_blind_and_uses_policy_model_count(tmp_path, monkeypatch):
     cache = _cache([{"jd": 2450000.0, "asteroid_to_sun_ecliptic_j2000_au": [1, 0, 0], "asteroid_to_earth_ecliptic_j2000_au": [0, 1, 0]}])
     prepared = tmp_path / "prepared.json"
-    prepared.write_text(
-        json.dumps(
-            prepared_ztf_object(
-                "known-2",
-                _rows(),
-                cache,
-                known_period_hours=7.0,
-                period_provenance="external",
-            )
-        )
+    value = prepared_ztf_object(
+        "asteroid_101", _rows(), cache,
+        known_period_hours=7.0, period_provenance="external",
     )
+    value["held_out_fold"] = 2
+    value["identity_binding"] = {
+        "schema": "delphi.k3-survey-identity-binding.v1", "object_id": "asteroid_101",
+        "damit_id": 101, "mpc_number": 2, "resolved_mpc_number": 2,
+        "held_out_fold": 2, "identity_map_sha256": "a" * 64,
+        "identity_table_sha256": "b" * 64,
+    }
+    prepared.write_text(json.dumps(value))
     monkeypatch.setattr(
         "lc_pipeline.k3.ztf_prediction._load_models",
         lambda root, manifest, folds, device: (
@@ -105,10 +106,14 @@ def test_prediction_is_label_blind_and_uses_policy_model_count(tmp_path, monkeyp
     output = tmp_path / "prediction.json"
     model_manifest = tmp_path / "model-manifest.json"
     model_manifest.write_text("{}")
+    split_path = _splits(tmp_path)
+    splits = json.loads(split_path.read_text())
+    splits["folds"][2]["test_ids"] = ["asteroid_101"]
+    split_path.write_text(json.dumps(splits))
     result = predict_prepared_ztf_object(
         prepared,
         tmp_path / "models",
-        _splits(tmp_path),
+        split_path,
         output,
         model_manifest_path=model_manifest,
         policy="existing_identity",

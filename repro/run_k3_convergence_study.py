@@ -33,6 +33,12 @@ def _add_frozen_resource_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--source-archive", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--executable", type=Path, required=True)
+    parser.add_argument(
+        "--capacity-revision",
+        dest="capacity_revision_path",
+        type=Path,
+        help="optional verified static-capacity revision report; the archived source remains the base",
+    )
 
 
 def _resource_kwargs(arguments: argparse.Namespace) -> dict[str, Path]:
@@ -48,6 +54,7 @@ def _resource_kwargs(arguments: argparse.Namespace) -> dict[str, Path]:
         "source_archive": arguments.source_archive,
         "source_root": arguments.source_root,
         "executable": arguments.executable,
+        "capacity_revision_path": arguments.capacity_revision_path,
     }
 
 
@@ -61,10 +68,7 @@ def _require_five(paths: list[Path], description: str) -> tuple[Path, ...]:
 def _selected_execution(path: Path) -> tuple[float, Path]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
-        if (
-            document.get("schema") != SELECTION_SCHEMA
-            or document.get("status") != "selected"
-        ):
+        if document.get("schema") != SELECTION_SCHEMA or document.get("status") != "selected":
             raise ValueError("development selection status is not selected")
         tolerance = float(document["selected_tolerance"])
         output_directory = Path(document["locked_execution_directory"])
@@ -86,9 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_spec_arguments(timing)
     timing.add_argument("--splits", type=Path, required=True)
     timing.add_argument("--blind-inputs", type=Path, required=True)
-    timing.add_argument(
-        "--frozen-ensemble", dest="ensemble_path", type=Path, required=True
-    )
+    timing.add_argument("--frozen-ensemble", dest="ensemble_path", type=Path, required=True)
     timing.add_argument("--bundle-root", type=Path, required=True)
     timing.add_argument("--dump-root", type=Path, required=True)
     timing.add_argument("--output", type=Path, required=True)
@@ -154,6 +156,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="development score artifact; provide exactly five times",
     )
 
+    corrected_locked = commands.add_parser(
+        "execute-correction-locked",
+        help="run the separately authorized correction-bound locked cohort",
+    )
+    _add_frozen_resource_arguments(corrected_locked)
+    corrected_locked.add_argument("--lock", type=Path, required=True)
+    corrected_locked.add_argument("--dump-root", type=Path, required=True)
+    corrected_locked.add_argument("--correction-authorization", type=Path, required=True)
+
     score_locked = commands.add_parser(
         "score-locked",
         help="score the one frozen locked-cohort execution and apply final gates",
@@ -202,9 +213,7 @@ def _run(arguments: argparse.Namespace) -> dict[str, Any]:
     )
 
     if arguments.command == "lock":
-        return create_study_lock(
-            **_resource_kwargs(arguments), output_path=arguments.output
-        )
+        return create_study_lock(**_resource_kwargs(arguments), output_path=arguments.output)
 
     if arguments.command == "execute-development-grid":
         return execute_development_grid(
@@ -237,11 +246,27 @@ def _run(arguments: argparse.Namespace) -> dict[str, Any]:
             output_path=arguments.output,
         )
 
+    if arguments.command == "execute-correction-locked":
+        from lc_pipeline.k3.convergence_correction_bridge import (
+            correction_locked_runner_parameters,
+        )
+
+        parameters = correction_locked_runner_parameters(
+            authorization_path=arguments.correction_authorization
+        )
+        return execute_blind_cohort(
+            **_resource_kwargs(arguments),
+            role="locked_evaluation",
+            lock_path=arguments.lock,
+            dump_root=arguments.dump_root,
+            output_directory=Path(str(parameters["locked_execution_directory"])),
+            convergence_tolerance=float(parameters["convergence_tolerance"]),
+            correction_authorization_path=arguments.correction_authorization,
+        )
+
     scores = _require_five(arguments.development_scores, "locked evaluation")
     if arguments.command == "execute-locked":
-        tolerance, output_directory = _selected_execution(
-            arguments.development_selection
-        )
+        tolerance, output_directory = _selected_execution(arguments.development_selection)
         return execute_blind_cohort(
             **_resource_kwargs(arguments),
             role="locked_evaluation",

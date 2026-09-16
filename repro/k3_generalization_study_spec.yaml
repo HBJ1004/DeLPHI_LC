@@ -1,0 +1,76 @@
+schema: delphi.k3-generalization-study-spec.v1
+status: development_protocol_not_a_completed_external_validation
+created_utc_date: '2026-09-10'
+released_software_version: '1.0'
+supersedes_scientific_evidence: false
+original_followup_spec_sha256: ff97151e38584f5b2f5448e9b1f3ab7b6e9a6274eb51cf2a5007280937e971a3
+claims:
+  primary: new_identity_dense_multiepoch_catalog_axis_agreement
+  separate_secondary: cross_survey_transfer
+  candidates: unordered_three_axis_set
+  period: externally_supplied_with_provenance
+  ranking: outside_scope
+  permitted_outcomes: [positive, negative, inconclusive, infeasible]
+development:
+  exposed_cohorts: [original_170_damit_objects, original_169_ztf_objects, post_cutoff_three_record_cases]
+  existing_ztf_result: preserved_negative_development_diagnostic
+  geometry_epochs:
+    maximum_span_days: 30.0
+    maximum_pairwise_sun_or_observer_angle_deg: 10.0
+    minimum_observations: 2
+    singleton_policy: record_dropped_points_and_retain_object_in_failure_denominator
+    cross_native_epoch_merge: false
+  diagnostics:
+    design: full_three_factor_preprocessing_comparison_fixed_before_new_scores
+    factors: [inverse_square_distance_reduction, geocentric_light_time_subtraction, geometry_bounded_epochs]
+    changes_weights: false
+    phase_function_correction: none
+    utc_to_tdb_conversion: not_assumed_without_source_contract
+    geometry_recomputed_at_retarded_time: false
+    light_time_scope: geocentric_first_order_time_correction_diagnostic_not_exact_astrometric_reconstruction
+    source_of_distance_time_conventions: https://damit.cuni.cz/pages/documentation
+    retain_original_photons_geometry_associations: true
+external:
+  primary_source: alcdef_pds_v1
+  secondary_sources: [tess_tssys_dr1, gaia_dr3, atlas_sscat]
+  primary_minimum_sessions: 5
+  primary_minimum_valid_observations: 150
+  primary_minimum_documented_apparitions: 2
+  desired_identity_count: 100
+  insufficient_count: report_precision_and_limit_claim_do_not_select_by_error
+  exposure_audit: [all_frozen_split_roles, synthetic_shape_donors, synthetic_geometry_donors, residual_noise_donors, historical_experiments, aliases]
+  unknown_exposure_or_apparition: not_confirmatory_eligible
+  reference_tiers: [catalog_agreement, independent_supported, provenance_unknown]
+  independent_supported_requires: documented_no_evaluation_photometry_in_reference_fit
+  frozen_new_identity_model: all_25_frozen_fold_seed_score_maps_averaged_before_three_mode_extraction
+  existing_identity_model: five_seeds_from_held_out_fold_only
+  reference_access: programmatic_separation_not_a_claim_of_human_blinding
+  final_lock_requires: [cohort, exposure_ledger, raw_data, prepared_data, reference_snapshot, model_manifest, source_code, preprocessing, analysis]
+statistics:
+  primary: mean_antipodal_oracle_at_3_deg
+  secondary: [median_deg, within_20_deg, within_30_deg, failures, reference_count_strata, source_strata]
+  primary_control: train_only_atlas
+  descriptive_control: uniform_random_exactly_three_axes
+  resampling_unit: asteroid_identity
+  paired_bootstrap_resamples: 10000
+  seed: 20260910
+  prediction_failure_error_deg: 90.0
+  multiple_reference_policy: all_predeclared_admissible_axes_no_posthoc_selection
+  final_test_model_selection: forbidden
+adaptation:
+  stage: requires_diagnostic_report_and_training_exposure_audit_first
+  variants: [survey_matched_synthetic_sampling_noise, same_plus_training_identity_survey_photometry]
+  architecture_change: false
+  gpu_hours: {pilot: 2, balanced_screen: 16, selected_complete_ensemble: 30, total_maximum: 48}
+  screening: five_original_folds_one_seed_17
+  final_ensemble: five_original_folds_five_original_seeds
+  choose: lowest_development_mean_oracle_at_3_ties_simpler
+  incomplete_balanced_stage: stop_without_selecting_a_partial_run
+  external_scoring_requires: all_frozen_and_adapted_predictions_sealed_before_first_score
+acceleration:
+  distinct_from_external_validation: true
+  original_development_design: infeasible_due_to_solver_capacity_and_full_support_requirement
+  correction: identical_capacity_expanded_solver_for_both_arms
+  required_before_new_development: [source_patch_hash, binary_hash, compiler, capacity_preflight, supported_input_parity, boundary_smoke_tests]
+  locked_140_execution: forbidden_until_feasible_revised_development_and_new_execution_lock
+  original_outputs: never_overwritten_or_relabelled

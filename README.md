@@ -33,6 +33,11 @@ bitwise reproducibility on different hardware.
 
 ## Start here
 
+Follow-up research is documented in [the generalization study](docs/generalization-study.md).
+Its original ZTF comparison had an invalid DAMIT-ID/MPC-number join and must not
+be used as evidence for or against transfer. The released within-DAMIT results
+are separate and unchanged.
+
 There are three supported ways to use DeLPHI:
 
 1. **Use published weights:** prepare one observation JSON file and run prediction.

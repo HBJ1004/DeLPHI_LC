@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
     resource = None  # type: ignore[assignment]
 
 from ..physics.axial import axial_angular_error_deg
-from .data import canonical_json, sha256_file
+from .serialization import canonical_json, sha256_file
 
 
 class ConvexinvError(ValueError):

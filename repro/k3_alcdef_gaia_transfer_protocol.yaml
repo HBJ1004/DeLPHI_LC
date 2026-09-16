@@ -1,0 +1,35 @@
+schema: delphi.k3-alcdef-gaia-transfer-protocol.v1
+status: pre-scoring-locked-transfer-evaluation
+created_utc_date: '2026-09-11'
+scope:
+  model: released_v1_0_frozen_25_checkpoint_ensemble
+  cohort: 30_model_training_unexposed_ALCDEF_objects_with_Gaia_DR3_model_derived_axes
+  permitted_description: retrospective_transfer_cohort_absent_from_the_frozen_model_released_real_cohort_and_published_synthetic_donors
+  forbidden_description: [prospective, project_wide_history_unexposed, physical_ground_truth]
+inputs:
+  photometry: ALCDEF_PDS_v1_raw_session_photometry
+  period: JPL_SBDB_phys_par_rot_per_independent_receipt
+  geometry: JPL_Horizons_asteroid_centric_ecliptic_J2000_at_native_session_median_JD
+  brightness: session_median_normalized_relative_brightness
+  corrections_not_applied: [distance, phase_function, light_time]
+  epoch_policy: preserve_native_ALCDEF_metadata_sessions_with_at_least_two_finite_points
+reference:
+  axes: Gaia_DR3_model_derived_ecliptic_J2000_spin_solutions
+  multiple_solution_policy: use_all_published_Gaia_axes_for_each_object
+  reference_access: programmatic_separation_only_not_human_blinding
+prediction:
+  model_ensemble: all_25_frozen_fold_seed_models
+  candidate_set: unordered_three_axial_candidates
+  ranking: outside_scope
+  failures: retain_in_denominator_as_90_degree_oracle_error
+statistics:
+  primary: mean_antipode_aware_oracle_at_3_degrees
+  secondary: [median_oracle_at_3_degrees, within_20_degrees, within_30_degrees, failure_count]
+  control: train_only_three_axis_atlas
+  resampling_unit: asteroid_identity
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20260910
+prohibitions:
+  - no_cohort_selection_using_Gaia_axis_period_model_prediction_score_or_error
+  - no_model_selection_or_adaptation_using_this_cohort
+  - no_scoring_before_candidate_and_atlas_prediction_receipt_is_sealed

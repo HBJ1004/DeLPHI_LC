@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -25,6 +26,7 @@ from scipy.stats import beta
 from ..physics.axial import axial_angular_error_deg
 from ..v2.convexinv import _tree_sha256
 from ..v2.data import canonical_json, sha256_file
+from .convergence_axis import AXIS_INTERPRETATION_VERSION, decode_convergence_axis
 from .convergence_benchmark import (
     _completion,
     _repeat_arm_order,
@@ -37,6 +39,17 @@ from .downstream import (
     DownstreamStart,
     _atomic_json,
     signed_starts_from_axes,
+)
+from .solver_capacity import (
+    CAPACITY_FIELDS,
+    INTERNAL_CAPACITY_RECEIPT_SCHEMA,
+    LightcurveStructure,
+    SolverCapacityError,
+    internal_capacity_requirements,
+    require_current_internal_capacity_receipt,
+)
+from .solver_capacity import (
+    tree_sha256 as capacity_tree_sha256,
 )
 
 SPEC_SCHEMA = "delphi.k3-followup-study-spec.v1"
@@ -60,6 +73,8 @@ LOCK_SCHEMA = "delphi.k3-convergence-study-lock.v1"
 EXECUTION_SCHEMA = "delphi.k3-convergence-blind-execution.v1"
 SCORE_SCHEMA = "delphi.k3-convergence-score.v1"
 SELECTION_SCHEMA = "delphi.k3-convergence-development-selection.v1"
+CAPACITY_REVISION_SCHEMA = INTERNAL_CAPACITY_RECEIPT_SCHEMA
+_CAPACITY_DEFINE = re.compile(r"^(\s*#define\s+)(POINTS_MAX|MAX_N_OBS|MAX_LC)(\s+)(\d+)(\b.*)$")
 
 
 def _read_json(path: str | Path, description: str) -> dict[str, object]:
@@ -79,7 +94,9 @@ def _read_spec(spec_path: str | Path, checksum_path: str | Path) -> tuple[dict[s
         expected = Path(checksum_path).read_text(encoding="ascii").strip().split()[0]
         spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, IndexError, yaml.YAMLError) as exc:
-        raise DownstreamBenchmarkError(f"cannot read frozen follow-up specification: {exc}") from exc
+        raise DownstreamBenchmarkError(
+            f"cannot read frozen follow-up specification: {exc}"
+        ) from exc
     if expected != digest or not isinstance(spec, dict) or spec.get("schema") != SPEC_SCHEMA:
         raise DownstreamBenchmarkError("follow-up specification does not match its frozen checksum")
     return spec, digest
@@ -106,7 +123,9 @@ def _study_section(spec: Mapping[str, object]) -> Mapping[str, object]:
     if not isinstance(study, Mapping) or not isinstance(shared, Mapping):
         raise DownstreamBenchmarkError("convergence study settings are invalid")
     if any(shared.get(key) != value for key, value in expected.items()):
-        raise DownstreamBenchmarkError("convergence study execution settings differ from the frozen protocol")
+        raise DownstreamBenchmarkError(
+            "convergence study execution settings differ from the frozen protocol"
+        )
     if [float(value) for value in shared.get("convergence_tolerance_grid", [])] != [
         0.01,
         0.003,
@@ -114,7 +133,9 @@ def _study_section(spec: Mapping[str, object]) -> Mapping[str, object]:
         0.0003,
         0.0001,
     ]:
-        raise DownstreamBenchmarkError("convergence tolerance grid differs from the frozen protocol")
+        raise DownstreamBenchmarkError(
+            "convergence tolerance grid differs from the frozen protocol"
+        )
     if (
         not isinstance(split, Mapping)
         or split.get("development_count") != 30
@@ -141,7 +162,9 @@ def _study_section(spec: Mapping[str, object]) -> Mapping[str, object]:
             "decision": "all_four_conditions_must_pass",
         }
     ):
-        raise DownstreamBenchmarkError("convergence analysis settings differ from the frozen protocol")
+        raise DownstreamBenchmarkError(
+            "convergence analysis settings differ from the frozen protocol"
+        )
     return study
 
 
@@ -289,7 +312,9 @@ def _load_timing(
         or tuple(document.get("object_ids", ())) != tuple(object_ids)
         or len(folds) != 170
     ):
-        raise DownstreamBenchmarkError("neural timing artifact is not aligned to the frozen ensemble")
+        raise DownstreamBenchmarkError(
+            "neural timing artifact is not aligned to the frozen ensemble"
+        )
     provenance = document.get("provenance")
     required_provenance = {
         "schema",
@@ -324,15 +349,9 @@ def _load_timing(
         "cold_definition": TIMING_COLD_DEFINITION,
         "warmup_runs_per_object": 1,
         "timed_runs_per_object": 1,
-        "score_grid_centered_normalized_rms_maximum": (
-            TIMING_GRID_NORMALIZED_RMS_MAXIMUM
-        ),
-        "axis_component_difference_maximum": (
-            TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM
-        ),
-        "refined_score_absolute_difference_maximum": (
-            TIMING_REFINED_SCORE_DIFFERENCE_MAXIMUM
-        ),
+        "score_grid_centered_normalized_rms_maximum": (TIMING_GRID_NORMALIZED_RMS_MAXIMUM),
+        "axis_component_difference_maximum": (TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM),
+        "refined_score_absolute_difference_maximum": (TIMING_REFINED_SCORE_DIFFERENCE_MAXIMUM),
     }
     if measurement != expected_measurement:
         raise DownstreamBenchmarkError("neural timing measurement semantics are not frozen")
@@ -396,11 +415,7 @@ def _load_timing(
             raise DownstreamBenchmarkError("neural timing fold-bundle provenance is invalid")
         for digest_key in ("manifest_sha256", "model_config_sha256"):
             digest = bundle.get(digest_key)
-            if (
-                not isinstance(digest, str)
-                or len(digest) != 64
-                or set(digest) - digest_characters
-            ):
+            if not isinstance(digest, str) or len(digest) != 64 or set(digest) - digest_characters:
                 raise DownstreamBenchmarkError("neural timing bundle digest is invalid")
         members = bundle.get("members")
         if not isinstance(members, list) or len(members) != 5:
@@ -417,8 +432,7 @@ def _load_timing(
                     "source_checkpoint_sha256",
                 }
                 or member.get("seed") != seed
-                or member.get("source_checkpoint_name")
-                != f"real-fold-{fold}-seed-{seed}.pt"
+                or member.get("source_checkpoint_name") != f"real-fold-{fold}-seed-{seed}.pt"
                 or not isinstance(member.get("file"), str)
                 or not member["file"]
             ):
@@ -434,8 +448,7 @@ def _load_timing(
     bundle_set_sha256 = provenance.get("bundle_set_sha256")
     if (
         not isinstance(bundle_set_sha256, str)
-        or bundle_set_sha256
-        != hashlib.sha256(canonical_json(bundles).encode("utf-8")).hexdigest()
+        or bundle_set_sha256 != hashlib.sha256(canonical_json(bundles).encode("utf-8")).hexdigest()
     ):
         raise DownstreamBenchmarkError("neural timing bundle-set identity is invalid")
     parity_rows = provenance.get("parity_rows")
@@ -452,9 +465,7 @@ def _load_timing(
             or not isinstance(parity_row.get("fold"), int)
             or parity_row.get("fold") != expected_fold
         ):
-            raise DownstreamBenchmarkError(
-                f"neural timing parity row {index} is not aligned"
-            )
+            raise DownstreamBenchmarkError(f"neural timing parity row {index} is not aligned")
         for condition in ("cold", "warm"):
             result = parity_row.get(condition)
             if (
@@ -477,7 +488,10 @@ def _load_timing(
                 result.get("max_refined_score_absolute_difference"),
             )
             if (
-                any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in metrics)
+                any(
+                    isinstance(value, bool) or not isinstance(value, (int, float))
+                    for value in metrics
+                )
                 or not all(math.isfinite(float(value)) and float(value) >= 0 for value in metrics)
                 or float(metrics[0]) > TIMING_GRID_NORMALIZED_RMS_MAXIMUM
                 or float(metrics[1]) > TIMING_AXIS_COMPONENT_DIFFERENCE_MAXIMUM
@@ -494,7 +508,9 @@ def _load_timing(
         or np.any(warm <= 0)
         or np.any(cold <= 0)
     ):
-        raise DownstreamBenchmarkError("cold and warm neural timings must be positive aligned vectors")
+        raise DownstreamBenchmarkError(
+            "cold and warm neural timings must be positive aligned vectors"
+        )
     return {
         object_id: (float(warm[index]), float(cold[index]))
         for index, object_id in enumerate(object_ids)
@@ -548,9 +564,7 @@ def _archive_source_payload(archive_path: str | Path) -> dict[str, bytes]:
     return payload
 
 
-def _verify_source_matches_archive(
-    source_root: str | Path, archive_path: str | Path
-) -> str:
+def _verify_source_matches_archive(source_root: str | Path, archive_path: str | Path) -> str:
     root = Path(source_root)
     payload = _archive_source_payload(archive_path)
     entries: list[dict[str, str]] = []
@@ -560,10 +574,184 @@ def _verify_source_matches_archive(
             raise DownstreamBenchmarkError(
                 f"solver source tree differs from the official archive at {relative}"
             )
-        entries.append(
-            {"path": relative, "sha256": hashlib.sha256(expected).hexdigest()}
-        )
+        entries.append({"path": relative, "sha256": hashlib.sha256(expected).hexdigest()})
     return hashlib.sha256(canonical_json(entries).encode("utf-8")).hexdigest()
+
+
+def _archive_source_payload_hash(archive_path: str | Path) -> str:
+    """Return the archive-source identity without requiring a copied tree match."""
+    entries = [
+        {"path": relative, "sha256": hashlib.sha256(value).hexdigest()}
+        for relative, value in sorted(_archive_source_payload(archive_path).items())
+    ]
+    return hashlib.sha256(canonical_json(entries).encode("utf-8")).hexdigest()
+
+
+def _capacity_revision_payload(
+    *,
+    revision_path: str | Path | None,
+    source_archive: str | Path,
+    source_root: str | Path,
+    executable: str | Path,
+    blind_inputs_path: str | Path,
+) -> dict[str, object] | None:
+    """Verify the sole permitted departure from the archived solver source.
+
+    The capacity report may bind a copied solver only when the three static
+    limits in ``constants.h`` are the *only* archive-source changes.  This
+    does not change cohorts, thresholds, or the phase-separated execution
+    contract; it only makes the previously declared cohort structurally
+    runnable.
+    """
+    if revision_path is None:
+        _verify_source_matches_archive(source_root, source_archive)
+        return None
+    report_path = Path(revision_path).resolve()
+    report = _read_json(report_path, "capacity revision report")
+    source = Path(source_root).resolve()
+    binary = Path(executable).resolve()
+    try:
+        require_current_internal_capacity_receipt(report)
+    except SolverCapacityError as exc:
+        raise DownstreamBenchmarkError(str(exc)) from exc
+    try:
+        inputs = report["inputs"]
+        expanded = report["expanded_solver"]
+        preflight = report["expanded_solver_preflight"]
+        smoke = report["development_supported_input_parity_smoke"]
+        scope = report["scope"]
+        worst = report["structural_worst_case"]
+        capacities = preflight["capacities"]
+        sanitizer = report["sanitizer_boundary_checks"]
+    except (KeyError, TypeError) as exc:
+        raise DownstreamBenchmarkError("capacity revision report is incomplete") from exc
+    if not all(
+        isinstance(value, Mapping)
+        for value in (inputs, expanded, preflight, smoke, scope, worst, capacities, sanitizer)
+    ):
+        raise DownstreamBenchmarkError("capacity revision report has malformed sections")
+    if (
+        inputs.get("blind_inputs_sha256") != sha256_file(blind_inputs_path)
+        or Path(str(expanded.get("source_root", ""))).resolve() != source
+        or Path(str(expanded.get("binary", ""))).resolve() != binary
+        or expanded.get("source_tree_sha256") != capacity_tree_sha256(source)
+        or expanded.get("binary_sha256") != sha256_file(binary)
+        or preflight.get("declared_cohort_support_met") is not True
+        or scope.get("capacity_measurement_metadata_only") is not True
+        or scope.get("locked_solver_execution") is not False
+        or worst.get("solver_executed") is not False
+        or smoke.get("status") != "passed"
+        or smoke.get("output_hashes_match") is not True
+        or sanitizer.get("status") != "passed"
+    ):
+        raise DownstreamBenchmarkError(
+            "capacity revision report does not bind the requested solver"
+        )
+    expected_counts = {"development": 30, "locked_evaluation": 140}
+    for role, count in expected_counts.items():
+        rows = (
+            preflight.get(role, {}).get("objects")
+            if isinstance(preflight.get(role), Mapping)
+            else None
+        )
+        if (
+            not isinstance(rows, list)
+            or len(rows) != count
+            or any(row.get("violations") for row in rows if isinstance(row, Mapping))
+        ):
+            raise DownstreamBenchmarkError(
+                "capacity revision lacks full declared structural support"
+            )
+        for row in rows:
+            if not isinstance(row, Mapping):
+                raise DownstreamBenchmarkError("capacity revision contains an invalid support row")
+            structure = row.get("structure")
+            effective = row.get("internal_required_capacities")
+            if not isinstance(structure, Mapping) or not isinstance(effective, Mapping):
+                raise DownstreamBenchmarkError("capacity revision lacks effective internal requirements")
+            try:
+                required = internal_capacity_requirements(
+                    LightcurveStructure(
+                        lightcurve_count=int(structure["lightcurve_count"]),
+                        total_observations=int(structure["total_observations"]),
+                        max_points_per_lightcurve=int(structure["max_points_per_lightcurve"]),
+                    )
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise DownstreamBenchmarkError("capacity revision has invalid native structure") from exc
+            if dict(effective) != required or any(required[name] > capacities[name] for name in CAPACITY_FIELDS):
+                raise DownstreamBenchmarkError(
+                    "capacity revision does not safely reserve its internal regularization append"
+                )
+    if set(capacities) != {"POINTS_MAX", "MAX_N_OBS", "MAX_LC"} or any(
+        not isinstance(value, int) or isinstance(value, bool) or value <= 0
+        for value in capacities.values()
+    ):
+        raise DownstreamBenchmarkError("capacity revision has invalid static capacities")
+    period_binary = Path(str(expanded.get("period_scan_binary", ""))).resolve()
+    if (
+        not period_binary.is_file()
+        or period_binary.parent != source
+        or expanded.get("period_scan_binary_sha256") != sha256_file(period_binary)
+        or not isinstance(sanitizer.get("runs"), Mapping)
+        or set(sanitizer["runs"]) != {"asteroid_109", "asteroid_2512"}
+    ):
+        raise DownstreamBenchmarkError("capacity revision does not bind both shared-constant binaries")
+
+    archived = _archive_source_payload(source_archive)
+    actual_constants = source / "constants.h"
+    if not actual_constants.is_file():
+        raise DownstreamBenchmarkError("capacity revision source lacks constants.h")
+    for relative, expected in archived.items():
+        actual_path = source / relative
+        if not actual_path.is_file():
+            raise DownstreamBenchmarkError(
+                f"capacity revision source lacks archived file {relative}"
+            )
+        if relative != "constants.h" and actual_path.read_bytes() != expected:
+            raise DownstreamBenchmarkError(
+                f"capacity revision changes archived source at {relative}"
+            )
+    base_lines = archived["constants.h"].decode("ascii").splitlines(keepends=True)
+    actual_lines = actual_constants.read_text(encoding="ascii").splitlines(keepends=True)
+    if len(base_lines) != len(actual_lines):
+        raise DownstreamBenchmarkError("capacity revision changes constants.h line structure")
+    seen: set[str] = set()
+    for base, actual in zip(base_lines, actual_lines, strict=True):
+        old = _CAPACITY_DEFINE.match(base.rstrip("\n"))
+        new = _CAPACITY_DEFINE.match(actual.rstrip("\n"))
+        if old is None:
+            if base != actual:
+                raise DownstreamBenchmarkError(
+                    "capacity revision changes non-capacity constants.h text"
+                )
+            continue
+        # The capacity-preparation utility preserves the macro and comment but
+        # may normalize spaces between the new integer and its old comment.
+        if (
+            new is None
+            or old.group(1, 2) != new.group(1, 2)
+            or old.group(5).strip() != new.group(5).strip()
+        ):
+            raise DownstreamBenchmarkError(
+                "capacity revision changes a capacity definition structure"
+            )
+        name, old_value, new_value = old.group(2), int(old.group(4)), int(new.group(4))
+        if new_value != capacities[name] or new_value < old_value:
+            raise DownstreamBenchmarkError(
+                "capacity revision does not only increase declared static limits"
+            )
+        seen.add(name)
+    if seen != set(capacities):
+        raise DownstreamBenchmarkError(
+            "capacity revision does not define every declared static limit"
+        )
+    return {
+        "capacity_revision_report": str(report_path),
+        "capacity_revision_report_sha256": sha256_file(report_path),
+        "capacity_revision_capacities": dict(capacities),
+        "capacity_revision_patch_sha256": expanded.get("patch_sha256"),
+    }
 
 
 def create_study_lock(
@@ -579,6 +767,7 @@ def create_study_lock(
     source_archive: str | Path,
     source_root: str | Path,
     executable: str | Path,
+    capacity_revision_path: str | Path | None = None,
     output_path: str | Path,
 ) -> dict[str, object]:
     """Freeze every external identity before development execution begins."""
@@ -597,6 +786,7 @@ def create_study_lock(
         source_archive=source_archive,
         source_root=source_root,
         executable=executable,
+        capacity_revision_path=capacity_revision_path,
     )
     _atomic_json(output, payload)
     return {**payload, "study_lock_sha256": sha256_file(output)}
@@ -616,6 +806,7 @@ def validate_study_lock(
     source_archive: str | Path,
     source_root: str | Path,
     executable: str | Path,
+    capacity_revision_path: str | Path | None = None,
 ) -> tuple[
     dict[str, object],
     Mapping[str, object],
@@ -637,9 +828,12 @@ def validate_study_lock(
         source_archive=source_archive,
         source_root=source_root,
         executable=executable,
+        capacity_revision_path=capacity_revision_path,
     )
     if lock != expected:
-        raise DownstreamBenchmarkError("current resources do not match the pre-execution study lock")
+        raise DownstreamBenchmarkError(
+            "current resources do not match the pre-execution study lock"
+        )
     return lock, study, blind_lookup, timing, cohorts
 
 
@@ -656,6 +850,7 @@ def _current_lock_payload(
     source_archive: str | Path,
     source_root: str | Path,
     executable: str | Path,
+    capacity_revision_path: str | Path | None = None,
 ) -> tuple[
     dict[str, object],
     Mapping[str, object],
@@ -720,6 +915,13 @@ def _current_lock_payload(
         raise DownstreamBenchmarkError("frozen solver executable and source root must exist")
     compiler_command = tuple(study["shared_conditions"]["compiler_version_command"])
     compiler_path, compiler_hash = _compiler_executable(compiler_command)
+    capacity_revision = _capacity_revision_payload(
+        revision_path=capacity_revision_path,
+        source_archive=source_archive,
+        source_root=source,
+        executable=binary,
+        blind_inputs_path=blind_inputs_path,
+    )
     payload: dict[str, object] = {
         "schema": LOCK_SCHEMA,
         "study_spec_sha256": spec_hash,
@@ -731,7 +933,7 @@ def _current_lock_payload(
         "ensemble_sha256": ensemble_hash,
         "neural_timing_sha256": timing_hash,
         "source_archive_sha256": archive_hash,
-        "source_payload_sha256": _verify_source_matches_archive(source, source_archive),
+        "source_payload_sha256": _archive_source_payload_hash(source_archive),
         "source_tree_sha256": _tree_sha256(source),
         "executable_sha256": sha256_file(binary),
         "compiler_command": list(compiler_command),
@@ -741,6 +943,8 @@ def _current_lock_payload(
         "settings": dict(study["shared_conditions"]),
         "cohort_sizes": {"development": 30, "locked_evaluation": 140},
     }
+    if capacity_revision is not None:
+        payload["capacity_revision"] = capacity_revision
     return payload, study, blind_lookup, timing, cohorts
 
 
@@ -772,14 +976,10 @@ def _paired_binary_noninferiority(
     favorable = int(np.sum((base == 0) & (guided == 1)))
     adverse = int(np.sum((base == 1) & (guided == 0)))
     favorable_lower = (
-        0.0
-        if favorable == 0
-        else float(beta.ppf(alpha_component, favorable, n - favorable + 1))
+        0.0 if favorable == 0 else float(beta.ppf(alpha_component, favorable, n - favorable + 1))
     )
     adverse_upper = (
-        1.0
-        if adverse == n
-        else float(beta.ppf(1.0 - alpha_component, adverse + 1, n - adverse))
+        1.0 if adverse == n else float(beta.ppf(1.0 - alpha_component, adverse + 1, n - adverse))
     )
     return {
         "object_count": n,
@@ -801,9 +1001,7 @@ def _paired_binary_noninferiority(
     }
 
 
-def _stratified_indices(
-    folds: np.ndarray, *, resamples: int, seed: int
-) -> np.ndarray:
+def _stratified_indices(folds: np.ndarray, *, resamples: int, seed: int) -> np.ndarray:
     if (
         folds.ndim != 1
         or folds.size < 2
@@ -954,18 +1152,22 @@ def execute_blind_cohort(
     source_archive: str | Path,
     source_root: str | Path,
     executable: str | Path,
+    capacity_revision_path: str | Path | None = None,
     dump_root: str | Path,
     output_directory: str | Path,
     convergence_tolerance: float,
     development_selection_path: str | Path | None = None,
     development_score_paths: Sequence[str | Path] = (),
+    correction_authorization_path: str | Path | None = None,
 ) -> dict[str, object]:
     """Execute one exact cohort without loading any reference-axis values."""
     if role not in {"development", "locked_evaluation"}:
         raise DownstreamBenchmarkError("study role must be development or locked_evaluation")
-    if role == "locked_evaluation" and development_selection_path is None:
+    if role == "locked_evaluation" and (development_selection_path is None) == (
+        correction_authorization_path is None
+    ):
         raise DownstreamBenchmarkError(
-            "locked evaluation requires a valid frozen development selection"
+            "locked evaluation requires exactly one valid frozen development selection or correction authorization"
         )
     lock, study, blind_lookup, neural_timing, cohorts = validate_study_lock(
         lock_path=lock_path,
@@ -980,13 +1182,45 @@ def execute_blind_cohort(
         source_archive=source_archive,
         source_root=source_root,
         executable=executable,
+        capacity_revision_path=capacity_revision_path,
     )
     tolerance = float(convergence_tolerance)
     grid = tuple(float(value) for value in study["shared_conditions"]["convergence_tolerance_grid"])
     if not math.isfinite(tolerance) or tolerance not in grid:
-        raise DownstreamBenchmarkError("convergence tolerance is not in the frozen development grid")
+        raise DownstreamBenchmarkError(
+            "convergence tolerance is not in the frozen development grid"
+        )
     selection: Mapping[str, object] | None = None
-    if role == "locked_evaluation":
+    correction_authorization: Mapping[str, object] | None = None
+    if role == "locked_evaluation" and correction_authorization_path is not None:
+        from .convergence_correction_bridge import (
+            CorrectionLockedAuthorizationError,
+            validate_correction_locked_authorization_artifact,
+        )
+
+        try:
+            correction_authorization = validate_correction_locked_authorization_artifact(
+                authorization_path=correction_authorization_path
+            )
+        except CorrectionLockedAuthorizationError as exc:
+            raise DownstreamBenchmarkError(
+                "correction authorization does not validate for locked execution"
+            ) from exc
+        if (
+            Path(str(correction_authorization["revised_study_lock_path"])).resolve()
+            != Path(lock_path).resolve()
+            or Path(str(correction_authorization["locked_manifest_path"])).resolve()
+            != Path(locked_manifest_path).resolve()
+            or correction_authorization["locked_manifest_sha256"] != lock["locked_manifest_sha256"]
+        ):
+            raise DownstreamBenchmarkError(
+                "correction authorization does not bind the supplied lock and locked manifest"
+            )
+        if tolerance != float(correction_authorization["runner_contract"]["convergence_tolerance"]):
+            raise DownstreamBenchmarkError(
+                "locked tolerance differs from the correction authorization"
+            )
+    elif role == "locked_evaluation":
         selection = validate_development_selection(
             selection_path=development_selection_path,
             score_paths=development_score_paths,
@@ -1005,17 +1239,19 @@ def execute_blind_cohort(
             )
 
     destination = Path(output_directory).resolve()
+    if (
+        correction_authorization is not None
+        and destination
+        != Path(str(correction_authorization["locked_execution_directory"])).resolve()
+    ):
+        raise DownstreamBenchmarkError("locked output differs from the correction authorization")
     artifact_path = destination / "blind-execution.json"
     object_ids = cohorts[role]
     expected_count = 30 if role == "development" else 140
     if len(object_ids) != expected_count:
         raise DownstreamBenchmarkError("execution cohort has the wrong frozen size")
     manifest_hash = str(
-        lock[
-            "development_manifest_sha256"
-            if role == "development"
-            else "locked_manifest_sha256"
-        ]
+        lock["development_manifest_sha256" if role == "development" else "locked_manifest_sha256"]
     )
     conditions = study["shared_conditions"]
     lock_hash = sha256_file(lock_path)
@@ -1080,12 +1316,22 @@ def execute_blind_cohort(
         for object_id in object_ids
     }
     if role == "locked_evaluation":
-        assert selection is not None and development_selection_path is not None
-        _claim_locked_execution(
-            selection=selection,
-            selection_path=development_selection_path,
-            output_directory=destination,
-        )
+        if correction_authorization is not None:
+            from .convergence_correction_bridge import claim_correction_locked_execution
+
+            assert correction_authorization_path is not None
+            claim_correction_locked_execution(
+                authorization_path=correction_authorization_path,
+                authorization=correction_authorization,
+                output_directory=destination,
+            )
+        else:
+            assert selection is not None and development_selection_path is not None
+            _claim_locked_execution(
+                selection=selection,
+                selection_path=development_selection_path,
+                output_directory=destination,
+            )
     for object_id in object_ids:
         blind = blind_lookup[object_id]
         lightcurve = resolved_lightcurves[object_id]
@@ -1177,9 +1423,7 @@ def execute_blind_cohort(
     }
 
 
-def _resolve_lightcurve(
-    dump_root: Path, blind: Mapping[str, object], object_id: str
-) -> Path:
+def _resolve_lightcurve(dump_root: Path, blind: Mapping[str, object], object_id: str) -> Path:
     lightcurve = blind["lightcurve"]
     assert isinstance(lightcurve, Mapping)
     relative = Path(str(lightcurve["source_path"]))
@@ -1204,12 +1448,14 @@ def _selection_from_records(records: Sequence[Mapping[str, object]]) -> dict[str
     )
     result = best["result"]
     identity = best["identity"]
+    axis = decode_convergence_axis(result["final_lambda_deg"], result["final_beta_deg"])
     return {
         "criterion": "minimum_final_relative_rms",
         "start_index": int(identity["start_index"]),
         "final_relative_rms": float(result["relative_rms_from_output"]),
-        "final_lambda_deg": float(result["final_lambda_deg"]),
-        "final_beta_deg": float(result["final_beta_deg"]),
+        "final_lambda_deg": axis.standard_lambda_deg,
+        "final_beta_deg": axis.standard_beta_deg,
+        "axis_interpretation_version": AXIS_INTERPRETATION_VERSION,
     }
 
 
@@ -1227,7 +1473,9 @@ def _arm_repeat_summary(
         dtype=np.float64,
     )
     if wall.shape != (6,) or np.any(~np.isfinite(wall)) or np.any(wall < 0):
-        raise DownstreamBenchmarkError("every solver start must retain finite nonnegative wall time")
+        raise DownstreamBenchmarkError(
+            "every solver start must retain finite nonnegative wall time"
+        )
     inversion_wall = float(np.sum(wall))
     neural_warm = warm_neural_seconds if arm == "candidate" else 0.0
     neural_cold = cold_neural_seconds if arm == "candidate" else 0.0
@@ -1283,13 +1531,16 @@ def _execute_complete_repeat(
     }
     if marker_path.exists():
         marker = _read_json(marker_path, "completed repeat marker")
-        if marker.get("schema") != "delphi.k3-convergence-repeat-complete.v1" or marker.get(
-            "plan"
-        ) != plan:
+        if (
+            marker.get("schema") != "delphi.k3-convergence-repeat-complete.v1"
+            or marker.get("plan") != plan
+        ):
             raise DownstreamBenchmarkError("completed repeat does not match the execution plan")
         cells = marker.get("cells")
         if not isinstance(cells, list) or len(cells) != 12:
-            raise DownstreamBenchmarkError("completed repeat must contain all twelve execution cells")
+            raise DownstreamBenchmarkError(
+                "completed repeat must contain all twelve execution cells"
+            )
         for cell in cells:
             if not isinstance(cell, Mapping) or not isinstance(cell.get("path"), str):
                 raise DownstreamBenchmarkError("completed repeat contains an invalid cell")
@@ -1376,6 +1627,7 @@ def execute_development_grid(
     source_archive: str | Path,
     source_root: str | Path,
     executable: str | Path,
+    capacity_revision_path: str | Path | None = None,
     dump_root: str | Path,
     output_root: str | Path,
 ) -> dict[str, object]:
@@ -1399,6 +1651,7 @@ def execute_development_grid(
             source_archive=source_archive,
             source_root=source_root,
             executable=executable,
+            capacity_revision_path=capacity_revision_path,
             dump_root=dump_root,
             output_directory=Path(output_root) / f"tolerance-{label}",
             convergence_tolerance=float(tolerance),
@@ -1528,7 +1781,9 @@ def _validate_execution_row(
         relative = Path(relative_text)
         marker_path = (root / relative).resolve()
         if relative.is_absolute() or not marker_path.is_relative_to(root):
-            raise DownstreamBenchmarkError("blind execution repeat marker escapes its artifact root")
+            raise DownstreamBenchmarkError(
+                "blind execution repeat marker escapes its artifact root"
+            )
         if (
             marker_ref.get("repeat_index") != repeat_index
             or not marker_path.is_file()
@@ -1557,16 +1812,16 @@ def _validate_execution_row(
         ):
             raise DownstreamBenchmarkError("blind execution repeat plan is invalid")
         expected_order = [
-            (arm, start_index)
-            for start_index in range(6)
-            for arm in plan.get("arm_order", ())
+            (arm, start_index) for start_index in range(6) for arm in plan.get("arm_order", ())
         ]
         observed_order = [(cell.get("arm"), cell.get("start_index")) for cell in cells]
         if observed_order != expected_order or set(plan.get("arm_order", ())) != {
             "baseline",
             "candidate",
         }:
-            raise DownstreamBenchmarkError("blind execution does not contain the paired AB/BA cells")
+            raise DownstreamBenchmarkError(
+                "blind execution does not contain the paired AB/BA cells"
+            )
         arm_records: dict[str, list[Mapping[str, object]]] = {
             "baseline": [],
             "candidate": [],
@@ -1609,9 +1864,7 @@ def _validate_execution_row(
                 or identity.get("timeout_seconds") != 300.0
                 or identity.get("repeat_arm_order") != list(plan["arm_order"])
                 or not isinstance(record_contract, Mapping)
-                or hashlib.sha256(
-                    canonical_json(dict(record_contract)).encode("utf-8")
-                ).hexdigest()
+                or hashlib.sha256(canonical_json(dict(record_contract)).encode("utf-8")).hexdigest()
                 != plan.get("execution_contract_sha256")
                 or not isinstance(result, Mapping)
                 or record.get("completion")
@@ -1636,7 +1889,11 @@ def _validate_execution_row(
                 "wall_seconds_cold",
             ):
                 value = summary.get(key)
-                if not isinstance(value, (int, float)) or not math.isfinite(float(value)) or value <= 0:
+                if (
+                    not isinstance(value, (int, float))
+                    or not math.isfinite(float(value))
+                    or value <= 0
+                ):
                     raise DownstreamBenchmarkError("blind execution timing is invalid")
             selection = summary.get("selected_fit")
             if (selection is None) != (summary.get("selectable") is False):
@@ -1644,6 +1901,7 @@ def _validate_execution_row(
             if selection is not None:
                 if not isinstance(selection, Mapping) or not all(
                     isinstance(selection.get(key), (int, float))
+                    and not isinstance(selection.get(key), bool)
                     and math.isfinite(float(selection[key]))
                     for key in (
                         "start_index",
@@ -1657,6 +1915,7 @@ def _validate_execution_row(
                     selection.get("criterion") != "minimum_final_relative_rms"
                     or int(selection["start_index"]) not in range(6)
                     or float(selection["final_relative_rms"]) <= 0
+                    or selection.get("axis_interpretation_version") != AXIS_INTERPRETATION_VERSION
                 ):
                     raise DownstreamBenchmarkError("blind execution selected fit is invalid")
             expected_summary = _arm_repeat_summary(
@@ -1712,16 +1971,8 @@ def _selected_pole_error(
 ) -> float | None:
     if selection is None:
         return None
-    longitude = math.radians(float(selection["final_lambda_deg"]))
-    latitude = math.radians(float(selection["final_beta_deg"]))
-    pole = np.asarray(
-        [
-            math.cos(latitude) * math.cos(longitude),
-            math.cos(latitude) * math.sin(longitude),
-            math.sin(latitude),
-        ],
-        dtype=np.float64,
-    )
+    axis = decode_convergence_axis(selection["final_lambda_deg"], selection["final_beta_deg"])
+    pole = np.asarray(axis.directed_unit_vector, dtype=np.float64)
     return float(np.min(axial_angular_error_deg(pole[None, :], targets)))
 
 
@@ -1780,7 +2031,9 @@ def score_blind_execution(
             spec_checksum_path=spec_checksum_path,
         )
         if selection.get("status") != "selected":
-            raise DownstreamBenchmarkError("locked scoring is forbidden without an eligible selection")
+            raise DownstreamBenchmarkError(
+                "locked scoring is forbidden without an eligible selection"
+            )
     execution = _validated_execution(
         execution_path,
         lock=lock,
@@ -1790,9 +2043,9 @@ def score_blind_execution(
         object_ids=object_ids,
         manifest_sha256=manifest_hash,
     )
-    if expected_role == "locked_evaluation" and float(
-        execution["convergence_tolerance"]
-    ) != float(selection["selected_tolerance"]):
+    if expected_role == "locked_evaluation" and float(execution["convergence_tolerance"]) != float(
+        selection["selected_tolerance"]
+    ):
         raise DownstreamBenchmarkError("locked execution does not use the selected tolerance")
 
     # This is the first point in the workflow at which reference values are parsed.
@@ -1833,9 +2086,7 @@ def score_blind_execution(
                     base_completion[object_index, repeat_index] = int(summary["completed"])
                     base_recovery[object_index, repeat_index] = int(recovered)
                     if selection_value is not None:
-                        base_rms[object_index, repeat_index] = selection_value[
-                            "final_relative_rms"
-                        ]
+                        base_rms[object_index, repeat_index] = selection_value["final_relative_rms"]
                 else:
                     guided_warm[object_index, repeat_index] = summary["wall_seconds_warm"]
                     guided_cold[object_index, repeat_index] = summary["wall_seconds_cold"]
@@ -1889,9 +2140,7 @@ def score_blind_execution(
     else:
         rms_metric = {
             "estimand": "geometric_mean_selected_fit_rms_ratio",
-            "support_conditioning": (
-                "jointly_completed_and_selectable_without_reference_outcome"
-            ),
+            "support_conditioning": ("jointly_completed_and_selectable_without_reference_outcome"),
             "minimum_joint_repeats_per_object": 2,
             "object_support": rms_support,
             "required_object_support": count,
@@ -1910,9 +2159,7 @@ def score_blind_execution(
         "runtime_cold_sensitivity": _stratified_ratio_bootstrap(
             base_cold, guided_cold, folds, resamples=resamples, seed=seed
         ),
-        "recovery": _paired_binary_noninferiority(
-            base_object_recovery, guided_object_recovery
-        ),
+        "recovery": _paired_binary_noninferiority(base_object_recovery, guided_object_recovery),
         "completion": _paired_binary_noninferiority(
             base_object_completion, guided_object_completion
         ),
@@ -1947,13 +2194,15 @@ def _score_decision(
     if role == "development":
         rules = study["development_selection"]["eligible_tolerance_requires"]
         failures = []
-        if metrics["recovery"]["point_difference"] < rules[
-            "guided_minus_baseline_recovery_point_difference_minimum"
-        ]:
+        if (
+            metrics["recovery"]["point_difference"]
+            < rules["guided_minus_baseline_recovery_point_difference_minimum"]
+        ):
             failures.append("recovery_point_difference")
-        if metrics["completion"]["point_difference"] < rules[
-            "guided_minus_baseline_completion_point_difference_minimum"
-        ]:
+        if (
+            metrics["completion"]["point_difference"]
+            < rules["guided_minus_baseline_completion_point_difference_minimum"]
+        ):
             failures.append("completion_point_difference")
         rms_point = metrics["rms"].get("point_ratio")
         if not isinstance(rms_point, (int, float)) or not math.isfinite(float(rms_point)):
@@ -1963,17 +2212,20 @@ def _score_decision(
         return {"eligible_for_selection": not failures, "failed_criteria": failures}
     rules = study["locked_evaluation_gate"]
     failures = []
-    if not metrics["runtime_warm"]["empirical_acceptance_lower_5pct"] > rules[
-        "runtime_ratio_stratified_bootstrap_acceptance_lower_strictly_greater_than"
-    ]:
+    if (
+        not metrics["runtime_warm"]["empirical_acceptance_lower_5pct"]
+        > rules["runtime_ratio_stratified_bootstrap_acceptance_lower_strictly_greater_than"]
+    ):
         failures.append("runtime_warm_empirical_acceptance_lower")
-    if metrics["recovery"]["simultaneous_exact_lower"] < rules[
-        "recovery_simultaneous_exact_lower_minimum"
-    ]:
+    if (
+        metrics["recovery"]["simultaneous_exact_lower"]
+        < rules["recovery_simultaneous_exact_lower_minimum"]
+    ):
         failures.append("recovery_simultaneous_exact_lower")
-    if metrics["completion"]["simultaneous_exact_lower"] < rules[
-        "completion_simultaneous_exact_lower_minimum"
-    ]:
+    if (
+        metrics["completion"]["simultaneous_exact_lower"]
+        < rules["completion_simultaneous_exact_lower_minimum"]
+    ):
         failures.append("completion_simultaneous_exact_lower")
     rms_upper = metrics["rms"].get("empirical_acceptance_upper_95pct")
     if (
@@ -2005,7 +2257,9 @@ def _development_selection_payload(
         raise DownstreamBenchmarkError("development scores are not bound to the frozen study lock")
     grid = tuple(float(value) for value in study["shared_conditions"]["convergence_tolerance_grid"])
     if len(score_paths) != len(grid):
-        raise DownstreamBenchmarkError("development selection requires exactly five score artifacts")
+        raise DownstreamBenchmarkError(
+            "development selection requires exactly five score artifacts"
+        )
     by_tolerance: dict[float, tuple[dict[str, object], str]] = {}
     for path in score_paths:
         score = _read_json(path, "development score")
@@ -2032,11 +2286,11 @@ def _development_selection_payload(
             raise DownstreamBenchmarkError("development RMS support is invalid")
         recomputed = _score_decision("development", metrics, study)
         if score.get("decision") != recomputed:
-            raise DownstreamBenchmarkError("development eligibility is inconsistent with its metrics")
+            raise DownstreamBenchmarkError(
+                "development eligibility is inconsistent with its metrics"
+            )
         runtime_lower = metrics["runtime_warm"].get("empirical_acceptance_lower_5pct")
-        if not isinstance(runtime_lower, (int, float)) or not math.isfinite(
-            float(runtime_lower)
-        ):
+        if not isinstance(runtime_lower, (int, float)) or not math.isfinite(float(runtime_lower)):
             raise DownstreamBenchmarkError("development runtime bound is invalid")
         by_tolerance[float(tolerance)] = (score, sha256_file(path))
     if set(by_tolerance) != set(grid):
@@ -2046,9 +2300,7 @@ def _development_selection_payload(
     for tolerance in grid:
         score, digest = by_tolerance[tolerance]
         is_eligible = bool(score["decision"]["eligible_for_selection"])
-        runtime_lower = float(
-            score["metrics"]["runtime_warm"]["empirical_acceptance_lower_5pct"]
-        )
+        runtime_lower = float(score["metrics"]["runtime_warm"]["empirical_acceptance_lower_5pct"])
         score_entries.append(
             {
                 "convergence_tolerance": tolerance,
@@ -2075,9 +2327,7 @@ def _development_selection_payload(
         "study_lock_sha256": sha256_file(lock_path),
         "study_spec_sha256": spec_hash,
         "selection_rule": {
-            "eligibility": dict(
-                study["development_selection"]["eligible_tolerance_requires"]
-            ),
+            "eligibility": dict(study["development_selection"]["eligible_tolerance_requires"]),
             "choose": "largest_runtime_ratio_lower_bound",
             "tie_break": "smaller_convergence_tolerance",
         },

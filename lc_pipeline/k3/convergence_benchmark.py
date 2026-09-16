@@ -25,6 +25,7 @@ from ..v2.convexinv import (
     write_convexinv_parameters,
 )
 from ..v2.data import canonical_json, sha256_file
+from .convergence_axis import ConvergenceAxisError, decode_convergence_axis
 from .downstream import (
     DAMIT_STANDARD_STARTS_DEG,
     DownstreamBenchmarkError,
@@ -296,15 +297,20 @@ def _completion(result: Mapping[str, object], *, expected_period_hours: float) -
         "relative_rms_from_output",
     )
     if result.get("output_validation_error") is not None or not all(
-        isinstance(result.get(key), (int, float)) and math.isfinite(float(result[key]))
+        isinstance(result.get(key), (int, float))
+        and not isinstance(result.get(key), bool)
+        and math.isfinite(float(result[key]))
         for key in numeric
     ):
+        return "numerical-output-failure"
+    try:
+        decode_convergence_axis(result["final_lambda_deg"], result["final_beta_deg"])
+    except ConvergenceAxisError:
         return "numerical-output-failure"
     if (
         float(result["chi2"]) < 0
         or float(result["deviation"]) < 0
         or float(result["relative_rms_from_output"]) <= 0
-        or not -90.0 <= float(result["final_beta_deg"]) <= 90.0
         or not math.isclose(
             float(result["final_period_hours"]),
             expected_period_hours,
@@ -328,12 +334,20 @@ def _selectable(record: Mapping[str, object]) -> bool:
     result = record.get("result")
     if not isinstance(result, Mapping) or record.get("completion") != "converged":
         return False
-    return (
-        all(
-            isinstance(result.get(key), (int, float)) and math.isfinite(float(result[key]))
-            for key in ("relative_rms_from_output", "final_lambda_deg", "final_beta_deg")
+    try:
+        axis = decode_convergence_axis(
+            result.get("final_lambda_deg"), result.get("final_beta_deg")
         )
+    except ConvergenceAxisError:
+        return False
+    return (
+        isinstance(result.get("relative_rms_from_output"), (int, float))
+        and not isinstance(result.get("relative_rms_from_output"), bool)
+        and math.isfinite(float(result["relative_rms_from_output"]))
         and float(result["relative_rms_from_output"]) > 0
+        # Touch the decoded axis so this function remains explicitly bound to
+        # the same interpretation used for selection and scoring.
+        and math.isfinite(axis.standard_beta_deg)
     )
 
 
@@ -643,16 +657,11 @@ def run_convergence_benchmark(
                     rms, pole_error, success, best_start = float("nan"), float("nan"), False, None
                 else:
                     result = best["result"]
-                    longitude, latitude = (
-                        math.radians(float(result["final_lambda_deg"])),
-                        math.radians(float(result["final_beta_deg"])),
-                    )
                     pole = np.asarray(
-                        [
-                            math.cos(latitude) * math.cos(longitude),
-                            math.cos(latitude) * math.sin(longitude),
-                            math.sin(latitude),
-                        ]
+                        decode_convergence_axis(
+                            result["final_lambda_deg"], result["final_beta_deg"]
+                        ).directed_unit_vector,
+                        dtype=np.float64,
                     )
                     rms, pole_error = (
                         float(result["relative_rms_from_output"]),

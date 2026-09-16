@@ -1,0 +1,252 @@
+schema: delphi.k3-reliability-protocol.v1
+protocol_version: 1.0.0
+status: frozen_design_not_executed
+frozen_date: '2026-09-15'
+title: Retrospective out-of-fold reliability and observational-degradation study
+
+scope:
+  role: retrospective_same_identity_out_of_fold_reliability_study
+  intended_objects: 170
+  outer_folds: 5
+  model_policy: ensemble_only_the_models_for_which_the_object_is_in_the_held_out_fold
+  models_per_held_out_fold: 5
+  supplied_period: fixed_and_not_a_validation_target
+  candidate_semantics: unordered_three_axial_candidates
+  allowed_conclusions: [positive, negative, inconclusive]
+  prohibited_conclusions:
+    - universal_minimum_observation_count
+    - prospective_or_new_identity_validation
+    - candidate_ranking
+    - previous_version_comparison
+
+pre_inference_checks:
+  required: true
+  order: [physical_identity_audit, synthetic_donor_exposure_audit, prediction]
+  physical_identity_namespaces: [internal_object_id, DAMIT_id, MPC_number]
+  synthetic_exposure_policy: verify_against_the_frozen_training_fold_and_published_donor_manifests
+  failure_action: stop_before_inference_and_record_an_audit_failure
+  no_label_conditioning: degradation_conditions_and_eligibility_do_not_use_reference_axes
+
+randomization:
+  sampling_seeds: [20260915, 20260916, 20260917]
+  repeat_labels: [0, 1, 2]
+  deterministic_hash_order: true
+  no_failure_replacements: true
+
+input_conventions:
+  native_session: source_metadata_session_before_any_degradation
+  observing_block:
+    construction: merge_overlapping_native_sessions_and_sessions_separated_by_less_than_30_days
+    disclosure: observing_blocks_are_not_verified_apparitions
+  absolute_count_cap:
+    unit: one_initial_atomic_two_point_allocation_per_seed_ordered_native_session
+    algorithm:
+      - freeze_native_session_order_and_point_order
+      - seed_order_the_native_sessions
+      - allocate_one_atomic_two_point_pair_to_each_session_in_the_largest_prefix_that_fits
+      - only_if_every_valid_session_received_its_pair_allocate_remaining_individual_observations_round_robin
+    padding: forbidden
+    unused_capacity: permitted_when_no_further_valid_observation_can_be_allocated
+  positive_noise:
+    distribution: frozen_seeded_positive_multiplicative_or_equivalent_flux_space_perturbation
+    mean_preserving: true
+    scales_fraction: [0.03, 0.10]
+  recomputation: all_input_features_are_recomputed_after_each_degradation
+
+prediction_conditions:
+  full:
+    points_fraction: 1.0
+    sessions_fraction: 1.0
+  point_thinning:
+    points_fraction: [0.50, 0.25, 0.10, 0.05]
+    sessions_fraction: 1.0
+  session_thinning:
+    sessions_fraction: [0.50, 0.25]
+    points_fraction_within_retained_sessions: 1.0
+  positive_noise:
+    apply_at_point_fractions: [1.0, 0.10]
+    noise_fraction: [0.03, 0.10]
+  absolute_count_caps:
+    points: [10, 20, 50, 100, 200, 500, all]
+  observing_block_grid:
+    blocks: [1, 3, 5, 10, all]
+    points_per_block: [5, 10, 20, 50, all]
+    eligibility: at_least_10_constructed_observing_blocks_in_the_full_input
+    preliminary_eligible_objects: 80
+    comparison_baseline: grid_full_alias_of_full_predictions_rescoped_to_the_same_grid_eligible_objects
+    baseline_requires_extra_inference: false
+  period_sensitivity:
+    multipliers: [0.5, 0.99, 0.999, 0.9999, 1.0, 1.0001, 1.001, 1.01, 2.0]
+    named_offsets_percent: [-1.0, -0.1, -0.01, 0.0, 0.01, 0.1, 1.0]
+    aliases: {half_period: 0.5, double_period: 2.0}
+    recompute_all_features_for_each_period: true
+    candidates_per_condition: 3
+  clustering_controls:
+    methods:
+      - k3_all_three_candidates
+      - training_only_axis_atlas_three_candidates
+      - frozen_seeded_random_three_axial_candidates
+    atlas_training_labels_per_outer_fold: 108
+    atlas_excludes_held_out_fold: true
+    atlas_neighborhood_radius_deg: 15.772555
+    neighborhood_interpretation: geometric_assignment_radius_not_a_confidence_bound
+    scoring_reference_solutions: identical_across_all_three_methods
+    random_primary_control:
+      realization: first_frozen_three_axis_draw_per_asteroid
+      aggregation: score_that_draw_then_summarize_asteroids
+      same_realization_used_for_clustering: true
+    random_expected_secondary_control:
+      draws_per_asteroid: 1000
+      candidates_per_draw: 3
+      aggregation: average_error_and_within20_over_draws_within_asteroid_then_summarize_asteroids
+      random_draws_are_not_independent_asteroids: true
+    random_clustering_control:
+      realization: first_frozen_draw_per_asteroid
+      interpretation: illustrative_directional_concentration_for_the_primary_random_realization
+
+reliability_row_contract:
+  unit: one_ensemble_object_condition_repeat
+  required_keys: [object_id, fold, condition, repeat, seed, status]
+  optional_default: {model_id: k3}
+  successful_keys: [error_deg, axes]
+  axes_shape: [3, 3]
+  statuses: [ok, failed, ineligible]
+  seed_role: degradation_sampling_seed_not_model_seed
+  seed_by_repeat: {0: 20260915, 1: 20260916, 2: 20260917}
+  repeat_schedule:
+    deterministic_full_and_period_conditions: [0]
+    stochastic_conditions_if_three_repeats_fit_budget: [0, 1, 2]
+    stochastic_conditions_if_only_one_repeat_fits_budget: [0]
+    condition_specific_schedule_is_frozen_before_inference: true
+  completeness: every_frozen_scheduled_cell_exactly_once_including_failures_and_ineligible_cells
+  forbidden_unit: one_row_per_candidate_or_model_seed
+
+holdout_fit_check:
+  role: forward_only_shape_fit_diagnostic_not_period_validation
+  split:
+    withheld: latest_constructed_observing_block
+    minimum_full_input_blocks: 3
+    minimum_retained_native_sessions: 5
+    minimum_retained_training_points: 150
+    minimum_withheld_points: 20
+    preliminary_eligible_objects: 157
+  conditions: [full, point_fraction_0.10]
+  arms: [classical_full_grid, k3_neighborhood, training_atlas_neighborhood]
+  fit_cells_per_sampling_per_object: 3
+  total_fit_cells_per_object: 6
+  withheld_points: identical_between_the_two_conditions
+  solver:
+    model: classical_convex_inversion
+    spherical_harmonic_degree: 6
+    spherical_harmonic_order: 6
+    gaussian_curvature_rows: 8
+    start_grid_spacing_deg: 20
+    classical_arm: complete_20_degree_start_grid
+    supplied_period: fixed
+    k3_neighborhood_radius_deg: 15.772555
+    atlas_neighborhood_radius_deg: 15.772555
+    neighborhood_interpretation: search_radius_not_a_confidence_bound
+  fit_selection:
+    criterion: minimum_training_RMS_only
+    reference_axes_available_to_selection: false
+    withheld_flux_available_to_fitting_or_selection: false
+  withheld_metric:
+    name: withheld_normalized_curve_rms
+    formula: sqrt(mean_over_curves(mean_over_points((observed_normalized_flux-predicted_flux)^2)))
+    curve_weighting: equal_per_curve
+    post_fit_rescaling_or_offset: forbidden
+
+statistics:
+  aggregation_order:
+    - compute_repeat_level_outcomes
+    - average_repeats_within_asteroid
+    - summarize_across_asteroids
+  error_metric: antipode_aware_oracle_at_3_angular_error_degrees
+  failure_convention:
+    eligible_prediction_or_scoring_failure_error_deg: 90.0
+    retain_in_all_registered_denominators: true
+    always_report: [eligible_count, attempted_repeats, successful_repeats, failed_repeats, failure_rate]
+  mean_error: mean_of_asteroid_repeat_mean_errors
+  median_error: median_of_asteroid_repeat_mean_errors
+  within_20: mean_of_repeat_level_within_20_indicators_after_within_asteroid_aggregation
+  matched_comparisons:
+    unit: asteroid
+    require_joint_eligibility: true
+    report_unmatched_denominators: true
+    degradation_sign: positive_is_worse
+    grid_baseline: each_grid_condition_uses_its_own_grid_full_baseline
+  bootstrap:
+    resamples: 10000
+    seed: 20260915
+    resampling_unit: asteroid
+    strata: frozen_outer_fold
+  interpretation:
+    intervals: descriptive_fold_stratified_bootstrap_intervals
+    threshold: none_universal
+    guidance: condition_specific_observational_tradeoffs_only
+
+runtime_plan:
+  compute_budget_hours: 24
+  excludes: implementation_time
+  global_wall_budget:
+    starts: immediately_before_prepare_builds_the_training_only_atlases
+    elapsed_downtime_is_charged: true
+    each_phase_remaining_seconds: minimum_of_phase_and_global_deadlines
+  allocations_hours: {pilot: 1, inference: 10, fitting: 11, scoring_and_export: 2}
+  pilot:
+    objects_per_fold: 2
+    total_objects: 10
+    source_cohort: frozen_30_object_development_subset
+    selection_within_each_fold: median_and_maximum_observation_count_with_object_id_tie_break
+    observed_runtime_reports: [median, maximum]
+    role: development_runtime_only_scores_remain_sealed
+    inference_projection:
+      statistic: maximum_observed_runtime_per_condition
+      unmeasured_condition: global_maximum_observed_cell_runtime
+      scheduled_cell_count: exact_full_cohort_count_with_grid_cells_only_for_grid_eligible_objects
+      multiplier: 2
+      fixed_overhead_seconds: 300
+      requirement: every_observed_pilot_prediction_cell_has_status_ok
+  repeats:
+    use_three_if: conservative_runtime_projection_fits_within_10_inference_hours
+    otherwise: use_one_repeat_uniformly_for_every_stochastic_condition_and_object
+    if_one_repeat_exceeds_budget: declare_infeasible_without_selective_omission
+  fit_sample:
+    candidate_sizes_largest_first: [all, 125, 100, 75, 50, 30]
+    projection: two_times_the_maximum_pilot_six_cell_object_runtime
+    selection: largest_candidate_size_whose_projection_fits_within_11_hours
+    ordering: fixed_hash_fold_balanced
+    failed_jobs: never_replaced
+
+execution_and_outputs:
+  phase_order:
+    - freeze_protocol_input_manifests_condition_schedule_and_code_hashes
+    - run_identity_and_synthetic_exposure_checks
+    - run_runtime_pilot_without_opening_scores
+    - freeze_condition_repeat_schedule_and_fit_sample
+    - run_inference_and_forward_fits
+    - seal_complete_prediction_and_fit_receipts
+    - verify_expected_rows_checksums_and_resume_state
+    - score_once
+    - export_JSON_CSV_TeX_and_failure_ledger
+  separate_run_directories: true
+  immutable_inputs_and_receipts: true
+  sealed_record_format: one_atomic_canonical_JSON_envelope_with_embedded_payload_SHA256
+  resume_requires_matching_checksums: true
+  published_artifact_mutation: forbidden
+  manuscript_mutation_by_execution: forbidden
+  required_exports:
+    - denominator_complete_condition_summary
+    - matched_degradation_table
+    - per_object_repeat_aggregate
+    - failure_and_ineligibility_ledger
+    - observational_guidance_with_scope_limits
+
+legacy_evidence_boundary:
+  prior_script: analysis/data_degradation_experiment.py
+  prior_design: top_10_objects_and_one_subsample
+  permitted_use: motivation_and_historical_context_only
+  prohibited_use:
+    - evidence_for_a_50_point_universal_threshold
+    - substitution_for_the_registered_170_object_out_of_fold_study
+    - previous_version_ranking_or_comparison
