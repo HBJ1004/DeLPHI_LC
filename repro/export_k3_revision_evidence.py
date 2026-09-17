@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 SCHEMA = "delphi.k3-publication-revision-export.v1"
+PRIVATE_PATH_PREFIXES = ("/mnt/", "/home/", "/Users/")
 
 
 def _sha256(path: Path) -> str:
@@ -49,6 +50,24 @@ def _write(path: Path, value: object) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _sanitize_private_paths(value: object) -> object:
+    """Remove machine-specific path roots while retaining useful file names."""
+    if isinstance(value, dict):
+        return {key: _sanitize_private_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_private_paths(item) for item in value]
+    if isinstance(value, str):
+        normalized = value.replace("\\", "/")
+        windows_absolute = (
+            len(normalized) >= 3
+            and normalized[1:3] == ":/"
+            and normalized[0].isalpha()
+        )
+        if normalized.startswith(PRIVATE_PATH_PREFIXES) or windows_absolute:
+            return f"<local-run-artifact>/{Path(normalized).name}"
+    return value
 
 
 def _require_schema(value: dict[str, object], expected: str, label: str) -> None:
@@ -326,7 +345,11 @@ def export(
 
     output.mkdir(parents=True)
     for name, source in sources.items():
-        shutil.copyfile(source, output / name)
+        target = output / name
+        if source.suffix.lower() == ".json":
+            _write(target, _sanitize_private_paths(_read(source)))
+        else:
+            shutil.copyfile(source, target)
 
     summary = {
         "schema": "delphi.k3-publication-revision-summary.v1",

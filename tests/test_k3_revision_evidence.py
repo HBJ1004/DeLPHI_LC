@@ -2,7 +2,11 @@ import csv
 import json
 from pathlib import Path
 
-from repro.export_k3_revision_evidence import _fixed_work_descriptive, _timing_descriptive
+from repro.export_k3_revision_evidence import (
+    _fixed_work_descriptive,
+    _sanitize_private_paths,
+    _timing_descriptive,
+)
 
 
 def test_timing_descriptive_uses_only_matching_arm_and_mode(tmp_path: Path) -> None:
@@ -84,3 +88,18 @@ def test_fixed_work_summary_exposes_capacity_rejections(tmp_path: Path) -> None:
 def test_revision_export_module_has_stable_schema() -> None:
     source = Path("repro/export_k3_revision_evidence.py").read_text(encoding="utf-8")
     assert json.dumps("delphi.k3-publication-revision-export.v1") in source
+
+
+def test_private_paths_are_sanitized_recursively() -> None:
+    value = {
+        "linux": "/mnt/d/private/run/convexinv",
+        "home": ["/home/person/data/report.json"],
+        "windows": r"C:\Users\person\run\result.json",
+        "public": "/usr/bin/gcc",
+    }
+    assert _sanitize_private_paths(value) == {
+        "linux": "<local-run-artifact>/convexinv",
+        "home": ["<local-run-artifact>/report.json"],
+        "windows": "<local-run-artifact>/result.json",
+        "public": "/usr/bin/gcc",
+    }

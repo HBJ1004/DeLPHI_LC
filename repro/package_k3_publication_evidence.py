@@ -7,12 +7,13 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
 import shutil
 import tarfile
 from pathlib import Path
 
 DATE = "2026-09-17"
-RELEASE_ID = f"{DATE}-r2"
+RELEASE_ID = f"{DATE}-r3"
 ARCHIVE_NAME = f"delphi-k3-publication-evidence-{RELEASE_ID}.tar.gz"
 DERIVED_FILES = (
     "k3-followup-derived.json",
@@ -34,6 +35,9 @@ REVISION_CODE = (
     "repro/run_k3_lowq_ablation.py",
     "repro/run_k3_lowq_census.py",
     "repro/run_k3_lowq_damit.py",
+)
+PRIVATE_PATH = re.compile(
+    r"(?:/mnt/[a-z]/|/home/[^/\s]+/|/users/|[a-z]:\\+users\\+)", re.I
 )
 
 
@@ -58,6 +62,17 @@ def _write_checksums(root: Path) -> None:
     )
     lines = [f"{sha256(path)}  {path.relative_to(root).as_posix()}" for path in files]
     (root / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _reject_private_paths(root: Path) -> None:
+    inspected = {".csv", ".json", ".md", ".tex", ".txt", ".yaml", ".yml"}
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and path.suffix.lower() in inspected:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if PRIVATE_PATH.search(text):
+                raise ValueError(
+                    f"private machine path in public evidence: {path.relative_to(root)}"
+                )
 
 
 def _tar_deterministic(root: Path, output: Path) -> None:
@@ -117,7 +132,7 @@ def package(
         _copy_file(source_root / name, code / Path(name).name)
 
     (staging / "README.md").write_text(
-        "# DeLPHI K3 publication evidence, 2026-09-17 revision 2\n\n"
+        "# DeLPHI K3 publication evidence, 2026-09-17 revision 3\n\n"
         "This archive adds the lower-quality DAMIT census, source-lineage split, "
         "ensemble-cost sensitivity, error-channel sensitivity, and public per-case "
         "broad-grid timing table used by the revised manuscript. The analyses are "
@@ -138,6 +153,7 @@ def package(
         "input hash.\n",
         encoding="utf-8",
     )
+    _reject_private_paths(staging)
     _write_checksums(staging)
     output.mkdir(parents=True, exist_ok=True)
     archive = output / ARCHIVE_NAME
