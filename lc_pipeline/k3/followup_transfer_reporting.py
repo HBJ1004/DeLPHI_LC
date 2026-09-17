@@ -53,6 +53,39 @@ def _ztf_sampling_summary(objects_dir: Path) -> dict:
     }
 
 
+def render_broad_grid_figure(analyses: dict, output: Path) -> None:
+    """Render the public cold-grid interval figure from an exported analysis."""
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 2, figsize=(7.1, 3.3))
+    runtime = analyses["cold_step20_primary"]["runtime"]
+    rms = analyses["cold_step20_primary"]["rms"]
+    for axis, record, label, color in (
+        (axes[0], runtime, "classical / guided runtime", "#4d8b6f"),
+        (axes[1], rms, "guided / classical RMS", "#b45b5b"),
+    ):
+        interval = record["percentile_interval_95"]
+        point = record["point_ratio"]
+        axis.errorbar(
+            [0],
+            [point],
+            yerr=[[point - interval["lower"]], [interval["upper"] - point]],
+            fmt="o",
+            color=color,
+            capsize=5,
+        )
+        axis.axhline(1, color="black", linewidth=0.8)
+        axis.set_xlim(-0.8, 0.8)
+        axis.set_xticks([])
+        axis.set_ylabel(label)
+        axis.set_title("95% percentile interval")
+    axes[1].axhline(1.01, color="0.35", linewidth=0.8, linestyle="--")
+    fig.suptitle("Broad-grid cold 20-degree primary (170 objects x 3 repeats)")
+    fig.tight_layout()
+    _pdf(output, fig)
+    plt.close(fig)
+
+
 def _grid_angular_comparison(grid: dict) -> dict:
     selected = grid["results"]["selected_axial_errors_by_object"]
     classical = selected["classical20"]["cold"]
@@ -396,32 +429,7 @@ def export_followup_transfer(data_root: Path, output: Path, comparator_path: Pat
     fig.tight_layout()
     _pdf(output / "survey-comparison.pdf", fig)
     plt.close(fig)
-    fig, axes = plt.subplots(1, 2, figsize=(7.1, 3.3))
-    runtime = analyses["cold_step20_primary"]["runtime"]
-    rms = analyses["cold_step20_primary"]["rms"]
-    for ax, record, label, color in (
-        (axes[0], runtime, "classical / guided runtime", "#4d8b6f"),
-        (axes[1], rms, "guided / classical RMS", "#b45b5b"),
-    ):
-        interval = record["percentile_interval_95"]
-        point = record["point_ratio"]
-        ax.errorbar(
-            [0],
-            [point],
-            yerr=[[point - interval["lower"]], [interval["upper"] - point]],
-            fmt="o",
-            color=color,
-            capsize=5,
-        )
-        ax.axhline(1, color="black", linewidth=0.8)
-        ax.set_xlim(-0.8, 0.8)
-        ax.set_xticks([])
-        ax.set_ylabel(label)
-        ax.set_title("95% percentile interval")
-    fig.suptitle("Broad-grid cold 20-degree primary (170 objects x 3 repeats)")
-    fig.tight_layout()
-    _pdf(output / "broad-grid-timing-rms.pdf", fig)
-    plt.close(fig)
+    render_broad_grid_figure(analyses, output / "broad-grid-timing-rms.pdf")
     files = {
         path.name: _sha(path)
         for path in sorted(output.iterdir())

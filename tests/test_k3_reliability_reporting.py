@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from lc_pipeline.k3.reliability_reporting import ReliabilityReportingError, write_reports
+from lc_pipeline.k3.reliability_reporting import (
+    ReliabilityReportingError,
+    _observation_cap_rows,
+    write_reports,
+)
 from lc_pipeline.k3.reliability_scoring import score_reliability
 
 
@@ -54,3 +58,11 @@ def test_write_reports_materialises_tables_figures_and_conditional_guidance(tmp_
     changed[0]["error_deg"] = 11.0
     with pytest.raises(ReliabilityReportingError, match="numeric report inputs"):
         write_reports(tmp_path, changed, {"sampling": score}, lock)
+
+
+def test_observation_cap_rows_are_numeric_with_all_last() -> None:
+    rows = [
+        {"family": "observation_cap", "cap": value, "mean_error_deg": 1.0}
+        for value in (10, 100, 20, None, 5, 50)
+    ]
+    assert [row["cap"] for row in _observation_cap_rows(rows)] == [5, 10, 20, 50, 100, None]

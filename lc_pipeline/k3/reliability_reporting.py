@@ -246,19 +246,37 @@ def _plot_path(path: Path, title: str, draw: Any) -> Path:
     return path
 
 
-def _caps_plot(path: Path, table: Sequence[Mapping[str, Any]]) -> Path:
+def _observation_cap_rows(table: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     values = [
         row
         for row in table
         if row.get("family") == "observation_cap" and _number(row.get("mean_error_deg")) is not None
     ]
+    return sorted(
+        values,
+        key=lambda row: (
+            row.get("cap") is None or str(row.get("cap")).lower() in {"all", "none"},
+            float("inf")
+            if row.get("cap") is None or str(row.get("cap")).lower() in {"all", "none"}
+            else float(row["cap"]),
+        ),
+    )
+
+
+def _caps_plot(path: Path, table: Sequence[Mapping[str, Any]]) -> Path:
+    values = _observation_cap_rows(table)
 
     def draw(axis: Any) -> None:
         if not values:
             axis.text(0.5, 0.5, "No scored sampling rows", ha="center", va="center")
             axis.set_axis_off()
             return
-        labels = [str(row.get("cap", "all")) for row in values]
+        labels = [
+            "all"
+            if row.get("cap") is None or str(row.get("cap")).lower() in {"all", "none"}
+            else str(row["cap"])
+            for row in values
+        ]
         means = [float(row["mean_error_deg"]) for row in values]
         low = [
             float(_number(row.get("mean_error_ci95_low")) or mean)
@@ -280,13 +298,22 @@ def _caps_plot(path: Path, table: Sequence[Mapping[str, Any]]) -> Path:
             fmt="o",
             capsize=3,
         )
-        axis.set_xticks(x, labels, rotation=70, ha="right", fontsize=7)
+        axis.set_xticks(x, labels, fontsize=8)
         axis.set_ylabel("mean oracle@3 error (deg)")
-        axis.set_xlabel("condition (n label = eligible-object count)")
+        axis.set_xlabel("total-observation cap (all = no cap)")
         for index, row in enumerate(values):
-            axis.annotate(str(row.get("n_label", "")), (index, means[index]), fontsize=6)
+            axis.annotate(
+                str(row.get("n_label", "")),
+                (index, means[index]),
+                xytext=(0, 8),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                clip_on=False,
+            )
+        axis.margins(y=0.18)
 
-    return _plot_path(path, "Matched sampling degradation (descriptive)", draw)
+    return _plot_path(path, "Total-observation sensitivity (descriptive)", draw)
 
 
 def _block_plot(path: Path, table: Sequence[Mapping[str, Any]]) -> Path:
