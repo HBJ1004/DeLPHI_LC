@@ -63,4 +63,6 @@ def test_package_contains_revision_and_is_deterministic(tmp_path: Path) -> None:
         names = archive.getnames()
     assert "./k3-followup/revision/timing-cases.csv" in names
     assert "./k3-followup/manifest.json" in names
+    assert "./evidence/exports/revision/timing-cases.csv" in names
+    assert "./evidence/exports/manifest.json" in names
     assert "./manuscript-derived/k3-followup-lowq-table.tex" in names

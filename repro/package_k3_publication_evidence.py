@@ -101,6 +101,11 @@ def package(
     followup = staging / "k3-followup"
     shutil.copytree(followup_import, followup, dirs_exist_ok=True)
     shutil.copytree(revision_export, followup / "revision", dirs_exist_ok=True)
+    public_exports = staging / "evidence" / "exports"
+    shutil.copytree(followup_import, public_exports, dirs_exist_ok=True)
+    shutil.copytree(
+        revision_export, public_exports / "revision", dirs_exist_ok=True
+    )
 
     derived = staging / "manuscript-derived"
     for name in DERIVED_FILES:
