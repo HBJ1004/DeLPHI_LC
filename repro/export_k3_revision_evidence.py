@@ -10,8 +10,11 @@ import json
 import math
 import os
 import shutil
+import statistics
 import tempfile
 from pathlib import Path
+
+import numpy as np
 
 SCHEMA = "delphi.k3-publication-revision-export.v1"
 
@@ -86,6 +89,22 @@ def _timing_descriptive(csv_path: Path) -> dict[str, object]:
         left_norm = math.sqrt(sum(value * value for value in left))
         right_norm = math.sqrt(sum(value * value for value in right))
         disagreements.append(math.degrees(math.acos(min(1.0, abs(dot) / left_norm / right_norm))))
+    object_time_ratios = []
+    guided_slower_count = 0
+    for object_id in sorted({row["object_id"] for row in guided}):
+        classical_times = [
+            float(row["wall_seconds"])
+            for row in classical_cold
+            if row["object_id"] == object_id
+        ]
+        guided_times = [
+            float(row["wall_seconds"])
+            for row in guided
+            if row["object_id"] == object_id
+        ]
+        ratio = statistics.fmean(classical_times) / statistics.fmean(guided_times)
+        object_time_ratios.append(ratio)
+        guided_slower_count += ratio < 1.0
     return {
         "guided20_cold_mean_starts": sum(starts) / len(starts),
         "guided20_cold_min_starts": min(starts),
@@ -105,6 +124,76 @@ def _timing_descriptive(csv_path: Path) -> dict[str, object]:
         "objects_with_guided_classical_selected_axis_disagreement_over_20_deg": sum(
             value > 20.0 for value in disagreements
         ),
+        "median_object_classical_over_guided_time_ratio": statistics.median(
+            object_time_ratios
+        ),
+        "objects_with_guided_mean_time_slower_than_classical": guided_slower_count,
+    }
+
+
+def _fixed_work_descriptive(rows_path: Path) -> dict[str, object]:
+    payload = _read(rows_path)
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or len(rows) != 170:
+        raise ValueError("fixed-work rows have an unexpected denominator")
+    supported = [
+        row
+        for row in rows
+        if int(row["baseline"]["valid_starts"]) > 0
+        and int(row["candidate"]["valid_starts"]) > 0
+    ]
+    if len(supported) != 144:
+        raise ValueError("fixed-work supported denominator changed")
+    baseline_times = [float(row["baseline"]["wall_seconds"]) for row in supported]
+    candidate_times = [float(row["candidate"]["wall_seconds"]) for row in supported]
+    return {
+        "intended_object_count": len(rows),
+        "solver_supported_object_count": len(supported),
+        "solver_capacity_rejection_count": len(rows) - len(supported),
+        "baseline_supported_recovery_count": sum(
+            bool(row["baseline"]["success"]) for row in supported
+        ),
+        "candidate_supported_recovery_count": sum(
+            bool(row["candidate"]["success"]) for row in supported
+        ),
+        "baseline_supported_recovery_fraction": sum(
+            bool(row["baseline"]["success"]) for row in supported
+        )
+        / len(supported),
+        "candidate_supported_recovery_fraction": sum(
+            bool(row["candidate"]["success"]) for row in supported
+        )
+        / len(supported),
+        "supported_wall_time_ratio_baseline_over_candidate": (
+            statistics.fmean(baseline_times) / statistics.fmean(candidate_times)
+        ),
+        "zero_iteration_rejections_in_both_arms": sum(
+            int(row["baseline"]["iterations"]) == 0
+            and int(row["candidate"]["iterations"]) == 0
+            for row in rows
+        ),
+    }
+
+
+def _paired_mean_interval(
+    differences: list[float], *, seed: int = 20260917, resamples: int = 10_000
+) -> dict[str, object]:
+    if not differences:
+        raise ValueError("paired comparison is empty")
+    values = np.asarray(differences, dtype=float)
+    rng = np.random.default_rng(seed)
+    estimates = np.empty(resamples, dtype=float)
+    for start in range(0, resamples, 128):
+        stop = min(resamples, start + 128)
+        indices = rng.integers(0, len(values), size=(stop - start, len(values)))
+        estimates[start:stop] = values[indices].mean(axis=1)
+    low, high = np.quantile(estimates, (0.025, 0.975))
+    return {
+        "mean_difference_deg": float(values.mean()),
+        "ci95_low_deg": float(low),
+        "ci95_high_deg": float(high),
+        "seed": seed,
+        "resamples": resamples,
     }
 
 
@@ -113,6 +202,8 @@ def export(
     lowq_analysis: Path,
     lowq_lineage: Path,
     lowq_lineage_objects: Path,
+    lowq_atlas: Path,
+    lowq_exposure: Path,
     ensemble_ablation: Path,
     error_sensitivity: Path,
     ztf_predictions: Path,
@@ -126,22 +217,29 @@ def export(
     random_atlas_rows: Path,
     reliability_sampling_table: Path,
     reliability_numbers: Path,
+    fixed_work_rows: Path,
+    solver_capacity_preflight: Path,
     output: Path,
 ) -> dict[str, object]:
     if output.exists():
         raise ValueError(f"output already exists: {output}")
     lowq = _read(lowq_analysis)
     lineage = _read(lowq_lineage)
+    exposure = _read(lowq_exposure)
     ablation = _read(ensemble_ablation)
     sensitivity = _read(error_sensitivity)
     ztf_prepared = _read(ztf_prepared_manifest)
     alcdef_prepared = _read(alcdef_prepared_manifest)
     timing = _read(timing_directory / "manifest.json")
     reliability = _read(reliability_study)
+    capacity = _read(solver_capacity_preflight)
     atlas_rows = _read(random_atlas_rows)
     reliability_publication = _read(reliability_numbers)
     _require_schema(lowq, "delphi.k3-lowq-damit-census-analysis.v1", "low-Q analysis")
     _require_schema(lineage, "delphi.k3-lowq-damit-lineage-analysis.v1", "lineage analysis")
+    _require_schema(
+        exposure, "delphi.k3-lowq-synthetic-donor-exposure.v1", "donor exposure"
+    )
     _require_schema(
         ablation, "delphi.k3-lowq-ensemble-ablation-analysis.v1", "ensemble ablation"
     )
@@ -151,9 +249,14 @@ def export(
     _require_schema(
         timing, "delphi.k3-pole-grid-timing-public-export.v1", "timing export"
     )
-    if lowq.get("analyzed_denominator") != 9783 or lineage.get("lineage_counts", {}).get(
-        "source_disjoint"
-    ) != 7420:
+    _require_schema(
+        capacity,
+        "delphi.k3-solver-internal-capacity-preflight.v2",
+        "solver capacity preflight",
+    )
+    if lowq.get("analyzed_denominator") != 9783 or lineage.get(
+        "lineage_counts", {}
+    ).get("structured_reference_disjoint") != 7420:
         raise ValueError("low-Q evidence has an unexpected denominator")
 
     study_payload = reliability.get("payload")
@@ -179,11 +282,31 @@ def export(
         for row in reliability_publication["two_d_cells"]
         if row["block_count"] == 1 and row["observation_cap_per_block"] == "all"
     )
+    ztf_objects = sensitivity["ztf"]["objects"]
+    ztf_no_error_minus_atlas = _paired_mean_interval(
+        [
+            float(row["without_error_channel_error_deg"])
+            - float(row["train_only_atlas_error_deg"])
+            for row in ztf_objects
+        ]
+    )
+    ztf_original_by_id = {
+        str(row["object_id"]): float(row["original_error_deg"])
+        for row in ztf_objects
+    }
+    ztf_intended_minus_atlas = _paired_mean_interval(
+        [
+            ztf_original_by_id.get(object_id, 90.0) - atlas_error
+            for object_id, atlas_error in sorted(atlas_by_id.items())
+        ]
+    )
 
     sources = {
         "lowq-analysis.json": lowq_analysis,
         "lowq-lineage-analysis.json": lowq_lineage,
         "lowq-lineage-objects.csv": lowq_lineage_objects,
+        "lowq-fold0-train-only-atlas.json": lowq_atlas,
+        "lowq-synthetic-donor-exposure.json": lowq_exposure,
         "ensemble-ablation-analysis.json": ensemble_ablation,
         "error-channel-sensitivity.json": error_sensitivity,
         "error-channel-ztf-predictions.json": ztf_predictions,
@@ -194,6 +317,8 @@ def export(
         "timing-source-manifest.json": timing_directory / "manifest.json",
         "k3_sampling-caps.pdf": sampling_caps,
         "broad-grid-timing-rms.pdf": broad_grid_figure,
+        "fixed-work-rows.json": fixed_work_rows,
+        "solver-capacity-preflight.json": solver_capacity_preflight,
     }
     for name, path in sources.items():
         if not path.is_file():
@@ -214,6 +339,7 @@ def export(
             "input_rejected_count": lowq["input_rejected_count"],
             "k3": lowq["primary"],
             "train_only_atlas": lowq["train_only_atlas"],
+            "atlas_provenance": lowq["atlas_provenance"],
             "paired_atlas_minus_k3": lowq["paired_atlas_minus_k3"],
             "timing": lowq["timing"],
             "reference_quality_warning": lowq["reference_quality_warning"],
@@ -222,9 +348,21 @@ def export(
                 "counts": lineage["lineage_counts"],
                 "training_identity_count": lineage["training_identity_count"],
                 "training_source_count": lineage["training_source_count"],
-                "source_disjoint": lineage["source_disjoint"],
-                "source_overlap": lineage["source_overlap"],
+                "structured_reference_coverage": lineage[
+                    "structured_reference_coverage"
+                ],
+                "limitation": lineage["lineage_limitation"],
+                "structured_reference_disjoint": lineage[
+                    "structured_reference_disjoint"
+                ],
+                "structured_reference_overlap": lineage[
+                    "structured_reference_overlap"
+                ],
+                "structured_reference_disjoint_source_groups": lineage[
+                    "structured_reference_disjoint_source_groups"
+                ],
             },
+            "synthetic_donor_exposure": exposure,
             "ensemble_ablation": {
                 "scope": ablation["study_scope"],
                 "selection_warning": ablation["selection_warning"],
@@ -250,6 +388,12 @@ def export(
         "error_channel_sensitivity": {
             "intervention": sensitivity["intervention"],
             "ztf": sensitivity["ztf"],
+            "ztf_without_error_channel_minus_train_only_atlas": (
+                ztf_no_error_minus_atlas
+            ),
+            "ztf_intended_failure_treated_minus_train_only_atlas": (
+                ztf_intended_minus_atlas
+            ),
             "alcdef_gaia": {
                 key: value
                 for key, value in sensitivity["alcdef_gaia"].items()
@@ -278,7 +422,15 @@ def export(
             "descriptive": _timing_descriptive(timing_directory / "timing-cases.csv"),
             "case_count": timing["case_count"],
             "interval_scope": "object resampling on the recorded host",
+            "solver_capacity": {
+                "official": capacity["inputs"]["original_static_capacities"],
+                "enlarged": capacity["expanded_solver_preflight"]["capacities"],
+                "same_binary_used_for_grid_arms": capacity[
+                    "expanded_solver_preflight"
+                ]["same_binary_required_for_baseline_and_guided_arms"],
+            },
         },
+        "fixed_work_benchmark": _fixed_work_descriptive(fixed_work_rows),
     }
     _write(output / "revision-summary.json", summary)
     files = {
@@ -289,6 +441,13 @@ def export(
     manifest = {
         "schema": SCHEMA,
         "date": "2026-09-17",
+        "generator": "python -m repro.export_k3_revision_evidence",
+        "generation_inputs": sorted(sources),
+        "generation_note": (
+            "Invoke the generator with the named source files and directories listed "
+            "in this export. The public package VERIFY.md gives the full regeneration "
+            "sequence."
+        ),
         "files": files,
         "source_sha256": {name: _sha256(path) for name, path in sources.items()},
     }
@@ -302,6 +461,8 @@ def main() -> None:
         "lowq-analysis",
         "lowq-lineage",
         "lowq-lineage-objects",
+        "lowq-atlas",
+        "lowq-exposure",
         "ensemble-ablation",
         "error-sensitivity",
         "ztf-predictions",
@@ -315,6 +476,8 @@ def main() -> None:
         "random-atlas-rows",
         "reliability-sampling-table",
         "reliability-numbers",
+        "fixed-work-rows",
+        "solver-capacity-preflight",
         "output",
     ):
         parser.add_argument(f"--{name}", type=Path, required=True)
@@ -324,6 +487,8 @@ def main() -> None:
             lowq_analysis=args.lowq_analysis,
             lowq_lineage=args.lowq_lineage,
             lowq_lineage_objects=args.lowq_lineage_objects,
+            lowq_atlas=args.lowq_atlas,
+            lowq_exposure=args.lowq_exposure,
             ensemble_ablation=args.ensemble_ablation,
             error_sensitivity=args.error_sensitivity,
             ztf_predictions=args.ztf_predictions,
@@ -337,6 +502,8 @@ def main() -> None:
             random_atlas_rows=args.random_atlas_rows,
             reliability_sampling_table=args.reliability_sampling_table,
             reliability_numbers=args.reliability_numbers,
+            fixed_work_rows=args.fixed_work_rows,
+            solver_capacity_preflight=args.solver_capacity_preflight,
             output=args.output,
         )
     except (OSError, TypeError, ValueError) as exc:

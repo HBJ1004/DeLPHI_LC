@@ -28,6 +28,10 @@ class ReliabilityReportingError(ValueError):
     """Raised when a sealed report cannot be resumed consistently."""
 
 
+def _stable_key(object_id: object, salt: str = "reliability-20260915") -> str:
+    return hashlib.sha256(f"{salt}:{object_id}".encode()).hexdigest()
+
+
 def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
@@ -38,8 +42,14 @@ def _write_text(path: Path, text: str) -> Path:
         if path.read_text(encoding="utf-8") != text:
             raise ReliabilityReportingError(f"report text differs on resume: {path}")
     else:
-        from .reliability_study import _write_text_new
-        _write_text_new(path, text)
+        try:
+            with path.open("x", encoding="utf-8", newline="") as stream:
+                stream.write(text)
+        except FileExistsError:
+            if path.read_text(encoding="utf-8") != text:
+                raise ReliabilityReportingError(
+                    f"report text differs after concurrent creation: {path}"
+                ) from None
     return path
 
 
@@ -408,11 +418,10 @@ def _sky_plot(
     ]
     if atlas:
         methods["train-only atlas axes"] = np.asarray(atlas, dtype=float).reshape(-1, 3)
-    from .reliability_study import stable_key
     random = []
     for row in scored_rows:
         if row.get("condition") == "full" and row.get("status") == "ok":
-            seed = int(stable_key(row["object_id"], "random-three-20260915")[:16], 16)
+            seed = int(_stable_key(row["object_id"], "random-three-20260915")[:16], 16)
             draw = np.random.default_rng(seed).normal(size=(3, 3))
             random.extend(draw / np.linalg.norm(draw, axis=1, keepdims=True))
     if random:

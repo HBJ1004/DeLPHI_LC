@@ -23,7 +23,7 @@ from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.ztf_prediction import _load_models
 from lc_pipeline.physics.axial import axial_angular_error_deg
 from lc_pipeline.v2.catalog import ecliptic_vector
-from lc_pipeline.v2.data import parse_damit_lightcurve
+from lc_pipeline.v2.data import canonical_json, parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod
 
 INDEX_SCHEMA = "delphi.k3-lowq-damit-census-index.v1"
@@ -342,7 +342,10 @@ def analyze(
     reference_path: Path,
     prediction_directory: Path,
     atlas_path: Path,
+    splits_path: Path,
     output: Path,
+    *,
+    fold: int,
 ) -> dict[str, object]:
     if output.exists():
         raise ValueError(f"output already exists: {output}")
@@ -353,7 +356,27 @@ def analyze(
     if _sha256(predictions_path) != manifest["predictions_sha256"]:
         raise ValueError("prediction JSONL hash mismatch")
     atlas = json.loads(atlas_path.read_text(encoding="utf-8"))
+    splits = json.loads(splits_path.read_text(encoding="utf-8"))
+    fold_rows = [
+        row
+        for row in splits.get("folds", [])
+        if isinstance(row, dict) and row.get("fold") == fold
+    ]
+    if len(fold_rows) != 1 or not isinstance(fold_rows[0].get("train_ids"), list):
+        raise ValueError(f"split document has no unique train role for fold {fold}")
+    expected_ids = sorted(str(value) for value in fold_rows[0]["train_ids"])
+    expected_ids_sha256 = hashlib.sha256(
+        canonical_json(expected_ids).encode("utf-8")
+    ).hexdigest()
+    if atlas.get("schema") != "delphi.axis-atlas.v1":
+        raise ValueError("atlas schema mismatch")
+    if atlas.get("object_count") != len(expected_ids):
+        raise ValueError("atlas was not fitted to the selected fold training role")
+    if atlas.get("train_object_ids_sha256") != expected_ids_sha256:
+        raise ValueError("atlas training identity hash does not match the selected fold")
     atlas_axes = np.asarray(atlas["axes"], dtype=np.float64)
+    if atlas_axes.shape != (3, 3) or not np.all(np.isfinite(atlas_axes)):
+        raise ValueError("atlas must contain three finite axes")
     reference_by_id = {row["object_id"]: row for row in reference["objects"]}
     result_rows: list[dict[str, object]] = []
     rejection_reasons: Counter[str] = Counter()
@@ -419,6 +442,15 @@ def analyze(
         "reference_quality_warning": reference["reference_quality_warning"],
         "prediction_manifest_sha256": _sha256(manifest_path),
         "reference_sha256": _sha256(reference_path),
+        "atlas_provenance": {
+            "fold": fold,
+            "atlas_file_sha256": _sha256(atlas_path),
+            "atlas_sha256": atlas["atlas_sha256"],
+            "axes": atlas["axes"],
+            "object_count": atlas["object_count"],
+            "train_object_ids_sha256": atlas["train_object_ids_sha256"],
+            "split_sha256": _sha256(splits_path),
+        },
         "selected_denominator": reference["object_count"],
         "analyzed_denominator": len(result_rows),
         "input_rejected_count": sum(rejection_reasons.values()),
@@ -461,6 +493,8 @@ def main() -> None:
     analysis.add_argument("--reference", type=Path, required=True)
     analysis.add_argument("--predictions", type=Path, required=True)
     analysis.add_argument("--atlas", type=Path, required=True)
+    analysis.add_argument("--splits", type=Path, required=True)
+    analysis.add_argument("--fold", type=int, default=0, choices=range(5))
     analysis.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -478,7 +512,14 @@ def main() -> None:
                 resume=args.resume,
             )
         else:
-            result = analyze(args.reference, args.predictions, args.atlas, args.output)
+            result = analyze(
+                args.reference,
+                args.predictions,
+                args.atlas,
+                args.splits,
+                args.output,
+                fold=args.fold,
+            )
     except ValueError as exc:
         parser.error(str(exc))
     if args.command == "index":

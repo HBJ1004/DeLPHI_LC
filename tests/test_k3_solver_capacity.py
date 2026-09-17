@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -99,6 +100,8 @@ def _fixture_inputs(tmp_path: Path) -> dict[str, Path]:
 
 
 def test_expanded_copy_preserves_original_source_and_expands_only_copy(tmp_path: Path):
+    if shutil.which("cc") is None or shutil.which("make") is None:
+        pytest.skip("fixture compilation requires a POSIX C compiler and make")
     values = _fixture_inputs(tmp_path)
     before = tree_sha256(values["solver"] / "convexinv")
     output = tmp_path / "capacity-output"
@@ -180,7 +183,9 @@ def test_unsafe_pre_padding_capacity_revision_is_rejected(tmp_path: Path):
     binary = source / "convexinv"
     archive = root.parent / "inputs" / "solver" / "damit-version_0.2.1.tar.gz"
     blind = root / "repro/data/k3-followup-20260910/convergence-blind-inputs.json"
-    assert report.is_file() and source.is_dir() and binary.is_file() and archive.is_file()
+    required = (report, source, binary, archive, blind)
+    if not all(path.exists() for path in required):
+        pytest.skip("local sealed solver-capacity evidence is not present in this checkout")
     with pytest.raises(Exception, match="differs from the official archive"):
         _verify_source_matches_archive(source, archive)
     with pytest.raises(Exception, match="current internal-padding schema"):

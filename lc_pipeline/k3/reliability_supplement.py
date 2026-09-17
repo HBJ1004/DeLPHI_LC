@@ -227,7 +227,12 @@ def export(run_root, output, mpc_table=None):
         else:
             bins = [(0, 30), (30, 60), (60, 90)]
         for i, (low, high) in enumerate(bins):
-            mask = (vals >= low) & ((vals < high) if i < len(bins) - 1 else (vals <= high))
+            if field == "reference_solution_count":
+                mask = (vals >= low) & (vals <= high)
+            else:
+                mask = (vals >= low) & (
+                    (vals < high) if i < len(bins) - 1 else (vals <= high)
+                )
             association.append(
                 {
                     "property": label,

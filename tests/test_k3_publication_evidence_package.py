@@ -61,5 +61,6 @@ def test_package_contains_revision_and_is_deterministic(tmp_path: Path) -> None:
     assert first["sha256"] == second["sha256"]
     with tarfile.open(tmp_path / "one" / ARCHIVE_NAME, "r:gz") as archive:
         names = archive.getnames()
-    assert "./evidence/exports/revision/timing-cases.csv" in names
+    assert "./k3-followup/revision/timing-cases.csv" in names
+    assert "./k3-followup/manifest.json" in names
     assert "./manuscript-derived/k3-followup-lowq-table.tex" in names

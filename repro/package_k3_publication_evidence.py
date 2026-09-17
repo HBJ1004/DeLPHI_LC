@@ -12,7 +12,8 @@ import tarfile
 from pathlib import Path
 
 DATE = "2026-09-17"
-ARCHIVE_NAME = f"delphi-k3-publication-evidence-{DATE}.tar.gz"
+RELEASE_ID = f"{DATE}-r2"
+ARCHIVE_NAME = f"delphi-k3-publication-evidence-{RELEASE_ID}.tar.gz"
 DERIVED_FILES = (
     "k3-followup-derived.json",
     "k3-followup-results.tex",
@@ -25,6 +26,8 @@ DERIVED_FILES = (
 )
 REVISION_CODE = (
     "repro/analyze_k3_lowq_lineage.py",
+    "repro/audit_k3_lowq_exposure.py",
+    "repro/build_k3_external_atlas.py",
     "repro/export_k3_grid_timing_cases.py",
     "repro/export_k3_revision_evidence.py",
     "repro/run_k3_error_channel_sensitivity.py",
@@ -95,9 +98,9 @@ def package(
 
     staging = output / "staging"
     shutil.copytree(base_staging, staging)
-    exports = staging / "evidence" / "exports"
-    shutil.copytree(followup_import, exports, dirs_exist_ok=True)
-    shutil.copytree(revision_export, exports / "revision", dirs_exist_ok=True)
+    followup = staging / "k3-followup"
+    shutil.copytree(followup_import, followup, dirs_exist_ok=True)
+    shutil.copytree(revision_export, followup / "revision", dirs_exist_ok=True)
 
     derived = staging / "manuscript-derived"
     for name in DERIVED_FILES:
@@ -109,7 +112,7 @@ def package(
         _copy_file(source_root / name, code / Path(name).name)
 
     (staging / "README.md").write_text(
-        "# DeLPHI K3 publication evidence, 2026-09-17\n\n"
+        "# DeLPHI K3 publication evidence, 2026-09-17 revision 2\n\n"
         "This archive adds the lower-quality DAMIT census, source-lineage split, "
         "ensemble-cost sensitivity, error-channel sensitivity, and public per-case "
         "broad-grid timing table used by the revised manuscript. The analyses are "
@@ -120,9 +123,14 @@ def package(
         encoding="utf-8",
     )
     (staging / "VERIFY.md").write_text(
-        "# Verification\n\nRun `sha256sum -c SHA256SUMS` from this directory. "
-        "The file `evidence/exports/manifest.json` binds the imported report groups, "
-        "and `evidence/exports/revision/manifest.json` binds the added evidence.\n",
+        "# Verification\n\n"
+        "Run `sha256sum -c SHA256SUMS` from this directory. The file "
+        "`k3-followup/manifest.json` binds the imported report groups, and "
+        "`k3-followup/revision/manifest.json` binds the added evidence. To verify the "
+        "manuscript-derived files, run `python manuscript-derived/derive_followup.py "
+        "--verify` from this directory. The revision export was generated with "
+        "`python -m repro.export_k3_revision_evidence`; its manifest records every "
+        "input hash.\n",
         encoding="utf-8",
     )
     _write_checksums(staging)
@@ -139,6 +147,7 @@ def package(
     return {
         "schema": "delphi.k3-publication-evidence-package.v1",
         "date": DATE,
+        "release_id": RELEASE_ID,
         "archive": ARCHIVE_NAME,
         "sha256": digest,
     }

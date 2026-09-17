@@ -57,7 +57,7 @@ def render_broad_grid_figure(analyses: dict, output: Path) -> None:
     """Render the public cold-grid interval figure from an exported analysis."""
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 2, figsize=(7.1, 3.3))
+    fig, axes = plt.subplots(1, 2, figsize=(7.1, 3.3), constrained_layout=True)
     runtime = analyses["cold_step20_primary"]["runtime"]
     rms = analyses["cold_step20_primary"]["rms"]
     for axis, record, label, color in (
@@ -77,11 +77,10 @@ def render_broad_grid_figure(analyses: dict, output: Path) -> None:
         axis.axhline(1, color="black", linewidth=0.8)
         axis.set_xlim(-0.8, 0.8)
         axis.set_xticks([])
-        axis.set_ylabel(label)
+        axis.set_ylabel(label, labelpad=8)
         axis.set_title("95% percentile interval")
     axes[1].axhline(1.01, color="0.35", linewidth=0.8, linestyle="--")
     fig.suptitle("Broad-grid cold 20-degree primary (170 objects x 3 repeats)")
-    fig.tight_layout()
     _pdf(output, fig)
     plt.close(fig)
 
@@ -402,31 +401,55 @@ def export_followup_transfer(data_root: Path, output: Path, comparator_path: Pat
     _write(output / "broad-grid-summary.csv", "\n".join(grid_csv) + "\n")
     # PDFs are intentionally small vector plots, derived solely from the exported rows.
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
 
-    fig, ax = plt.subplots(figsize=(7, 3.3))
+    fig, ax = plt.subplots(figsize=(7.2, 4.4), constrained_layout=True)
     subset = [row for row in rows if row["study"] == "alcdef_gaia_transfer"]
     survey = [
         (
-            f"ZTF usable\n(n={original['fixed_available_input_cohort']['n_objects']})",
+            f"ZTF usable K3 (n={original['fixed_available_input_cohort']['n_objects']})",
             original["fixed_available_input_cohort"]["mean_oracle_at_3_error_deg"],
+            "K3",
         ),
         (
-            f"ZTF intended\n(n={original['all_intended_objects']['n_objects']}; {original['prediction_failure_count']} failures)",
+            f"ZTF intended K3 (n={original['all_intended_objects']['n_objects']}, "
+            f"{original['prediction_failure_count']} failures at 90 deg)",
             original["all_intended_objects"]["mean_oracle_at_3_error_deg"],
+            "K3",
         ),
-        (f"ZTF atlas\n(n={len(ztf_atlas_values)})", float(np.mean(ztf_atlas_values))),
-        (f"ALCDEF candidate\n(n={subset[0]['n_objects']})", subset[0]["mean_error_deg"]),
-        (f"ALCDEF atlas\n(n={subset[1]['n_objects']})", subset[1]["mean_error_deg"]),
-        (f"ALCDEF random\n(n={subset[2]['n_objects']})", subset[2]["mean_error_deg"]),
+        (
+            f"ZTF atlas (n={len(ztf_atlas_values)})",
+            float(np.mean(ztf_atlas_values)),
+            "Atlas",
+        ),
+        (f"ALCDEF K3 (n={subset[0]['n_objects']})", subset[0]["mean_error_deg"], "K3"),
+        (
+            f"ALCDEF atlas (n={subset[1]['n_objects']})",
+            subset[1]["mean_error_deg"],
+            "Atlas",
+        ),
+        (
+            f"ALCDEF random (n={subset[2]['n_objects']})",
+            subset[2]["mean_error_deg"],
+            "Random",
+        ),
     ]
-    ax.bar(
-        [value[0] for value in survey],
+    colors = {"K3": "#4c78a8", "Atlas": "#f58518", "Random": "#8c8c8c"}
+    positions = np.arange(len(survey))
+    ax.barh(
+        positions,
         [value[1] for value in survey],
-        color=("#6b8eb5", "#8ca9c7", "#4878a8", "#d28445"),
+        color=[colors[value[2]] for value in survey],
     )
-    ax.set_ylabel("mean oracle-at-3 error (deg)")
-    ax.set_title("Survey comparison; ZTF is same-identity development diagnostic")
-    fig.tight_layout()
+    ax.set_yticks(positions, [value[0] for value in survey])
+    ax.invert_yaxis()
+    ax.set_xlabel("mean oracle-at-3 error (deg)")
+    ax.set_title("Transfer checks")
+    ax.legend(
+        handles=[Patch(color=color, label=label) for label, color in colors.items()],
+        frameon=False,
+        loc="lower right",
+    )
     _pdf(output / "survey-comparison.pdf", fig)
     plt.close(fig)
     render_broad_grid_figure(analyses, output / "broad-grid-timing-rms.pdf")
