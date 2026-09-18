@@ -152,7 +152,27 @@ def _freeze(values: dict[str, Path], output: Path) -> dict:
                        reference_catalog=values["catalog"], output=output, device="cpu")
 
 
-def test_freeze_requires_exact_salted_development_manifest_and_bundle_contract(tmp_path: Path):
+def test_environment_rejects_insufficient_benchmark_affinity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        grid.os,
+        "sched_getaffinity",
+        lambda _pid: set(range(grid.SETTINGS["workers"] - 1)),
+        raising=False,
+    )
+    with pytest.raises(grid.GridBenchmarkError, match="at least six"):
+        grid._environment("cpu")
+
+
+def test_freeze_requires_exact_salted_development_manifest_and_bundle_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        grid,
+        "_environment",
+        lambda device: {"device": device, "cpu_affinity": list(range(6))},
+    )
     values = _fixture(tmp_path)
     lock = _freeze(values, tmp_path / "lock.json")
     assert len(lock["pilot_ids"]) == 5
