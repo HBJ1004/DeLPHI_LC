@@ -48,7 +48,9 @@ def test_export_is_read_only_and_has_portable_manifest(tmp_path):
                     "platform": "test",
                     "cpu_models": ["test"],
                     "cpu_count": 1,
-                    "gpu": ["test"],
+                    "gpu": [
+                        "NVIDIA GeForce RTX 4070, GPU-01234567-abcd, 591.86, 12282 MiB"
+                    ],
                     "python": "test",
                     "packages": {},
                     "neural_torch_threads": 1,
@@ -147,6 +149,9 @@ def test_export_is_read_only_and_has_portable_manifest(tmp_path):
     assert "tmp_path" not in (output / "manifest.json").read_text()
     result = json.loads((output / "followup-summary.json").read_text())
     assert result["broad_grid"]["runtime_point_ratio"] == 1
+    assert result["broad_grid"]["host"]["gpu"] == [
+        "NVIDIA GeForce RTX 4070, 591.86, 12282 MiB"
+    ]
     assert result["broad_grid"]["analyses"]["cold_step20_primary"]["classical_mean_seconds"] == 5
     assert "warm_step20_separately_scoped" not in result["broad_grid"]["analyses"]
     assert result["ztf_sampling"]["points_min_median_max"] == [2, 2.5, 3]

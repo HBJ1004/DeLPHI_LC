@@ -6,12 +6,23 @@ import csv
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 from statistics import median
 
 import numpy as np
 
 SCHEMA = "delphi.k3-followup-transfer-publication.v1"
+GPU_UUID = re.compile(r",\s*GPU-[0-9a-f-]{8,}(?=,)", re.IGNORECASE)
+
+
+def _public_gpu_description(value: object) -> object:
+    """Remove device UUIDs while retaining model, driver, and memory details."""
+    if isinstance(value, list):
+        return [_public_gpu_description(item) for item in value]
+    if isinstance(value, str):
+        return GPU_UUID.sub("", value)
+    return value
 
 
 def _sha(path: Path) -> str:
@@ -321,7 +332,7 @@ def export_followup_transfer(data_root: Path, output: Path, comparator_path: Pat
         "platform": environment["platform"],
         "cpu_models": environment["cpu_models"],
         "cpu_count": environment["cpu_count"],
-        "gpu": environment["gpu"],
+        "gpu": _public_gpu_description(environment["gpu"]),
         "python": environment["python"],
         "packages": environment["packages"],
         "neural_torch_threads": environment["neural_torch_threads"],
