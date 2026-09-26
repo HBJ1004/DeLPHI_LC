@@ -1,0 +1,507 @@
+{
+  "cohorts": {
+    "alcdef": {
+      "delphi": {
+        "mean_deg": 26.819536235671524,
+        "median_deg": 22.657732658258798,
+        "object_count": 30,
+        "within_twenty_percent": 43.333333333333336
+      },
+      "object_count": 30,
+      "random": {
+        "mean_deg": 35.912654357469506,
+        "mean_scatter_deg": 3.019676662432737,
+        "median_deg": 34.81994638261014,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 30,
+        "randomization_interval95_high_deg": 41.70455171413004,
+        "randomization_interval95_low_deg": 30.233707411238527,
+        "resamples": 1000,
+        "within_twenty_percent": 20.356666666666666
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 15.268126780842746,
+        "ci95_low_deg": 2.6292059458634394,
+        "mean_difference_deg": 9.093118121797996,
+        "resamples": 10000,
+        "seed": 20260925
+      },
+      "standard": {
+        "mean_deg": 21.56445414010449,
+        "median_deg": 22.618220732873596,
+        "object_count": 30,
+        "within_twenty_percent": 36.666666666666664
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": 1.4083379621328151,
+        "ci95_low_deg": -12.477458899819398,
+        "mean_difference_deg": -5.255082095567035,
+        "resamples": 10000,
+        "seed": 20260924
+      },
+      "unmatched_count": 0
+    },
+    "lowq": {
+      "delphi": {
+        "mean_deg": 19.915974207169917,
+        "median_deg": 17.183136132177182,
+        "object_count": 9783,
+        "within_twenty_percent": 58.17233977307574
+      },
+      "object_count": 9783,
+      "random": {
+        "mean_deg": 33.571982910185596,
+        "mean_scatter_deg": 0.15231146068647122,
+        "median_deg": 31.969134589188354,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 9783,
+        "randomization_interval95_high_deg": 33.831669739238684,
+        "randomization_interval95_low_deg": 33.260982265225195,
+        "resamples": 200,
+        "within_twenty_percent": 23.6557293263825
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 13.930109201187127,
+        "ci95_low_deg": 13.381369031374572,
+        "mean_difference_deg": 13.656008703015683,
+        "resamples": 10000,
+        "seed": 20260925
+      },
+      "standard": {
+        "mean_deg": 22.056510940677125,
+        "median_deg": 22.481949807326366,
+        "object_count": 9783,
+        "within_twenty_percent": 41.22457323929265
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": 2.441578048645141,
+        "ci95_low_deg": 1.8425835760077771,
+        "mean_difference_deg": 2.140536733507207,
+        "resamples": 10000,
+        "seed": 20260924
+      },
+      "unmatched_count": 0
+    },
+    "lowq_asas": {
+      "delphi": {
+        "mean_deg": 31.23742125061471,
+        "median_deg": 26.978645477108934,
+        "object_count": 147,
+        "within_twenty_percent": 37.41496598639456
+      },
+      "object_count": 147,
+      "random": {
+        "mean_deg": 31.501643681919536,
+        "mean_scatter_deg": 1.2641100183010228,
+        "median_deg": 29.86434194219024,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 147,
+        "randomization_interval95_high_deg": 34.01526302246193,
+        "randomization_interval95_low_deg": 28.822530528030896,
+        "resamples": 200,
+        "within_twenty_percent": 27.142857142857142
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 3.2338236164699494,
+        "ci95_low_deg": -2.8247322872464085,
+        "mean_difference_deg": 0.2642224313048305,
+        "resamples": 10000,
+        "seed": 20260929
+      },
+      "standard": {
+        "mean_deg": 23.47730581900208,
+        "median_deg": 22.992415518203803,
+        "object_count": 147,
+        "within_twenty_percent": 42.17687074829932
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": -4.726578256478579,
+        "ci95_low_deg": -10.843760470848546,
+        "mean_difference_deg": -7.760115431612624,
+        "resamples": 10000,
+        "seed": 20260928
+      },
+      "unmatched_count": 0
+    },
+    "lowq_gaia": {
+      "delphi": {
+        "mean_deg": 18.65678536353428,
+        "median_deg": 16.068049421843295,
+        "object_count": 7273,
+        "within_twenty_percent": 62.25766533754984
+      },
+      "object_count": 7273,
+      "random": {
+        "mean_deg": 34.43654393725908,
+        "mean_scatter_deg": 0.19629412382706382,
+        "median_deg": 32.93783855238139,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 7273,
+        "randomization_interval95_high_deg": 34.81268594521827,
+        "randomization_interval95_low_deg": 34.01031309375326,
+        "resamples": 200,
+        "within_twenty_percent": 22.462670149869382
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 16.07715373030853,
+        "ci95_low_deg": 15.479197230084523,
+        "mean_difference_deg": 15.779758573724804,
+        "resamples": 10000,
+        "seed": 20260929
+      },
+      "standard": {
+        "mean_deg": 22.024508295145328,
+        "median_deg": 22.615208771798212,
+        "object_count": 7273,
+        "within_twenty_percent": 40.244740822219164
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": 3.6931954639014215,
+        "ci95_low_deg": 3.040849726496211,
+        "mean_difference_deg": 3.3677229316110493,
+        "resamples": 10000,
+        "seed": 20260928
+      },
+      "unmatched_count": 0
+    },
+    "lowq_shared": {
+      "delphi": {
+        "mean_deg": 23.07982145275952,
+        "median_deg": 21.17714422277924,
+        "object_count": 2362,
+        "within_twenty_percent": 46.90939881456393
+      },
+      "object_count": 2362,
+      "random": {
+        "mean_deg": 31.10352202199285,
+        "mean_scatter_deg": 0.291049062440081,
+        "median_deg": 29.51958142666462,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 2362,
+        "randomization_interval95_high_deg": 31.65786217183839,
+        "randomization_interval95_low_deg": 30.478845217514298,
+        "resamples": 200,
+        "within_twenty_percent": 26.952159187129556
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 8.57095863921087,
+        "ci95_low_deg": 7.492903272775241,
+        "mean_difference_deg": 8.023700569233329,
+        "resamples": 10000,
+        "seed": 20260929
+      },
+      "standard": {
+        "mean_deg": 22.071124106500715,
+        "median_deg": 21.893194665118305,
+        "object_count": 2362,
+        "within_twenty_percent": 44.15749364944962
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": -0.3259722406190412,
+        "ci95_low_deg": -1.694067654141874,
+        "mean_difference_deg": -1.008697346258807,
+        "resamples": 10000,
+        "seed": 20260928
+      },
+      "unmatched_count": 0
+    },
+    "lowq_unshared": {
+      "delphi": {
+        "mean_deg": 18.908966095853028,
+        "median_deg": 16.20093116558758,
+        "object_count": 7421,
+        "within_twenty_percent": 61.75717558280556
+      },
+      "object_count": 7421,
+      "random": {
+        "mean_deg": 34.369330425200715,
+        "mean_scatter_deg": 0.18430676195349988,
+        "median_deg": 32.86309641756344,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 7421,
+        "randomization_interval95_high_deg": 34.72302734305784,
+        "randomization_interval95_low_deg": 34.057835244404245,
+        "resamples": 200,
+        "within_twenty_percent": 22.597493599245382
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 15.764555146715532,
+        "ci95_low_deg": 15.152029636397192,
+        "mean_difference_deg": 15.460364329347689,
+        "resamples": 10000,
+        "seed": 20260929
+      },
+      "standard": {
+        "mean_deg": 22.051859775379285,
+        "median_deg": 22.615208771798212,
+        "object_count": 7421,
+        "within_twenty_percent": 40.291065894084355
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": 3.4614043886806654,
+        "ci95_low_deg": 2.81605485660827,
+        "mean_difference_deg": 3.142893679526251,
+        "resamples": 10000,
+        "seed": 20260928
+      },
+      "unmatched_count": 0
+    },
+    "ztf": {
+      "delphi": {
+        "mean_deg": 31.279393562382708,
+        "median_deg": 30.165527652631702,
+        "object_count": 161,
+        "within_twenty_percent": 29.81366459627329
+      },
+      "object_count": 161,
+      "random": {
+        "mean_deg": 33.68054625690343,
+        "mean_scatter_deg": 1.2269798599866575,
+        "median_deg": 32.07057979974399,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 161,
+        "randomization_interval95_high_deg": 36.07534140407113,
+        "randomization_interval95_low_deg": 31.28462483999237,
+        "resamples": 1000,
+        "within_twenty_percent": 23.631055900621117
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 5.070819298222545,
+        "ci95_low_deg": -0.174761823736752,
+        "mean_difference_deg": 2.4011526945207224,
+        "resamples": 10000,
+        "seed": 20260925
+      },
+      "standard": {
+        "mean_deg": 24.368070777166523,
+        "median_deg": 24.22785013125071,
+        "object_count": 161,
+        "within_twenty_percent": 39.75155279503105
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": -4.109225380522416,
+        "ci95_low_deg": -9.609092675486066,
+        "mean_difference_deg": -6.911322785216183,
+        "resamples": 10000,
+        "seed": 20260924
+      },
+      "unmatched_count": 0
+    }
+  },
+  "delphi": {
+    "mean_deg": 15.772555008039914,
+    "median_deg": 12.09351746833093,
+    "object_count": 170,
+    "within_twenty_percent": 74.11764705882354
+  },
+  "latitude_diagnostics": {
+    "note": "the flat dependence is not produced by low-latitude asteroids having more catalog solutions to match",
+    "spearman_latitude_all_references": 0.06045207835152866,
+    "spearman_latitude_first_reference": 0.01969303712231451,
+    "spearman_latitude_reference_count": -0.054513416257818276,
+    "strata": {
+      "0-30": {
+        "mean_all_references_deg": 15.534450454711424,
+        "mean_first_reference_deg": 17.471350713830596,
+        "mean_reference_count": 1.6101694915254237,
+        "object_count": 59
+      },
+      "30-60": {
+        "mean_all_references_deg": 14.612140936780062,
+        "mean_first_reference_deg": 15.990583674819076,
+        "mean_reference_count": 1.5846153846153845,
+        "object_count": 65
+      },
+      "60-90": {
+        "mean_all_references_deg": 17.717665274079497,
+        "mean_first_reference_deg": 19.102319225131026,
+        "mean_reference_count": 1.5,
+        "object_count": 46
+      }
+    }
+  },
+  "primary_variants": {
+    "alcdef_primary": {
+      "delphi": {
+        "mean_deg": 37.25189119330039,
+        "median_deg": 36.16390596316093,
+        "object_count": 30,
+        "within_twenty_percent": 20.0
+      },
+      "object_count": 30,
+      "random": {
+        "mean_deg": 36.1076256503137,
+        "mean_scatter_deg": 2.8924700677594624,
+        "median_deg": 35.023129753993665,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 30,
+        "randomization_interval95_high_deg": 41.71107161613599,
+        "randomization_interval95_low_deg": 30.424219107609314,
+        "resamples": 1000,
+        "within_twenty_percent": 20.03333333333333
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 5.192172752195543,
+        "ci95_low_deg": -7.745290800111878,
+        "mean_difference_deg": -1.144265542986694,
+        "resamples": 10000,
+        "seed": 20260927
+      },
+      "standard": {
+        "mean_deg": 21.56445414010449,
+        "median_deg": 22.618220732873596,
+        "object_count": 30,
+        "within_twenty_percent": 36.666666666666664
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": -7.969828386113209,
+        "ci95_low_deg": -23.155188561467863,
+        "mean_difference_deg": -15.687437053195902,
+        "resamples": 10000,
+        "seed": 20260926
+      }
+    },
+    "alcdef_without_uncertainties": {
+      "delphi": {
+        "mean_deg": 26.81953623567152,
+        "median_deg": 22.657732658258787,
+        "object_count": 30,
+        "within_twenty_percent": 43.333333333333336
+      },
+      "object_count": 30,
+      "random": {
+        "mean_deg": 36.01603881007693,
+        "mean_scatter_deg": 3.042127566261977,
+        "median_deg": 34.77141408517313,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 30,
+        "randomization_interval95_high_deg": 42.04578277839324,
+        "randomization_interval95_low_deg": 30.087689983147982,
+        "resamples": 1000,
+        "within_twenty_percent": 20.25
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 15.34826973651584,
+        "ci95_low_deg": 2.6110217826127764,
+        "mean_difference_deg": 9.196502574405406,
+        "resamples": 10000,
+        "seed": 20260927
+      },
+      "standard": {
+        "mean_deg": 21.56445414010449,
+        "median_deg": 22.618220732873596,
+        "object_count": 30,
+        "within_twenty_percent": 36.666666666666664
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": 1.5851478524592928,
+        "ci95_low_deg": -12.260096786960103,
+        "mean_difference_deg": -5.255082095567032,
+        "resamples": 10000,
+        "seed": 20260926
+      }
+    },
+    "ztf_primary": {
+      "delphi": {
+        "mean_deg": 29.997396659976577,
+        "median_deg": 27.757677011420995,
+        "object_count": 161,
+        "within_twenty_percent": 29.81366459627329
+      },
+      "object_count": 161,
+      "random": {
+        "mean_deg": 33.61754590078684,
+        "mean_scatter_deg": 1.2343746011534737,
+        "median_deg": 32.06843619099988,
+        "method": "three_independent_uniform_sphere_axes_per_identity",
+        "object_count": 161,
+        "randomization_interval95_high_deg": 35.860712442244484,
+        "randomization_interval95_low_deg": 31.22550054978037,
+        "resamples": 1000,
+        "within_twenty_percent": 23.71242236024845
+      },
+      "random_minus_delphi": {
+        "ci95_high_deg": 6.0659507373826616,
+        "ci95_low_deg": 1.1824258186910646,
+        "mean_difference_deg": 3.6201492408102633,
+        "resamples": 10000,
+        "seed": 20260927
+      },
+      "standard": {
+        "mean_deg": 24.368070777166523,
+        "median_deg": 24.22785013125071,
+        "object_count": 161,
+        "within_twenty_percent": 39.75155279503105
+      },
+      "standard_minus_delphi": {
+        "ci95_high_deg": -2.730407965016651,
+        "ci95_low_deg": -8.593596253813947,
+        "mean_difference_deg": -5.629325882810055,
+        "resamples": 10000,
+        "seed": 20260926
+      }
+    }
+  },
+  "random": {
+    "mean_deg": 33.84181097998106,
+    "mean_scatter_deg": 1.2441318401525356,
+    "median_deg": 32.327795366018826,
+    "method": "three_independent_uniform_sphere_axes_per_identity",
+    "object_count": 170,
+    "randomization_interval95_high_deg": 36.32014896587898,
+    "randomization_interval95_low_deg": 31.4203252593885,
+    "resamples": 10000,
+    "within_twenty_percent": 23.348823529411764
+  },
+  "random_draws": 10000,
+  "random_minus_delphi": {
+    "ci95_high_deg": 20.002323252096435,
+    "ci95_low_deg": 15.9986828282747,
+    "mean_difference_deg": 18.06925597194114,
+    "resamples": 10000,
+    "seed": 20260923
+  },
+  "random_seed": 20260922,
+  "schema": "delphi.reference-baselines.v1",
+  "standard": {
+    "mean_deg": 24.421444784971605,
+    "median_deg": 24.131269193512615,
+    "object_count": 170,
+    "within_twenty_percent": 39.411764705882355
+  },
+  "standard_axis_count": 5,
+  "standard_minus_delphi": {
+    "ci95_high_deg": 11.249405286410221,
+    "ci95_low_deg": 5.954611215782576,
+    "mean_difference_deg": 8.64888977693169,
+    "resamples": 10000,
+    "seed": 20260922
+  },
+  "standard_pole_count": 6,
+  "standard_poles_deg": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      180.0,
+      0.0
+    ],
+    [
+      90.0,
+      60.0
+    ],
+    [
+      240.0,
+      60.0
+    ],
+    [
+      90.0,
+      -60.0
+    ],
+    [
+      240.0,
+      -60.0
+    ]
+  ]
+}
