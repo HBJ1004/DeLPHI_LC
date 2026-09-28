@@ -414,10 +414,11 @@ def render_publication(run_root: str | Path, output_dir: str | Path) -> dict[str
                 )
         ax.set_xticks(range(5), cap_order, fontsize=9)
         ax.set_yticks(range(5), block_order, fontsize=9)
-        ax.set_xlabel("Observation cap per merged block (all = no cap)", fontsize=10)
-        ax.set_ylabel("Merged block count (all = no cap)", fontsize=10)
+        ax.set_xlabel("Maximum observations per 30-day group (all = no limit)", fontsize=10)
+        ax.set_ylabel("30-day groups retained (all = complete record)", fontsize=10)
         ax.set_title(
-            "K3 oracle@3 under data degradation\n80 matched asteroids; three repeats per cell",
+            "DeLPHI under reduced photometric coverage\n"
+            "80 matched asteroids; three selections per cell",
             fontsize=11,
         )
         bar = fig.colorbar(image, ax=ax)
