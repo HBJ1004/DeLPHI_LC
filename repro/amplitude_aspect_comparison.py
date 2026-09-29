@@ -3,9 +3,14 @@
 For every trial axis p of the 6,144-axis grid, the aspect angle phi_i of each
 lightcurve i is the angle between p and the mean asteroid-to-observer
 direction of that lightcurve.  A triaxial ellipsoid with semi-axes a >= b >= c
-rotating about c has the amplitude (Zappala et al. 1990)
+rotating about c has, from the ratio of its largest and smallest projected
+areas, the amplitude (Zappala et al. 1990)
 
-    A(phi) = 1.25 log10[(a^2 sin^2 phi + c^2 cos^2 phi) / (b^2 sin^2 phi + c^2 cos^2 phi)].
+    A(phi) = 2.5 log10(a/b)
+             - 1.25 log10[(a^2 cos^2 phi + c^2 sin^2 phi) / (b^2 cos^2 phi + c^2 sin^2 phi)].
+
+The version of 2026-09-23 used an incorrect expression with the same pole-on
+and equator-on limits. Its output is kept in data/interpretation-20260923.
 
 We fit a/b and b/c on a fixed grid for each trial axis and use the negative
 residual sum of squares as a physical score map.  Three candidates are taken
@@ -61,7 +66,8 @@ def amplitude_aspect_scores(amplitudes, directions, axes):
     b2 = bc ** 2                                         # c = 1
     best = np.full(len(axes), np.inf)
     for a2v, b2v in zip(a2.ravel(), b2.ravel()):
-        model = 1.25 * np.log10((a2v * sin2 + cos2) / (b2v * sin2 + cos2))
+        model = (1.25 * np.log10(a2v / b2v)
+                 - 1.25 * np.log10((a2v * cos2 + sin2) / (b2v * cos2 + sin2)))
         rss = np.sum((model - amplitudes[None, :]) ** 2, axis=1)
         best = np.minimum(best, rss)
     return -best
@@ -92,7 +98,7 @@ def main():
             "delphi_grid_oracle_deg": float(ensemble["grid_oracle_errors_deg"][index]),
             "standard_oracle_deg": base.axial_error_deg(standard, poles[name]),
         })
-    output = FOLLOWUP / "data/interpretation-20260923/amplitude-aspect.json"
+    output = FOLLOWUP / "data/interpretation-20260930/amplitude-aspect.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(rows, indent=1))
     maps = np.array(maps)
