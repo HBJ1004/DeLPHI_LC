@@ -31,20 +31,26 @@ The `constraints/` files record supported dependency constraints. Exact historic
 package versions and hardware belong to the benchmark archive, not a promise of
 bitwise reproducibility on different hardware.
 
-## Start here
+## Which release do I need?
 
-Follow-up research is documented in [the generalization study](docs/generalization-study.md).
-Its original ZTF comparison had an invalid DAMIT-ID/MPC-number join and must not
-be used as evidence for or against transfer. The released within-DAMIT results
-are separate and unchanged.
+| To... | Use |
+|---|---|
+| Run DeLPHI on your own lightcurves | The trained networks in release [`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0) (`k3-oof-fold-*.tar.gz`) and this repository |
+| Check the numbers of the paper | Release [`paper-v1`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v1) together with `v1.0.0`, and the code at tag `paper-v1` |
+
+The README inside the `paper-v1` archive lists, for each section of the paper,
+the files that hold its results. All other releases (`v1.0`, `v1.0.1`, and the
+`publication-evidence-*` releases) are earlier versions and are superseded.
+
+## Start here
 
 There are three supported ways to use DeLPHI:
 
 1. **Use published weights:** prepare one observation JSON file and run prediction.
 2. **Train on your own labelled data:** make train/validation JSONL files and
    train a new experimental model.
-3. **Reproduce the paper result:** use the frozen release package and exact
-   reproduction instructions.
+3. **Reproduce the paper result:** use releases `v1.0.0` and `paper-v1` (see
+   above) and the [reproduction instructions](docs/reproduction.md).
 
 Start with the [data-format guide](docs/data-format.md). It explains coordinate
 conventions, flux conversion, epoch grouping, and pole labels with examples.
@@ -84,13 +90,12 @@ and does not select a pole at deployment.
 | Median oracle@3 error | 12.09° |
 | Objects within 20° | 74.1% |
 
-In the matched, fixed-period convex-inversion benchmark (six starts per arm,
-50 iterations per start), both arms performed the same 43,200 inversion
-iterations. Baseline/guided wall time was **0.947**: guided execution was
-approximately **5.6% slower**, including neural inference. This fixed-work
-design cannot demonstrate an inversion speedup. Archived model
-scoring/refinement took a median 0.509 s/object; this excludes data loading,
-tokenization, and model loading and is not end-to-end deployment latency.
+The paper compares complete pole searches started from the candidates with
+classical searches (Section 6.4.2 and Appendix F of the paper, evidence in
+release `paper-v1`). An earlier fixed-work benchmark, described in the
+`v1.0.0` release notes, used a different protocol and is superseded by that
+comparison. Model scoring and candidate selection take a median of 0.51 s per
+asteroid on an RTX 4070, excluding data and model loading.
 
 The 90% fold containment radii span 31.31–61.52° with 94.1% pooled empirical
 coverage. All 95% radii are 90°, covering the entire axial domain and providing
