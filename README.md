@@ -49,6 +49,9 @@ There are three supported ways to use DeLPHI:
 Start with the [data-format guide](docs/data-format.md). It explains coordinate
 conventions, flux conversion, epoch grouping, and pole labels with examples.
 
+All model and training settings, and which of them can be changed, are listed
+in the [configuration guide](docs/configuration.md).
+
 ## Use published weights
 
 Obtain an evaluated `k3-oof-fold-N.tar.gz` bundle and its `SHA256SUMS` from the

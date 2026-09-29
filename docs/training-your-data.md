@@ -37,6 +37,8 @@ row, rejects duplicate/overlapping object IDs, writes an atomic `.pt`
 checkpoint, a hash-bound `training-report.json`, and an `inference-bundle/`
 directory containing safe `safetensors` weights. Choose a new output directory
 for each run. The five allowed seeds are 17, 42, 137, 777, and 2027.
+The command uses the manuscript settings. To train with other settings, see the
+[configuration guide](configuration.md).
 
 The custom command starts from a new K3 scorer. It does not fine-tune published
 safetensors bundles: those are five fold ensembles, not one general-purpose
