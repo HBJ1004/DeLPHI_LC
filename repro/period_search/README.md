@@ -25,7 +25,10 @@ metadata. On 2026-09-29 we reran the Fourier and phase-dispersion searches of
 the current `search.py` on all 170 asteroids and rebuilt the candidate lists with
 the current `end_to_end.py`. Every candidate list has the same number of periods
 as `candidates-v1.jsonl`, and the periods agree to within a relative difference
-of 1.6e-7. The physical pilot, which needs `convexinv`, was not rerun.
+of 1.6e-7. On 2026-09-30 we also reran the physical pilot with the current
+`end_to_end.py` and the same settings. All 20 asteroids selected the same
+period with the same chi-squared as `pilot-screen-v2.jsonl`, giving the same
+7 of 20 correct and 10 ambiguous results. Only the run times differ.
 
 `period_uncertainty.py` and `period_uncertainty_summary.py` are the versions
 that produced `period-uncertainty-v1.jsonl` and its summary.
