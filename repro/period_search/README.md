@@ -1,6 +1,6 @@
-# Experimental period search (manuscript Appendix D)
+# Experimental period search (manuscript Appendix C)
 
-These scripts produced the experimental period search of Appendix D and its
+These scripts produced the experimental period search of Appendix C and its
 period uncertainties. They are byte-identical copies of the scripts in
 `DeLPHI-followup/experiments/period-refinement-20260921/`, where they were run,
 and they read and write paths relative to that folder. The result files are in

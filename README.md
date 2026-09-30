@@ -91,7 +91,7 @@ and does not select a pole at deployment.
 | Objects within 20° | 74.1% |
 
 The paper compares complete pole searches started from the candidates with
-classical searches (Section 6.4.2 and Appendix F of the paper, evidence in
+classical searches (Section 6.4.2 and Appendix E of the paper, evidence in
 release `paper-v1`). An earlier fixed-work benchmark, described in the
 `v1.0.0` release notes, used a different protocol and is superseded by that
 comparison. Model scoring and candidate selection take a median of 0.51 s per
