@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import NullFormatter
+from matplotlib.ticker import MaxNLocator, NullFormatter
+from matplotlib.transforms import blended_transform_factory
 import numpy as np
 
 
@@ -39,6 +40,7 @@ def main() -> None:
     fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.3), constrained_layout=True)
     blue, grey = "#0072B2", "#666666"
 
+    edges = np.geomspace(0.1, 10.0, 41)
     for ax, report, title in zip(
         axes[:2], reports, ("(a) Fresh process for each asteroid", "(b) Models kept loaded"), strict=True
     ):
@@ -47,24 +49,27 @@ def main() -> None:
         interval = report["bootstrap_95_intervals"]
         classical_time = np.array([row["arms"]["classical"]["mean_wall_seconds"] for row in rows])
         delphi_time = np.array([row["arms"]["delphi"]["mean_wall_seconds"] for row in rows])
-        ax.scatter(classical_time, delphi_time, s=18, color=blue, alpha=0.7,
-                   edgecolors="white", linewidths=0.3)
-        lower = 0.8 * min(classical_time.min(), delphi_time.min())
-        upper = 1.2 * max(classical_time.max(), delphi_time.max())
-        ax.plot([lower, upper], [lower, upper], "--", color=grey, lw=1)
-        ax.set(xscale="log", yscale="log", xlim=(lower, upper), ylim=(lower, upper),
-               xlabel="Classical search time (s)", ylabel="DeLPHI search time (s)", title=title)
-        ticks = [tick for tick in (1, 3, 10, 30) if lower <= tick <= upper]
-        ax.set_xticks(ticks, [str(tick) for tick in ticks])
-        ax.set_yticks(ticks, [str(tick) for tick in ticks])
+        ratio = classical_time / delphi_time
+        ax.axvspan(1.0, edges[-1], color=blue, alpha=0.07, lw=0)
+        ax.hist(ratio, bins=edges, color=blue, alpha=0.8, edgecolor="white", linewidth=0.4)
+        ax.axvline(1.0, color=grey, ls="--", lw=1)
+        ax.set(xscale="log", xlim=(edges[0], edges[-1]), xlabel="Classical time / DeLPHI time",
+               ylabel="Number of asteroids", title=title)
+        ax.set_xticks([0.1, 0.3, 1, 3, 10], ["0.1", "0.3", "1", "3", "10"])
         ax.xaxis.set_minor_formatter(NullFormatter())
-        ax.yaxis.set_minor_formatter(NullFormatter())
-        ax.set_aspect("equal", adjustable="box")
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.55)
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        mixed = blended_transform_factory(ax.transData, ax.transAxes)
+        ax.text(0.9, 0.74, "Classical\nfaster", transform=mixed, ha="right", va="center",
+                color=grey, fontsize=9)
+        ax.text(1.12, 0.74, "DeLPHI\nfaster", transform=mixed, ha="left", va="center",
+                color=blue, fontsize=9)
         speed = interval["speed_ratio_classical_over_delphi"]
-        ax.text(0.03, 0.96,
-                f"Ratio of means {point['speed_ratio_classical_over_delphi']:.2f}\n"
-                f"95% interval {speed[0]:.2f}--{speed[1]:.2f}",
-                transform=ax.transAxes, va="top", ha="left",
+        ax.text(0.03, 0.97,
+                f"DeLPHI faster for {int(np.sum(ratio > 1))} of {len(ratio)}\n"
+                f"Ratio of means {point['speed_ratio_classical_over_delphi']:.2f} "
+                f"({speed[0]:.2f}--{speed[1]:.2f})",
+                transform=ax.transAxes, va="top", ha="left", fontsize=9,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2})
 
     # (c) Agreement with the DAMIT poles against the number of starts (exploratory, saved fits).
