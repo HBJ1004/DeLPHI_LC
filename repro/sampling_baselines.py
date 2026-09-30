@@ -48,6 +48,21 @@ def main(scored_rows):
         boot = diff[draws].mean(axis=1)
         paired[blocks] = [float(diff.mean()), float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))]
     out["standard_minus_delphi_deg"] = paired
+    # Total-observation caps on all 170 asteroids, paired against the standard poles.
+    per_object = np.load(HERE / "baselines_out/reference-baselines-per-object.npz")
+    standard_all = dict(zip([str(v) for v in per_object["object_ids"]], per_object["standard_errors_deg"]))
+    caps = {}
+    for cap in ("10", "20", "50", "100", "200", "500", "None"):
+        cond = f"observation_cap-cap-{cap}"
+        errors = {}
+        for r in rows:
+            if r["condition"] == cond and r.get("status") == "ok":
+                errors.setdefault(r["object_id"], []).append(r["error_deg"])
+        diff = np.array([standard_all[i] - np.mean(v) for i, v in sorted(errors.items())])
+        draws = np.random.default_rng(20260930).integers(0, len(diff), size=(10000, len(diff)))
+        boot = diff[draws].mean(axis=1)
+        caps[cap] = [int(len(diff)), float(diff.mean()), float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))]
+    out["total_cap_standard_minus_delphi_deg"] = caps
     out.update(n_objects=len(ids), standard_mean_error_deg=float(std.mean()),
                standard_within20=float(np.mean(std < 20)), random_within20_1000_draws=float(np.mean(fractions)))
     target = FOLLOWUP / "data/interpretation-20260930/sampling-baselines.json"
