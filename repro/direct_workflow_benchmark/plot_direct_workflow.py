@@ -10,9 +10,12 @@ from matplotlib.ticker import NullFormatter
 import numpy as np
 
 
-ROOT = Path(__file__).resolve().parent
-SCORES = (ROOT / "score.json", ROOT / "score-loaded.json")
-FIGURE = ROOT.parents[2] / "paper" / "figures" / "inversion-benchmark.pdf"
+HERE = Path(__file__).resolve().parent
+FOLLOWUP = HERE.parents[2]
+DATA = FOLLOWUP / "data/direct-workflow-benchmark"
+SCORES = (DATA / "score.json", DATA / "score-loaded.json")
+BUDGETS = DATA / "budget-equivalence.json"
+FIGURE = FOLLOWUP.parent / "paper" / "figures" / "inversion-benchmark.pdf"
 
 
 def main() -> None:
@@ -33,11 +36,11 @@ def main() -> None:
             "pdf.fonttype": 42,
         }
     )
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.2), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.3), constrained_layout=True)
     blue, grey = "#0072B2", "#666666"
 
     for ax, report, title in zip(
-        axes, reports, ("(a) Fresh process for each asteroid", "(b) Models kept loaded"), strict=True
+        axes[:2], reports, ("(a) Fresh process for each asteroid", "(b) Models kept loaded"), strict=True
     ):
         rows = report["object_rows"]
         point = report["point_estimates"]
@@ -63,6 +66,23 @@ def main() -> None:
                 f"95% interval {speed[0]:.2f}--{speed[1]:.2f}",
                 transform=ax.transAxes, va="top", ha="left",
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2})
+
+    # (c) Agreement with the DAMIT poles against the number of starts (exploratory, saved fits).
+    budgets = json.loads(BUDGETS.read_text(encoding="utf-8"))
+    starts = np.array([row["starts"] for row in budgets["budgets"]])
+    error = np.array([row["mean_error_deg"] for row in budgets["budgets"]])
+    delphi = budgets["delphi"]
+    ax = axes[2]
+    ax.plot(starts, error, "-o", color=grey, ms=4, lw=1.2, label="Classical search")
+    ax.axhline(delphi["mean_error_deg"], color=blue, ls=":", lw=1.0)
+    ax.plot([delphi["starts"]], [delphi["mean_error_deg"]], "D", color=blue, ms=7,
+            label="DeLPHI, six starts")
+    ax.set(xscale="log", xlabel="Number of starting poles",
+           ylabel="Mean disagreement with DAMIT (deg)", title="(c) Agreement and number of starts")
+    ax.set_xticks([6, 12, 24, 48, 96], ["6", "12", "24", "48", "96"])
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_ylim(12, 25)
+    ax.legend(frameon=False, loc="upper right", fontsize=8.5)
 
     for ax in axes:
         ax.tick_params(direction="out", length=3.5, width=0.8)
