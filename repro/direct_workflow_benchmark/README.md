@@ -86,8 +86,7 @@ Every script refuses to overwrite an existing output.
   comparison.
 
 These are records written at the time of the runs. Their numbers are those of
-the scored files and of the paper, apart from the rounding noted at the top of
-the exploratory note.
+the scored files and of the paper.
 
 ## Provenance
 

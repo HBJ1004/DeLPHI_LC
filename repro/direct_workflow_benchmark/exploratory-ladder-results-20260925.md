@@ -4,9 +4,8 @@
 > `delphi-paper-v1-evidence.tar.gz`, and are reported in Section 6.4.2 and
 > Appendix E of the paper. The 96-start difference in mean DAMIT-pole
 > disagreement given below as 2.41° is −2.414° in
-> `classical-ladder-exploratory.json` (classical minus DeLPHI). Appendix E of
-> the submitted paper gives −2.42°, the difference of the rounded means
-> 14.90° and 17.32°.
+> `classical-ladder-exploratory.json` (classical minus DeLPHI), given as
+> −2.41° in Appendix E of the paper.
 
 # Exploratory classical-budget comparison, 2026-09-25
 

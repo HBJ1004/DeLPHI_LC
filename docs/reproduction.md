@@ -222,10 +222,10 @@ seed 2027 alone: mean 16.57
 network time per asteroid: median 0.51 s, mean 0.61 s
 ```
 
-The mean of run 4 is 14.6946°. Table 6 of the submitted paper gives 14.70°,
-rounded from the value 14.695 in
-`part-a-validation/k3-followup/supplement/k3_fold_metrics.csv`. The same file,
-`real-oof-ensemble.npz`, also holds `grid_oracle_errors_deg`, whose mean
+These match Tables 6 and 7 of the paper. (The run-4 value 14.695 in
+`part-a-validation/k3-followup/supplement/k3_fold_metrics.csv` is already
+rounded; the unrounded mean is 14.6946°, which the paper gives as 14.69°.) The
+same file, `real-oof-ensemble.npz`, also holds `grid_oracle_errors_deg`, whose mean
 (15.32°) is the oracle error before the final small adjustment of the
 candidates (Appendix A).
 

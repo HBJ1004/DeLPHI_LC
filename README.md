@@ -163,6 +163,14 @@ RTX 4070, without reading the data and loading the networks.
 Please cite the paper and the release you used; see [CITATION.cff](CITATION.cff).
 Changes between releases are listed in the [release notes](CHANGELOG.md).
 
+## Use of AI assistants
+
+As stated in the paper, we used the AI assistants Claude/Claude Code
+(Anthropic) and GPT/Codex (OpenAI) to help build the DeLPHI software, to search
+the literature, and to edit the language of the manuscript for grammar and
+vocabulary. The authors checked all code, analyses, and text and take full
+responsibility for the content.
+
 ## Source layout
 
 - `lc_pipeline/k3/`: the method, from the lightcurve description to the
