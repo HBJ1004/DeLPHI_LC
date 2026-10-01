@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 
-
 ROOT = Path(__file__).resolve().parent
 SOURCE = ROOT / "classical-ladder-exploratory.json"
 OUTPUT = ROOT / "classical-ladder-intervals.json"

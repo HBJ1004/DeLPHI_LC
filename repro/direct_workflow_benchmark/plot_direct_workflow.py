@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.ticker import MaxNLocator, NullFormatter
 from matplotlib.transforms import blended_transform_factory
-import numpy as np
-
 
 HERE = Path(__file__).resolve().parent
 FOLLOWUP = HERE.parents[2]

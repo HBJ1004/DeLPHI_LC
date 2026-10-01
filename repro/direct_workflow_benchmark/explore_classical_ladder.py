@@ -11,12 +11,10 @@ import json
 from pathlib import Path
 
 import numpy as np
+from run_direct_benchmark import LADDER, classical_starts
 
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline import workflow_benchmark as prior
-
-from run_direct_benchmark import LADDER, classical_starts
-
 
 ROOT = Path(__file__).resolve().parent
 ARCHIVE = Path(json.loads((ROOT / "development-report.json").read_text())["source_archive"])

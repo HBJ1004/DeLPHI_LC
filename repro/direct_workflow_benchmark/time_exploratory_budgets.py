@@ -12,11 +12,10 @@ import random
 import time
 from pathlib import Path
 
-from lc_pipeline import grid_benchmark as grid
-
 from run_direct_benchmark import classical_starts, digest, validate_lock, write_once
 from run_loaded_benchmark import case
 
+from lc_pipeline import grid_benchmark as grid
 
 BUDGETS = (18, 96)
 SEED = 20260924

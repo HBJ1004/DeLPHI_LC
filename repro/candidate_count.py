@@ -24,8 +24,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
-from lc_pipeline.k3.grid import axial_healpix_grid, local_maximum_indices  # noqa: E402
 import compute_reference_baselines as base  # noqa: E402
+
+from lc_pipeline.k3.grid import axial_healpix_grid, local_maximum_indices  # noqa: E402
 
 FOLLOWUP = HERE.parents[1]
 ENSEMBLE = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"

@@ -26,7 +26,6 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import brentq, minimize_scalar
 from scipy.stats import chi2
-
 from search import observing_groups, profile, read_curves, sparse_observing_groups
 
 HERE = Path(__file__).resolve().parent
@@ -81,7 +80,9 @@ def interval(groups, period, frequency_step):
                   reduced_rss=s2)
     for name, delta in (("polishook_3sigma", float(chi2.ppf(0.9973, p))), ("one_parameter_1sigma", 1.0)):
         threshold = rss_best + delta * s2
-        objective = lambda x: rss(groups, x, order) - threshold
+        def objective(x, threshold=threshold):
+            return rss(groups, x, order) - threshold
+
         limit = MAX_RELATIVE_HALF_WIDTH * f_best
         lo = edge(objective, f_best, -1, frequency_step / 50, limit)
         hi = edge(objective, f_best, 1, frequency_step / 50, limit)

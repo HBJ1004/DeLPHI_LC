@@ -396,6 +396,7 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
              for oid in fold["test_ids"]}
     sys.path.insert(0, str(BASE / "source"))
     import torch
+
     from lc_pipeline.k3.bundle import _model_inputs
     from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
     from lc_pipeline.k3.inference import score_axial_grid

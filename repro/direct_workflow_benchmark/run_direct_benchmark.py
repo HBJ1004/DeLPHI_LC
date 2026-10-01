@@ -8,14 +8,12 @@ cannot read DAMIT reference axes. Scoring is a separate final command.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import hashlib
 import json
 import os
 import random
 import resource
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -23,7 +21,6 @@ import numpy as np
 
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline import workflow_benchmark as prior
-
 
 SCHEMA = "delphi.direct-pole-workflow.v1"
 LADDER = (6, 12, 18, 24, 36, 48, 72, 96, 120, 146)
@@ -80,7 +77,6 @@ def development(lock_path: Path, scoring_lock_path: Path, archive: Path, output:
             row = json.loads(line)
             if row.get("eligible"):
                 references[row["object_id"]] = [item["vector"] for item in row["solutions"]]
-    standard = grid.starts_for_arm("standard6")
     grid20 = grid.pole_grid(20)
     starts = classical_starts()
     grid_indexes = []

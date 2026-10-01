@@ -8,7 +8,6 @@ import math
 from pathlib import Path
 
 import numpy as np
-
 from physical import CATALOG
 
 

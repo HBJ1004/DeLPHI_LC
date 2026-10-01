@@ -48,7 +48,9 @@ def main():
     for i in range(4):
         m = (oracle >= edges[i]) & ((oracle <= edges[i + 1]) if i == 3 else (oracle < edges[i + 1]))
         s = [o for o, keep in zip(objects, m) if keep]
-        mean = lambda k: float(np.mean([o[k] for o in s]))
+        def mean(key, chosen=s):
+            return float(np.mean([o[key] for o in chosen]))
+
         groups.append(dict(oracle_range_deg=[float(edges[i]), float(edges[i + 1])], n=len(s),
                            classical_seconds=mean("classical_seconds"), delphi_seconds=mean("delphi_seconds"),
                            classical_iterations=mean("classical_iterations"), delphi_iterations=mean("delphi_iterations"),

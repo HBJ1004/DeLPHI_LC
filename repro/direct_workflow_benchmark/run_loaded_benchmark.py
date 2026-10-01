@@ -13,14 +13,13 @@ import time
 from pathlib import Path
 
 import numpy as np
+from run_direct_benchmark import REPEATS, SCHEMA, SEED, digest, validate_lock, write_once
 
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline import workflow_benchmark as prior
 from lc_pipeline.k3.damit import _read_lc
 from lc_pipeline.v2.convexinv import _parse_lightcurve_brightness
 from lc_pipeline.v2.preprocessing import KnownPeriod
-
-from run_direct_benchmark import REPEATS, SCHEMA, SEED, digest, read, validate_lock, write_once
 
 
 def case(lock: dict, job: dict, predictor: object, directory: Path) -> dict:

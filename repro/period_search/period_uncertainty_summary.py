@@ -1,12 +1,10 @@
 """Compare the Delta-chi^2 period intervals with the DAMIT periods (after the fact)."""
 import json
-from pathlib import Path
 
 import numpy as np
-
 from period_uncertainty import CATALOG, HERE
 
-rows = [json.loads(l) for l in (HERE / "end-to-end/period-uncertainty-v1.jsonl").read_text().splitlines()]
+rows = [json.loads(line) for line in (HERE / "end-to-end/period-uncertainty-v1.jsonl").read_text().splitlines()]
 catalog = {r["object_id"]: r for r in map(json.loads, CATALOG.read_text().splitlines())}
 summary = dict(asteroids=len(rows), periods=sum(len(r["candidates"]) for r in rows),
                mean_seconds=float(np.mean([r["seconds"] for r in rows])))
