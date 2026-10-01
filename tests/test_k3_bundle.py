@@ -55,7 +55,7 @@ def test_single_object_score_map_and_unseen_prediction(ensemble, monkeypatch):
 def test_known_training_object_is_rejected(ensemble):
     root, metadata = ensemble
     predictor = bundle.K3EnsemblePredictor(root)
-    with pytest.raises(ValueError, match="held-out"):
+    with pytest.raises(ValueError, match="benchmark asteroid used in training"):
         predictor.predict(_smoke_geometry(), known_period=KnownPeriod(6., "test"),
                           object_id=metadata["object_roles"]["train_ids"][0])
 

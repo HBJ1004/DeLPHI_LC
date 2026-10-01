@@ -56,7 +56,8 @@ for f in glob.glob(str(FU / "inputs/frozen-artifacts/k3-2408c563/synthetic/**/*.
     donors |= set(json.load(open(f))["geometry_donor_ids"])
 catalog = [json.loads(l) for l in open(FU / "inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl")]
 requested174 = {c["object_id"] for c in catalog}
-lowq = {o["object_id"].replace("damit:", "asteroid_") for o in json.load(open(FU / "source/experiments/lowq_damit_census_20260917/input-index.json"))["objects"]}
+# Input list of the lower-quality comparison (Appendix D), archived next to the census results.
+lowq = {o["object_id"].replace("damit:", "asteroid_") for o in json.load(open(OUT / "lowq-input-index.json"))["objects"]}
 
 def qmax(models):
     vals = [q(m["quality_flag"]) for m in models]

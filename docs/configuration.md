@@ -40,7 +40,7 @@ networks (see [training-your-data.md](training-your-data.md)).
 | `refinement_steps` | 8 | yes | Steps of the final adjustment. |
 | `refinement_max_displacement_deg` | 5.0 | yes | Cap on the final adjustment. The adjustment slightly increased the mean error in the paper (Section 3.4). |
 | `refinement_learning_rate` | 0.08 | no | Step size of the final adjustment. |
-| `score_chunk_size` | 512 | no | Axes scored per batch. Affects memory and speed only. |
+| `score_chunk_size` | 512 | no | Axes scored per batch during training and evaluation. Affects memory and speed only. The prediction command for the published networks scores 1,024 axes per batch, as in the archived predictions. |
 
 ## Training (`K3TrainingConfig`)
 

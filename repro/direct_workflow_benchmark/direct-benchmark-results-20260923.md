@@ -1,3 +1,11 @@
+> **Note added 2026-10-01.** This is a record written at the time of the run
+> and is kept unchanged except for the corrected last sentence. Its results are
+> in release `paper-v1`, folder `part-b-analyses/workflow-benchmark/` of
+> `delphi-paper-v1-evidence.tar.gz`, and are reported in Section 6.4.2 and
+> Appendix E of the paper. The per-search case directories mentioned below
+> (`evaluation/cases/`, `evaluation-contended/`) are part of the raw fits,
+> which are available from the authors on request.
+
 # Fixed-start DeLPHI versus classical inversion, 2026-09-23
 
 The benchmark compares six signed poles from DeLPHI's three axes with 12
@@ -45,5 +53,7 @@ and `score-loaded.json`. Their SHA-256 digests are
 `8c2d78d70d5ffe0940dba440154eb09da23ab53d2dd05e2524fbff04d3a9cd8f`
 and
 `be9218a7b3f800ca54f082101b236881cd9be63cb0fb6459fb73cdc819934002`,
-respectively. These records are local and must be put in a versioned public
-release before the new manuscript numbers are submitted.
+respectively. These records are in release `paper-v1`
+(`part-b-analyses/workflow-benchmark/`). [Corrected 2026-10-01. The note first
+said that the records were local and had to be put in a versioned public
+release before the new manuscript numbers were submitted.]

@@ -120,7 +120,12 @@ class K3EnsemblePredictor:
         roles = self.manifest["object_roles"]
         if any(object_id in roles[role] for role in
                ("train_ids", "validation_ids", "calibration_ids")):
-            raise ValueError("known benchmark object requires its held-out fold bundle")
+            raise ValueError(
+                f"{object_id} is a benchmark asteroid used in training this network set; "
+                "use the bundle of the cross-validation run in which it is a test asteroid, "
+                "listed in repro/data/benchmark-asteroids.csv (the check matches the "
+                "asteroid_<DAMIT id> name only)"
+            )
         inputs = _model_inputs(epochs, known_period, self.device)
         # Match the chunk size used to generate the archived deployed ensemble.
         maps = [score_axial_grid(model, inputs, chunk_size=1024) for model in self.models]

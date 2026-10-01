@@ -400,7 +400,7 @@ def prepare(*, original_study: Path, output: Path):
         for name in ("study.json", "schedule.json", "scored-rows.json", "inference-complete.json")
     }
     inputs["catalog"] = binding(verify(study["catalog"]))
-    inputs["protocol"] = binding(base / "docs/similarity-stability-design-20260916.md")
+    inputs["protocol"] = binding(base / "repro/protocols/similarity-stability-design-20260916.md")
     sources = [
         Path(__file__),
         base / "repro/run_k3_similarity_stability.py",

@@ -7,7 +7,9 @@ test set that is never used for model selection.
 
 ## 1. Make train and validation JSONL files
 
-Copy [training.example.jsonl](../examples/training.example.jsonl). JSONL means
+Copy [training.example.jsonl](../examples/training.example.jsonl), which shows
+the format of one row only (one asteroid with a two-point lightcurve); it is not
+enough data to train on. JSONL means
 one complete JSON object per line. The observation fields are exactly those in
 the [data-format guide](data-format.md). Add `target_axes`, a nonempty list of
 unit `[x, y, z]` axes in ecliptic J2000.
@@ -33,17 +35,37 @@ python -m repro.train_k3_custom \
 ```
 
 Use `--device cpu` if no CUDA GPU is available. The command validates every
-row, rejects duplicate/overlapping object IDs, writes an atomic `.pt`
-checkpoint, a hash-bound `training-report.json`, and an `inference-bundle/`
-directory containing safe `safetensors` weights. Choose a new output directory
-for each run. The five allowed seeds are 17, 42, 137, 777, and 2027.
-The command uses the manuscript settings. To train with other settings, see the
-[configuration guide](configuration.md).
+row, rejects duplicate or overlapping object IDs, and writes a `.pt`
+checkpoint, a `training-report.json`, and an `inference-bundle/` directory
+with the weights in the safe `safetensors` format. Choose a new output
+directory for each run. The allowed seeds are 17, 42, 137, 777, and 2027.
 
-The custom command starts from a new K3 scorer. It does not fine-tune published
-safetensors bundles: those are five fold ensembles, not one general-purpose
-training checkpoint. The `.pt` checkpoint is for trusted local use only; it
-uses Python pickle and must not be loaded from an untrusted source.
+**What this command does, and how it differs from the paper.** It trains one
+network from random initial weights on your data alone, in a single stage, with
+the network and optimizer settings of the paper (learning rate, batch size,
+negative axes, loss) and at most 100 passes with early stopping after 15 passes
+without improvement on your validation file. It does **not** reproduce the
+paper's training, which (Section 4 of the paper) first trained on 20,000
+simulated asteroids, then adjusted each network on the real asteroids mixed with
+simulated ones at a ratio of 3 to 1 with a reduced learning rate for the part
+that describes the photometry, and finally averaged the score maps of five
+networks trained with different seeds. A custom run therefore gives one network,
+not an average of five, and is expected to be less accurate with small data
+sets. To change settings, see the [configuration guide](configuration.md).
+
+**How much data.** We have not tested a minimum. For scale, each network of the
+paper saw 108 real asteroids after pretraining on 20,000 simulated ones. With a
+few dozen asteroids, expect a network that mostly learns the distribution of
+poles in your training set; use the controls of Section 4 below to check.
+
+**Run time** depends on the number of asteroids and observations and has not
+been benchmarked for custom data. Start with a small validation run on CPU to
+check your files, then train on a GPU.
+
+The command does not fine-tune the published networks: those are five sets of
+five networks, one set per cross-validation run, not one general-purpose
+checkpoint. The `.pt` checkpoint is for trusted local use only; it uses Python
+pickle and must not be loaded from an untrusted source.
 
 ## 3. Predict with the trained model
 
@@ -64,27 +86,38 @@ your untouched test objects before using the model scientifically.
 
 ## 4. Evaluate honestly
 
-For every held-out object, use three K3 axes and report antipode-aware oracle@3
-error only as candidate coverage. The helper is:
+For every asteroid of your untouched test set, predict its three candidate
+axes and compute the oracle error, the smallest angle between any candidate
+axis and any of its reference poles, with an axis and its opposite direction
+treated as the same (Section 5.1 of the paper):
 
 ```python
+import json
+import numpy as np
 from lc_pipeline.k3.evaluation import oracle_at_k_error_deg, summarize_errors
 
-# predictions: shape (3, 3); targets: shape (number_of_reference_axes, 3)
-error = oracle_at_k_error_deg(predictions, targets)
-print(summarize_errors(all_held_out_errors))
+# reference_poles: {object_id: [[x, y, z], ...]} unit vectors, ecliptic J2000
+errors = []
+for object_id, poles in reference_poles.items():
+    prediction = json.load(open(f"outputs/{object_id}_prediction.json"))
+    axes = np.array([axis["axis_xyz"] for axis in prediction["axes"]])
+    errors.append(oracle_at_k_error_deg(axes, np.array(poles)))
+print(summarize_errors(errors))
 ```
 
-The oracle selects the closest candidate using reference labels. It cannot
-choose an axis at deployment, prove unique-pole recovery, or demonstrate
-inversion acceleration. Report held-out object count, splitting rule, period
+Compare the result with the six standard starting poles and with three random
+axes on the same asteroids, as the paper does; the oracle error of a network
+that ignores the lightcurves can be moderate if your poles are clustered. The
+oracle error uses the reference poles after the prediction to pick the closest
+candidate. It is a measure of how well the candidates cover the reference
+solutions, not the accuracy of a single pole chosen by the network, and it does
+not show that an inversion becomes faster. Report held-out object count, splitting rule, period
 and geometry sources, all seeds, and failures. Do not compare custom data with
 the frozen DAMIT metric unless the cohort, endpoint, and protocol are identical.
 
 ## Advanced work
 
-The published pipeline contains synthetic pretraining, five object-disjoint
-outer folds, controls, calibration, and a matched inversion benchmark.
-Reproducing it needs external frozen artifacts and raw DAMIT inputs; follow
-[reproduction.md](reproduction.md). It is intentionally separate from this
-short custom-data route.
+The paper's full procedure (simulated pretraining, five cross-validation runs,
+five seeds, controls, and the inversion comparison) is described in
+[reproduction.md](reproduction.md). It needs the released archives and the DAMIT
+data and is separate from this short custom-data route.

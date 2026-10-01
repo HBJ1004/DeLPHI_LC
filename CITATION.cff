@@ -1,12 +1,17 @@
 cff-version: 1.2.0
-message: "If you use DeLPHI, cite this software and Jo, Ishiguro, and Lee (in preparation)."
-title: "DeLPHI K3: asteroid pole-axis candidate generation from lightcurves"
+message: "If you use DeLPHI, please cite the paper below and this software release."
+title: "DeLPHI: pole-axis candidates for asteroid lightcurve inversion"
 type: software
-version: "1.0"
-date-released: 2026-09-07
+version: "1.1"
+date-released: 2026-10-01
 license: MIT
 repository-code: "https://github.com/HBJ1004/DeLPHI_LC"
-url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0"
+url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v1"
+keywords:
+  - asteroids
+  - asteroid rotation
+  - lightcurve inversion
+  - neural networks
 authors:
   - family-names: Jo
     given-names: Hangbin
@@ -19,3 +24,18 @@ authors:
   - family-names: Lee
     given-names: Hee-jae
     affiliation: "Korea Astronomy and Space Science Institute"
+preferred-citation:
+  type: article
+  title: "DeLPHI: Pole-Axis Candidates for Asteroid Lightcurve Inversion"
+  journal: "The Planetary Science Journal"
+  status: submitted
+  year: 2026
+  authors:
+    - family-names: Jo
+      given-names: Hangbin
+      orcid: "https://orcid.org/0009-0004-9591-8646"
+    - family-names: Ishiguro
+      given-names: Masateru
+      orcid: "https://orcid.org/0000-0002-7332-2479"
+    - family-names: Lee
+      given-names: Hee-jae

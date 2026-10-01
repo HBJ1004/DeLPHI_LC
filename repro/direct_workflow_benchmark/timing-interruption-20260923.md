@@ -1,3 +1,12 @@
+> **Note added 2026-10-01.** This is a record written at the time of the run
+> and is kept unchanged. The scored comparison is in release `paper-v1`,
+> folder `part-b-analyses/workflow-benchmark/` of
+> `delphi-paper-v1-evidence.tar.gz` (`score.json`, `score-loaded.json` and the
+> execution summaries `evaluation/execution.json` and
+> `evaluation-loaded/execution.json`). The case directories named below,
+> including the 32 set-aside cases in `evaluation-contended/`, are part of the
+> raw fits, which are available from the authors on request.
+
 The reference-blind direct benchmark was interrupted on 2026-09-23 after 404
 of 840 timed cases. Two unrelated compute-heavy processes started on the same
 workstation at approximately 11:33 and 11:37 KST. Their CPU and GPU activity

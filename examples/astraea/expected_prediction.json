@@ -1,0 +1,45 @@
+{
+  "schema": "delphi.k3-ensemble-prediction.v1",
+  "status": "ok",
+  "object_id": "asteroid_103",
+  "fold": 0,
+  "bundle_id": "k3-oof-fold-0",
+  "tokenizer_sha256": "04fdcf844876cb22e620fd1ade87ff44d1ddb3a915a6dd1c9081c80da75b5b99",
+  "period_provenance": "DAMIT model 1816 of (5) Astraea (DAMIT asteroid 103), quality flag 4; period from the DAMIT asteroid_models table (local copy damit-20250610T000301Z/tables/asteroid_models.csv)",
+  "axes": [
+    {
+      "axis_xyz": [
+        -0.35576874017715454,
+        0.5204904675483704,
+        0.7762205600738525
+      ],
+      "score": -1.0688012838363647,
+      "grid_index": 1835
+    },
+    {
+      "axis_xyz": [
+        0.47012239694595337,
+        -0.3885727524757385,
+        0.7924621105194092
+      ],
+      "score": -1.208252191543579,
+      "grid_index": 3870
+    },
+    {
+      "axis_xyz": [
+        -0.17725461721420288,
+        0.5927448272705078,
+        0.7856427431106567
+      ],
+      "score": -1.1132993698120117,
+      "grid_index": 1762
+    }
+  ],
+  "calibration": {
+    "cone90_deg": 46.60136690184923,
+    "cone95_deg": 90.0,
+    "source_sha256": "7b73c2936c2f85ce016a2691c01a9f0d93271c119a123e730236589f11f076ad",
+    "scope": "archived DAMIT fold; transfer coverage is not established"
+  },
+  "risk_deg": null
+}

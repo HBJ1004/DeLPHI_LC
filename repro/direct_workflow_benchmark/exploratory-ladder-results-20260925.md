@@ -1,3 +1,13 @@
+> **Note added 2026-10-01.** This is a record written at the time of the run
+> and is kept unchanged except for the corrected last sentence. Its results are
+> in release `paper-v1`, folder `part-b-analyses/workflow-benchmark/` of
+> `delphi-paper-v1-evidence.tar.gz`, and are reported in Section 6.4.2 and
+> Appendix E of the paper. The 96-start difference in mean DAMIT-pole
+> disagreement given below as 2.41° is −2.414° in
+> `classical-ladder-exploratory.json` (classical minus DeLPHI). Appendix E of
+> the submitted paper gives −2.42°, the difference of the rounded means
+> 14.90° and 17.32°.
+
 # Exploratory classical-budget comparison, 2026-09-25
 
 This follows the frozen 12-start direct benchmark. Its 140-object evaluation
@@ -48,5 +58,7 @@ The timing run has 420/420 hashed cases. Every newly timed selected axis
 agrees with its saved counterpart to within 0.000002°, and every fitted RMS
 matches exactly. The machine-readable records are
 `classical-ladder-exploratory.json`, `classical-ladder-intervals.json`, and
-`exploratory-loaded-ladder/score.json`. The records are local and are not in
-the existing public evidence release.
+`exploratory-loaded-ladder/score.json`. They are in release `paper-v1`
+(`part-b-analyses/workflow-benchmark/`). [Corrected 2026-10-01. The note first
+said that the records were local and not in the public evidence release that
+existed then.]
