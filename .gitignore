@@ -15,3 +15,9 @@ htmlcov/
 outputs/
 bundles/
 .env
+
+# Files created by following the user guides in the repository folder
+/networks/
+/prediction*.json
+/observations*.json
+/*.lc.txt

@@ -7,6 +7,12 @@ the main results from the released predictions without rerunning any analysis,
 which file and script lie behind each result, and how to arrange the files to
 rerun the analyses.
 
+**Shortest route.** To confirm the main numbers of the paper, you need only the
+16 MB `paper-v1` archive, the code, and Check A: follow
+[the minimal download](#minimal-download-for-check-a), [Install](#install), and
+[Check A](#check-a-main-numbers-from-the-paper-v1-archive). The rest of this
+guide is for checking individual results in detail.
+
 A few terms are used throughout.
 
 - **Oracle error**: for one asteroid, the smallest angle between any of the
@@ -58,6 +64,18 @@ URL=https://github.com/HBJ1004/DeLPHI_LC/releases/download
 
 Leave out the archives you do not need; the checks below say which they use.
 
+#### Minimal download for Check A
+
+```bash
+mkdir delphi-check && cd delphi-check
+git clone --branch paper-v1 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
+mkdir paper-v1 && cd paper-v1
+curl -L -O https://github.com/HBJ1004/DeLPHI_LC/releases/download/paper-v1/delphi-paper-v1-evidence.tar.gz
+curl -L -O https://github.com/HBJ1004/DeLPHI_LC/releases/download/paper-v1/SHA256SUMS
+sha256sum -c SHA256SUMS && cd ..
+tar xzf paper-v1/delphi-paper-v1-evidence.tar.gz
+```
+
 ### Verify the downloads
 
 ```bash
@@ -79,7 +97,7 @@ Then extract the archives into `delphi-check/` and check the files inside the
 ```bash
 tar xzf paper-v1/delphi-paper-v1-evidence.tar.gz
 (cd delphi-paper-v1-evidence && sha256sum -c --quiet SHA256SUMS)
-tar xzf v1.0.0/delphi-k3-artifacts-v1.0.0.tar.gz          # creates artifact-root/
+tar xzf v1.0.0/delphi-k3-artifacts-v1.0.0.tar.gz          # only for Checks B and C; creates artifact-root/
 ```
 
 To check every one of the 9,797 files of release `v1.0.0` after extraction,
@@ -99,7 +117,7 @@ into the new folder `../v1.0.0-verified`, and prints a report with
 Python 3.11 or 3.12 is needed. From `delphi-check/`:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate     # or python3.11
 python -m pip install -e './DeLPHI_LC[test,plot]'
 delphi-k3 validate-protocol
 ```
@@ -113,7 +131,9 @@ The last command checks that the fixed configuration file of the model,
 
 ## 2. Quick checks without rerunning anything
 
-Checks A and B need only Python with NumPy and are run from `delphi-check/`.
+Run the checks from `delphi-check/` inside the environment created under
+[Install](#install), which provides NumPy and the package. Checks A and B need
+nothing else; Checks C and D are described with their prerequisites.
 
 ### Check A: main numbers from the `paper-v1` archive
 
@@ -276,6 +296,16 @@ and random-axes values of Tables 8 and 9 are in
 `part-b-analyses/baselines/reference-baselines.json`.
 
 ## 3. Where each result comes from
+
+**Asteroids outside the sample.** For the ALCDEF comparison (Appendix D), the
+paper scored each asteroid with the average score map of all 25 networks,
+because none of them was trained on these asteroids
+([repro/predict_k3_alcdef_transfer.py](../repro/predict_k3_alcdef_transfer.py),
+policy `all_25_frozen_models_for_new_identity`). That script reads the 25
+networks as PyTorch checkpoints from `artifact-root/models/` of release
+`v1.0.0`, with the [model binding file](#model-binding-file) of Section 4. The
+prediction command `delphi-k3-predict` uses one set of five networks instead,
+which is the supported way to run DeLPHI on a new asteroid.
 
 In this table `A/` and `B/` are `part-a-validation/` and `part-b-analyses/` of
 the `paper-v1` archive, `v1:` is `artifact-root/` of `v1.0.0`, and scripts are
@@ -459,7 +489,7 @@ lightcurve. Copy the resulting `convexinv/` folder to
 
 ### Model binding file
 
-The period-search score check and the ZTF predictions load the 25 networks
+The period-search score check, the ZTF predictions and the ALCDEF predictions load the 25 networks
 through a binding file that records their checksums. Write it from
 `DeLPHI-followup/source`:
 

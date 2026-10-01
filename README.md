@@ -25,15 +25,10 @@ published pole (median 12.09°, 74.1% within 20°), against 24.42° for the six
 standard starting poles of a classical search.
 
 It works best for **dense lightcurves from several well-separated observing
-geometries, with a well-constrained period**. In the paper it was **worse than
-the standard starting poles** for
-
-- sparse survey photometry (ZTF) and the ALCDEF lightcurves tested,
-- lightcurves from a single 30-day period,
-- 200 or fewer observations in total,
-
-and the period must not be wrong by a factor of two for the best results. For
-such data, use the standard starting poles of classical inversion instead.
+geometries, with a well-constrained period**. For sparse survey photometry, a
+single short observing period, or a few hundred observations, it did worse than
+the standard starting poles in the paper; see
+[when not to use DeLPHI](docs/usage.md#when-not-to-use-delphi) before you start.
 
 ## 1. Install
 
@@ -67,6 +62,11 @@ delphi-k3 renderer-smoke --cases 8   # one line of JSON ending in "passed": true
 python -m pytest -q tests repro/tests
 ```
 
+The first check confirms that the fixed settings of the paper
+(`repro/k3_redesign_spec.yaml`) are intact. The second compares the brightness
+simulator that made the simulated training lightcurves with an independent
+reference calculation. The last runs the automated tests.
+
 The test suite takes about half a minute and should end with all tests passed
 and two skipped. The skipped tests need local research data that is not part of
 the repository. To install the exact package versions of our test environment,
@@ -74,42 +74,17 @@ add `-c constraints/ci.txt` to the install command.
 
 ## 2. Make your first prediction
 
-The trained networks are not stored in git. They are in release
-[`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0), as five
-sets of five networks, one set per cross-validation run (`k3-oof-fold-0` to
-`k3-oof-fold-4`, about 12 MB each). Download one set and check it:
+Follow the [prediction guide](docs/usage.md). In a few minutes it downloads one
+set of trained networks (12 MB, from release
+[`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0)), runs a
+worked example, the asteroid (5) Astraea, against its expected output, explains
+every field of the result, and turns the candidate axes into the six starting
+poles for an inversion. It also explains which network set to use, which
+matters for the 170 asteroids of the paper.
 
-```bash
-mkdir -p networks && cd networks
-curl -LO https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/k3-oof-fold-0.tar.gz
-curl -LO https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/SHA256SUMS
-sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0.tar.gz: OK"
-tar -xzf k3-oof-fold-0.tar.gz
-cd ..
-```
-
-Then follow the [step-by-step prediction guide](docs/usage.md). It runs a
-worked example, the asteroid (5) Astraea, whose result you can compare with the
-expected output in [examples/astraea](examples/astraea), and explains every
-field of the output, how to convert the candidate axes to ecliptic longitude
-and latitude, and how to pass the six starting poles to an inversion.
-
-To prepare your own data, see the [data-format guide](docs/data-format.md). It
-explains the input file, how to obtain the Sun and observer directions from JPL
-Horizons, and how to convert DAMIT lightcurve files with
-[examples/damit_to_observations.py](examples/damit_to_observations.py).
-
-**Which network set to use.**
-
-- For a **new asteroid**, any one set is the supported choice. Choose it before
-  looking at results. (The paper's tests on new asteroids averaged all 25
-  networks; see the [prediction guide](docs/usage.md).)
-- For one of the **170 benchmark asteroids**, use only the set of the
-  cross-validation run in which it is a test asteroid, listed in
-  [repro/data/benchmark-asteroids.csv](repro/data/benchmark-asteroids.csv). The
-  other sets were trained on it. The software refuses such a combination, but
-  only if you name the asteroid by its benchmark ID, `asteroid_<DAMIT id>`; for
-  example (5) Astraea is `asteroid_103`.
+To prepare your own asteroid, see the [data-format guide](docs/data-format.md):
+it converts DAMIT lightcurve files, or takes your own photometry with geometry
+from JPL Horizons.
 
 ## 3. Other things you can do
 

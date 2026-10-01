@@ -36,7 +36,7 @@ networks (see [training-your-data.md](training-your-data.md)).
 |---|---|---|---|
 | `nside` | 32 | yes | HEALPix resolution of the trial axes, 6,144 axes about 1.8 deg apart. |
 | `candidate_count` | 3 | yes | Number of candidates K. Section 6.4.1 of the paper reads 1 to 6 peaks from the same maps. |
-| `nms_separation_deg` | 15.0 | no | Minimum separation between candidates. No retraining needed. |
+| `nms_separation_deg` | 15.0 | no | Minimum separation between candidates. Used by the Python scoring interface `lc_pipeline.k3.api`; the prediction command for the published networks, `delphi-k3-predict`, always uses 15°. Changing it needs no retraining. |
 | `refinement_steps` | 8 | yes | Steps of the final adjustment. |
 | `refinement_max_displacement_deg` | 5.0 | yes | Cap on the final adjustment. The adjustment slightly increased the mean error in the paper (Section 3.4). |
 | `refinement_learning_rate` | 0.08 | no | Step size of the final adjustment. |
@@ -50,7 +50,7 @@ networks (see [training-your-data.md](training-your-data.md)).
 | `batch_size` | 16 | no | Asteroids per update. |
 | `learning_rate` | 3e-4 | no | AdamW. |
 | `weight_decay` | 1e-4 | no | AdamW. |
-| `synthetic_max_epochs`, `synthetic_patience` | 100, 15 | no | Passes over the simulated data and early-stopping patience. |
+| `synthetic_max_epochs`, `synthetic_patience` | 100, 15 | no | Passes over the simulated data and early-stopping patience. The custom training command (`repro.train_k3_custom`) also uses these limits. |
 | `real_max_epochs`, `real_patience` | 30, 8 | no | The same for the real DAMIT data. |
 | `encoder_finetune_lr_multiplier` | 0.25 | no | Learning rate of the photometry encoder, relative to `learning_rate`, during the real-data stage. |
 | `synthetic_to_real_ratio` | (3, 1) | yes | Simulated to real asteroids during the real-data stage. |

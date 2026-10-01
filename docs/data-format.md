@@ -99,17 +99,11 @@ incompatible photometry physically equivalent.
 
 ## Measurement uncertainties
 
-`measured_error` is optional. Note that the DAMIT lightcurves used to train and
-test the networks carry no per-point uncertainties; for them these inputs are
-zero, whereas the simulated training lightcurves include them (paper
-Sections 3.2 and 6.1.2). Reported uncertainties are therefore a possible
-difference between your data and the DAMIT data. In the paper, removing them
-lowered the mean oracle error on the ALCDEF test (from 37.3° to 26.8°) but
-raised it on the ZTF test (from 30.0° to 31.3°), and in neither case did
-DeLPHI become better than the standard starting poles. Because the two data
-sets respond differently, the paper does not recommend removing reported
-uncertainties as a general practice. If you have them, supply them, and record
-any decision to omit them.
+`measured_error` is optional. If you have uncertainties, supply them, and
+record any decision to omit them. The DAMIT lightcurves used to train and test
+the networks carry none, so your uncertainties are one way your data differ from
+the training data; the paper (Section 6.1.2) found no general benefit in
+removing them.
 
 ## Geometry from JPL Horizons
 
@@ -219,9 +213,33 @@ python examples/damit_to_observations.py --damit-id 103 --output observations.js
 With `--damit-id` the period is that of the first DAMIT model of quality flag
 3 or higher, as in the paper; `--model-id` chooses another model. The source
 of the period, including the DAMIT model number, is written to
-`known_period.provenance`. The DAMIT asteroid id is the number in the DAMIT
-web address and in the benchmark IDs, not the asteroid number: (5) Astraea has
-DAMIT id 103.
+`known_period.provenance`. When the converter downloads the lightcurves, it
+also keeps them as `<output>.lc.txt` next to the output file (choose another
+name with `--save-lc`); this is the file an inversion program such as
+`convexinv` reads.
+
+**Finding the DAMIT id.** The DAMIT asteroid id is not the asteroid number:
+(5) Astraea has DAMIT id 103, which is also the number in its DAMIT web address
+(`https://damit.cuni.cz/projects/damit/asteroids/view/103`). For the 170
+asteroids of the paper, look it up in the benchmark table:
+
+```bash
+grep -i phaethon repro/data/benchmark-asteroids.csv
+# asteroid_2514,2514,3200,Phaethon,,2,k3-oof-fold-2
+```
+
+For any other asteroid in DAMIT, search DAMIT's table of asteroids; the first
+column is the DAMIT id:
+
+```bash
+curl -s https://damit.cuni.cz/projects/damit/exports/table/asteroids | grep -i '"phaethon"'
+# 2514,3200,"Phaethon",,,2020-02-13 08:54:32,2020-02-13 08:54:32
+```
+
+**Next step.** Choose the network set before you predict. If the asteroid is
+one of the 170 of the paper, you must use the set of the run in which it is a
+test asteroid (the last column of the benchmark table above); see
+[choosing the network set](usage.md#3-choose-the-network-set).
 
 ## Pole labels for custom training
 

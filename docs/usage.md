@@ -14,7 +14,7 @@ inversion should start from all six.
 ## 1. Before you start
 
 - Install DeLPHI from a source checkout as described in the
-  [README](../README.md#1-install) (`python -m pip install -e .`). Run all
+  [README](../README.md#1-install). Run all
   commands below from the repository root. The prediction checks the network
   files against the frozen cross-validation split in `repro/data`, so it needs
   the checkout, not only an installed package.
@@ -66,15 +66,9 @@ asteroid. It recognizes the asteroid **only by this exact ID**: if you call it
 `Astraea` or `5`, nothing stops you from using a contaminated set, and the
 result is not a test result.
 
-**New asteroids.** Any one set is the supported choice. Choose it before you
-look at any output, and record which one you used. Note that the paper's tests
-on asteroids outside its sample (the ALCDEF comparison, Appendix D) averaged
-the score maps of all 25 networks, with
-[repro/predict_k3_alcdef_transfer.py](../repro/predict_k3_alcdef_transfer.py)
-(policy `all_25_frozen_models_for_new_identity`). That script needs the
-research checkpoints and their model manifest rather than the `v1.0.0` sets,
-and `delphi-k3-predict` does not offer it. Each set used alone is what the
-paper evaluated on the benchmark asteroids.
+**New asteroids.** Use any one set. Choose it before you look at any output,
+and record which one you used. (How the paper scored asteroids outside its
+sample is described in the [reproduction guide](reproduction.md).)
 
 ## 4. Run the Astraea example
 
@@ -85,8 +79,9 @@ delphi-k3-predict \
   --output prediction.json
 ```
 
-Add `--device cuda` to use an NVIDIA GPU. The output file is never
-overwritten; choose a new name for a rerun. Then list the six starting poles
+Add `--device cuda` to use an NVIDIA GPU. The command prints nothing when it
+succeeds; check that `prediction.json` was written. The output file is never
+overwritten, so choose a new name for a rerun. Then list the six starting poles
 and compare with the expected output:
 
 ```bash
@@ -103,11 +98,13 @@ cand end  lambda(deg)  beta(deg)
    2  -       140.4      -52.4
    3  +       106.6      +51.8
    3  -       286.6      -51.8
-largest axis difference 0.0000 deg: matches examples/astraea/expected_prediction.json
+largest axis difference 0.0012 deg: matches examples/astraea/expected_prediction.json
 ```
 
-Differences of up to about 0.01° between computers, or between a CPU and a
-GPU, are normal. The [example's README](../examples/astraea/README.md) gives
+Your difference may be slightly different. Differences of up to about 0.01°
+between computers, or between a CPU and a GPU, are normal; the script reports
+"matches" for differences up to 0.1° (change this with `--tolerance-deg`). The
+[example's README](../examples/astraea/README.md) gives
 the full expected result, the angle of each candidate to Astraea's DAMIT pole,
 and measured timings.
 
@@ -204,7 +201,10 @@ poles** of a classical search for
 - 200 or fewer observations in total (with up to 500 it was not
   distinguishable from the standard poles).
 
-For such data, start the inversion from the standard poles instead.
+For such data, start the inversion from the standard poles instead. The six
+standard starting poles used in the paper (Appendix E) are, in ecliptic
+longitude and latitude, (0°, 0°), (180°, 0°), (90°, 60°), (240°, 60°),
+(90°, −60°) and (240°, −60°).
 
 The period must be well constrained (Section 6.3.3): errors of up to 1% changed the mean
 oracle error by about 0.4° or less, but half or twice the period raised it from

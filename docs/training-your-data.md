@@ -38,13 +38,16 @@ Use `--device cpu` if no CUDA GPU is available. The command validates every
 row, rejects duplicate or overlapping object IDs, and writes a `.pt`
 checkpoint, a `training-report.json`, and an `inference-bundle/` directory
 with the weights in the safe `safetensors` format. Choose a new output
-directory for each run. The allowed seeds are 17, 42, 137, 777, and 2027.
+directory for each run. The allowed seeds are 17, 42, 137, 777, and 2027, the
+five seeds of the paper; the configuration accepts only these, which keeps runs
+comparable with the published networks.
 
 **What this command does, and how it differs from the paper.** It trains one
 network from random initial weights on your data alone, in a single stage, with
 the network and optimizer settings of the paper (learning rate, batch size,
 negative axes, loss) and at most 100 passes with early stopping after 15 passes
-without improvement on your validation file. It does **not** reproduce the
+without improvement on your validation file (the limits of the simulated stage,
+`synthetic_max_epochs` and `synthetic_patience` in the configuration guide). It does **not** reproduce the
 paper's training, which (Section 4 of the paper) first trained on 20,000
 simulated asteroids, then adjusted each network on the real asteroids mixed with
 simulated ones at a ratio of 3 to 1 with a reduced learning rate for the part
