@@ -2,6 +2,14 @@
 
 The script reads only frozen publication evidence.  It does not recompute or
 change any scientific result.
+
+Own-period copy (lower-quality census): only ``render_latitude`` (Figure 11)
+and ``render_transfer`` (Figure 7) are run.  Their lower-quality series come
+from ``data/own-period-20261021/lowq/scores-own`` (variant ``at90`` or
+``excluded``); every other series is the published one and is labelled so.
+Output goes to ``data/own-period-20261021/lowq/figures/``.
+
+    PYTHONPATH=<worktree> python repro/own_period/lowq_figures/render_main_figures.py
 """
 
 from __future__ import annotations
@@ -15,15 +23,18 @@ import numpy as np
 from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Rectangle
 
 
-ROOT = Path(__file__).resolve().parents[1]
-FOLLOWUP = ROOT.parent / "DeLPHI-followup"
-DAMIT_DUMP = ROOT.parent / "damit-20250610T000301Z"
+# Own-period copy: the paths of the published layout, resolved from this worktree.
+FOLLOWUP = Path(__file__).resolve().parents[4]
+ROOT = FOLLOWUP / "data/own-period-20261021/lowq"
+DAMIT_DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
+SCORES = ROOT / "scores-own"
+VARIANTS = {"at90": "no period counted at 90 deg", "excluded": "no period excluded"}
 METHOD_EXAMPLE_OBJECT = "asteroid_107"
 ORACLE_EXAMPLE_OBJECT = "asteroid_2514"  # DAMIT asteroid 2514, (3200) Phaethon
 INTERPRETATION_EXAMPLE_OBJECT = "asteroid_121"  # DAMIT asteroid 121, (41) Daphne
 CANDIDATE_SKY_SAMPLE = 25
 CANDIDATE_SKY_SEED = 20260922
-OUT = ROOT / "figures" / "main"
+OUT = ROOT / "figures"
 OUT.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update(
@@ -1306,39 +1317,31 @@ def render_shapley() -> None:
     print("mean errors", dict(zip([groups[i] for i in order], np.round(errors.mean(0)[order], 2))))
 
 
-def render_latitude() -> None:
-    """Mean oracle error against the absolute ecliptic latitude of the reference pole."""
-    import csv
-    import json
-    import sys
-    from collections import defaultdict
+def render_latitude(variant: str) -> None:
+    """Mean oracle error against the absolute ecliptic latitude of the reference pole.
 
-    sys.path.insert(0, str(FOLLOWUP / "source/repro"))
-    import compute_reference_baselines as base
+    Own-period copy: the lower-quality DeLPHI curve and the standard-pole line
+    use the own-period census (``variant``); the main-sample curve is the
+    published one (another package redraws it).  The published lower-quality
+    curve is added in grey for comparison.  The binned series are saved as JSON.
+    """
+    import json
 
     main = json.loads((FOLLOWUP / "data/interpretation-20260926/mirror-symmetry.json").read_text())["objects"]
     main_lat = np.array([abs(row["reference_latitude_deg"]) for row in main])
     main_err = np.array([row["oracle_error_deg"] for row in main])
-    solutions = defaultdict(list)
-    with (ROOT.parent / "damit-20250610T000301Z/tables/asteroid_models.csv").open() as stream:
-        for row in csv.DictReader(stream):
-            try:
-                solutions[int(row["asteroid_id"])].append((float(row["lambda"]), float(row["beta"])))
-            except ValueError:
-                continue
-    standard = base.standard_axes()
-    lowq = json.loads((FOLLOWUP / "data/publication-revision-20260917-r2/lowq-analysis.json").read_text())["objects"]
-    low_lat, low_err, low_std = [], [], []
-    for entry in lowq:
-        listed = solutions[int(entry["object_id"].split(":")[1])]
-        references = np.array([base.unit_from_degrees(l, b) for l, b in listed])
-        low_lat.append(abs(listed[0][1]))
-        low_err.append(float(entry["oracle_at_3_error_deg"]))
-        low_std.append(base.axial_error_deg(standard, references))
-    low_lat, low_err, low_std = map(np.array, (low_lat, low_err, low_std))
+    series = json.loads((SCORES / f"direction-{variant}.json").read_text())["series"]
+    low_lat = np.array(series["abs_latitude_deg"])
+    low_err = np.array(series["delphi_error_deg"])
+    low_std = np.array(series["standard_error_deg"])
+    published = json.loads((SCORES.parent / "scores-published-check" / "direction-excluded.json").read_text())["series"]
+    pub_lat = np.array(published["abs_latitude_deg"])
+    pub_err = np.array(published["delphi_error_deg"])
     edges = np.arange(0, 91, 15)
     centres = edges[:-1] + 7.5
     generator = np.random.default_rng(20260929)
+    saved = {"variant": variant, "variant_meaning": VARIANTS[variant], "bin_edges_deg": edges.tolist(),
+             "bootstrap": "2,000 resamples, generator seed 20260929 shared in drawing order"}
 
     def binned(lat, err):
         means, lows, highs = [], [], []
@@ -1350,28 +1353,42 @@ def render_latitude() -> None:
             highs.append(np.percentile(draws, 97.5) - chosen.mean())
         return np.array(means), np.array([lows, highs])
 
+    def counts(lat):
+        return [int(((lat >= lo) & ((lat < hi) if hi < 90 else (lat <= hi))).sum())
+                for lo, hi in zip(edges[:-1], edges[1:])]
+
     fig, ax = plt.subplots(figsize=(5.3, 3.4))
     # Okabe-Ito colours plus distinct line styles and markers, so the series stay
     # distinguishable under colour-vision deficiency.
-    for lat, err, label, colour, marker, style, shift in (
-        (main_lat, main_err, "DeLPHI, 170 test asteroids (quality 3 or higher)", "#0072B2", "o", "-", -1.2),
-        (low_lat, low_err, "DeLPHI, 9,783 lower-quality models", "#333333", "s", "--", 1.2),
+    for key, lat, err, label, colour, marker, style, shift in (
+        ("main_published", main_lat, main_err, "DeLPHI, 170 test asteroids (DAMIT period, published)", "#0072B2", "o", "-", -1.2),
+        ("lowq_own", low_lat, low_err, f"DeLPHI, {low_err.size:,} lower-quality models (own period, {VARIANTS[variant]})", "#333333", "s", "--", 1.2),
     ):
         means, yerr = binned(lat, err)
+        saved[key] = {"n": int(err.size), "bin_n": counts(lat), "mean_deg": means.tolist(),
+                      "ci95_low_deg": (means - yerr[0]).tolist(), "ci95_high_deg": (means + yerr[1]).tolist()}
         ax.errorbar(centres + shift, means, yerr=yerr, fmt=marker, ls=style, color=colour, ms=5,
                     lw=1.3, capsize=2, label=label)
     means, _ = binned(low_lat, low_std)
-    ax.plot(centres, means, ":", color="#E69F00", lw=1.8, label="Standard poles, lower-quality models")
+    saved["lowq_standard"] = {"n": int(low_std.size), "bin_n": counts(low_lat), "mean_deg": means.tolist()}
+    ax.plot(centres, means, ":", color="#E69F00", lw=1.8, label="Standard poles, same lower-quality models")
+    means, _ = binned(pub_lat, pub_err)
+    saved["lowq_published"] = {"n": int(pub_err.size), "bin_n": counts(pub_lat), "mean_deg": means.tolist()}
+    ax.plot(centres + 1.2, means, "-", color="#999999", lw=1.0, alpha=0.8,
+            label=f"DeLPHI, {pub_err.size:,} lower-quality models (DAMIT period, published)")
     ax.set_xticks(edges)
     ax.set_xlim(0, 90)
-    ax.set_ylim(0, 45)
+    ax.set_ylim(0, 90 if variant == "at90" else 45)
     ax.set_xlabel("Absolute ecliptic latitude of the reference pole (degrees)")
     ax.set_ylabel("Mean oracle error (degrees)")
     ax.grid(alpha=0.2)
-    ax.legend(frameon=False, fontsize=7.5, loc="upper right")
+    ax.legend(frameon=False, fontsize=6.5, loc="upper right")
     fig.tight_layout()
-    fig.savefig(ROOT / "figures" / "latitude.pdf", dpi=300, facecolor="white")
+    fig.savefig(OUT / f"latitude-{variant}.pdf", dpi=300, facecolor="white")
+    fig.savefig(OUT / f"latitude-{variant}.png", dpi=200, facecolor="white")
     plt.close(fig)
+    with (OUT / f"latitude-{variant}-series.json").open("x") as stream:
+        stream.write(json.dumps(saved, indent=1) + "\n")
 
 
 def _sampling_rows():
@@ -1471,32 +1488,41 @@ def render_coverage() -> None:
     plt.close(fig)
 
 
-def render_transfer() -> None:
+def render_transfer(variant: str) -> None:
+    """Figure 7 with the three lower-quality rows at the own period (``variant``).
+
+    The main-sample, ZTF and ALCDEF rows are the published values (other
+    packages recompute them) and are marked "(published)".
+    """
     labels = [
-        "Main DAMIT test asteroids",
-        "All lower-quality DAMIT",
-        "Gaia DR3 lower-quality subset",
-        "ASAS-SN lower-quality subset",
-        "Mapped ZTF",
-        "ALCDEF–Gaia",
+        "Main DAMIT test asteroids (published)",
+        "All lower-quality DAMIT (own period)",
+        "Gaia DR3 lower-quality subset (own period)",
+        "ASAS-SN lower-quality subset (own period)",
+        "Mapped ZTF (published)",
+        "ALCDEF–Gaia (published)",
     ]
     import json
 
     summary = json.loads(
         (FOLLOWUP / "source/repro/baselines_out/reference-baselines.json").read_text()
     )
+    own = json.loads((SCORES / f"baselines-{variant}.json").read_text())
     rows = [
         summary["standard_minus_delphi"],
-        summary["cohorts"]["lowq"]["standard_minus_delphi"],
-        summary["cohorts"]["lowq_gaia"]["standard_minus_delphi"],
-        summary["cohorts"]["lowq_asas"]["standard_minus_delphi"],
+        own["lowq"]["standard_minus_delphi"],
+        own["lowq_gaia"]["standard_minus_delphi"],
+        own["lowq_asas"]["standard_minus_delphi"],
         summary["primary_variants"]["ztf_primary"]["standard_minus_delphi"],
         summary["primary_variants"]["alcdef_primary"]["standard_minus_delphi"],
     ]
     difference = np.array([row["mean_difference_deg"] for row in rows])
     low = np.array([row["ci95_low_deg"] for row in rows])
     high = np.array([row["ci95_high_deg"] for row in rows])
-    print("generalization differences", np.round(difference, 2), np.round(low, 2), np.round(high, 2))
+    print("generalization differences", variant, np.round(difference, 2), np.round(low, 2), np.round(high, 2))
+    with (OUT / f"generalization-checks-{variant}-rows.json").open("x") as stream:
+        stream.write(json.dumps({"variant": variant, "variant_meaning": VARIANTS[variant],
+                                 "rows": [dict(label=l, **r) for l, r in zip(labels, rows)]}, indent=1) + "\n")
     y = np.arange(len(labels))[::-1]
     colors = np.where(difference >= 0, "#2878B5", "#C44E52")
     fig, ax = plt.subplots(figsize=(6.4, 3.5))
@@ -1513,9 +1539,11 @@ def render_transfer() -> None:
     ax.scatter(difference, y, c=colors, s=38, zorder=3)
     ax.set_yticks(y, labels)
     ax.set_xlabel("Standard-pole error minus DeLPHI error (degrees)")
+    ax.set_title(f"Lower-quality rows at the own period, {VARIANTS[variant]}", fontsize=8)
     ax.grid(axis="x", alpha=0.2)
     fig.tight_layout()
-    fig.savefig(ROOT / "figures" / "generalization-checks.pdf", dpi=300)
+    fig.savefig(OUT / f"generalization-checks-{variant}.pdf", dpi=300)
+    fig.savefig(OUT / f"generalization-checks-{variant}.png", dpi=200)
     plt.close(fig)
 
 
@@ -1557,20 +1585,10 @@ def render_inversion() -> None:
 
 
 def main() -> None:
-    render_data_summary()
-    render_worked_example()
-    render_architecture()
-    render_oracle_error()
-    render_candidate_sky()
-    render_interpretation()
-    render_candidate_count()
-    render_appendix_checks()
-    render_data_degradation()
-    render_shapley()
-    render_latitude()
-    render_coverage()
-    render_transfer()
-    render_inversion()
+    # Own-period copy: only Figures 11 and 7, for both failure variants.
+    for variant in VARIANTS:
+        render_latitude(variant)
+        render_transfer(variant)
 
 
 if __name__ == "__main__":
