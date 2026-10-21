@@ -50,7 +50,14 @@ def main() -> int:
             continue
         a = np.asarray([x["axis_xyz"] for x in old["axes"]])
         b = np.asarray([x["axis_xyz"] for x in new["axes"]])
-        angle = np.degrees(np.arccos(np.clip(np.abs(np.sum(a * b, axis=1)), 0.0, 1.0)))
+        # The stored axes are unit vectors to float32 precision (norms 1 +- 1e-7), so
+        # they are normalized before the angle; otherwise identical axes would
+        # show up to 0.03 deg (the first chain run failed on exactly this).
+        a = a / np.linalg.norm(a, axis=1, keepdims=True)
+        b = b / np.linalg.norm(b, axis=1, keepdims=True)
+        # atan2 form: arccos near 1 has a floating-point floor of about 1e-6 deg.
+        angle = np.degrees(np.arctan2(np.linalg.norm(np.cross(a, b), axis=1),
+                                      np.abs(np.sum(a * b, axis=1))))
         worst = max(worst, float(angle.max()))
         bit_identical += int(np.array_equal(a, b))
         if [x["grid_index"] for x in old["axes"]] != [x["grid_index"] for x in new["axes"]]:

@@ -43,11 +43,11 @@ if [ ! -f "$V.manifest.json" ]; then
   "$PY" -m repro.own_period.lowq_predict --periods published --limit 500 --output "$V" \
     --finalize "$V.manifest.json" || exit 1
 fi
-if [ ! -f "$OUT/validation-damit-period-500-check.json" ]; then
+if [ ! -f "$OUT/validation-damit-period-500-check-v3.json" ]; then
   "$PY" -m repro.own_period.lowq_validate --rerun "$V" \
-    --output "$OUT/validation-damit-period-500-check.json" || { log "VALIDATION FAILED, stopping"; exit 1; }
+    --output "$OUT/validation-damit-period-500-check-v3.json" || { log "VALIDATION FAILED, stopping"; exit 1; }
 fi
-grep -q '"passed": true' "$OUT/validation-damit-period-500-check.json" || { log "VALIDATION FAILED, stopping"; exit 1; }
+grep -q '"passed": true' "$OUT/validation-damit-period-500-check-v3.json" || { log "VALIDATION FAILED, stopping"; exit 1; }
 log "validation passed"
 
 # 2. Published scoring path reproduces every published census number (CPU only).

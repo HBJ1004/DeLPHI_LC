@@ -45,7 +45,7 @@ def main() -> int:
     own = load(OUT / "scores-own/summary.json")
     sub = load(OUT / "scores-damit-period-500/summary.json")
     check = load(OUT / "check-published.json")
-    validation = load(OUT / "validation-damit-period-500-check.json")
+    validation = load(OUT / "validation-damit-period-500-check-v3.json")
     timing = load(OUT / "search-timing-sample.json")
     periods = load(OUT / "own-periods-lowq.json")
     pub_census = load(REVISION / "lowq-analysis.json")
@@ -88,7 +88,7 @@ def main() -> int:
         f"bit-identical, largest axis difference {validation['max_axis_angle_deg']:.3g} deg, "
         f"status and grid-index mismatches {len(validation['status_mismatches'])} and "
         f"{len(validation['grid_index_mismatches'])}; passed = {validation['passed']} "
-        f"(`{REL}/validation-damit-period-500-check.json`).")
+        f"(`{REL}/validation-damit-period-500-check-v3.json`).")
     add(f"- Oracle errors of that rerun minus the published errors: largest absolute difference "
         f"{sub['published_minus_own']['max_abs_difference_deg']:.3g} deg "
         f"(`{REL}/scores-damit-period-500/summary.json`).")
@@ -236,6 +236,10 @@ def main() -> int:
         "ensemble (`predictions-fold0-five-seed/manifest.json`), so that is what is rerun here ('exactly as "
         "published'). The 25-network policy belongs to the earlier 169-asteroid low-quality cohort "
         "(`run_k3_lowq_damit.py`), which the manuscript does not print.")
+    add("- Validation check files `-check.json` and `-check-v2.json` report `passed: false` only because of the "
+        "angle formula (arccos of the dot product of float32-normalized axes gives 0.03 deg, and 1.7e-6 deg after "
+        "normalizing, for bit-identical vectors). All 499 axis sets were bit-identical in every version; `-check-v3.json` "
+        "uses the atan2 form and passes. The rerun itself was not repeated.")
     add("- Census inputs are read from the raw `lc.txt` exactly as the published census does (there is no "
         "separate prepared-object directory for the 9,783); the search receives those same observations.")
     add("- Only the lower-quality rows are recomputed. Main-sample, ZTF and ALCDEF rows of Figure 7 and the "
