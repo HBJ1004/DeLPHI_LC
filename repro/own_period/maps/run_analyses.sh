@@ -9,7 +9,7 @@ export PYTHONPATH="$WT" OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS
 cd "$WT"
 until grep -q "exploratory timing done" "$OP/benchmark/explore-timed.log" 2>/dev/null; do sleep 300; done
 until [ -f "$OUT/own-period/evaluations/score-summary.json" ]; do
-  grep -q "FAILED" "$OUT/run-predictions.log" 2>/dev/null && { echo "prediction validation failed"; exit 1; }
+  grep -q "FAILED" "$OUT/run-predictions-2.log" 2>/dev/null && { echo "prediction validation failed"; exit 1; }
   sleep 120
 done
 PUB="$OP/../../inputs/frozen-artifacts/k3-definitive-7874092"
