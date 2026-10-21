@@ -66,9 +66,12 @@ def main() -> int:
         if sha256(path) != digest:
             raise ValueError(f"{object_id}: prepared-object hash mismatch")
         started = time.perf_counter()
-        result = estimate(
-            curves_of(path), "fourier_gpu", resolution=1, timeout=180, sparse_fallback=True
-        )
+        try:
+            result = estimate(
+                curves_of(path), "fourier_gpu", resolution=1, timeout=180, sparse_fallback=True
+            )
+        except TimeoutError as error:
+            result = {"status": "timeout", "reason": str(error), "ranked_periods": []}
         ranked = result.get("ranked_periods") or []
         periods[object_id] = float(ranked[0]) if result.get("status") == "ok" and ranked else None
         details[object_id] = {
