@@ -44,7 +44,7 @@ def main() -> int:
         raise FileExistsError(destination)
     own = load(OUT / "scores-own/summary.json")
     sub = load(OUT / "scores-damit-period-500/summary.json")
-    check = load(OUT / "check-published.json")
+    check = load(OUT / "check-published-v2.json")
     validation = load(OUT / "validation-damit-period-500-check-v3.json")
     timing = load(OUT / "search-timing-sample.json")
     periods = load(OUT / "own-periods-lowq.json")
@@ -95,7 +95,10 @@ def main() -> int:
     add(f"- The scoring chain (`lowq_score.py`, which calls the published census, lineage, baseline and "
         f"latitude code) run on the published prediction file reproduces {check['compared_values']} published "
         f"values with {len(check['mismatches'])} mismatches (tolerance {check['tolerance']}); passed = "
-        f"{check['passed']} (`{REL}/check-published.json`).\n")
+        f"{check['passed']} (`{REL}/check-published-v2.json`). The only differences "
+        f"({len(check['standard_pole_20deg_tie_differences'])} values) are within-20 fractions of the six "
+        "standard poles, caused by six asteroids lying exactly 20 deg from a standard pole (floating-point tie; "
+        "reference-only, not printed). The first check file `check-published.json` reports these as failures.\n")
 
     add("## Period search\n")
     regimes = own.get("search_status_regime", {})

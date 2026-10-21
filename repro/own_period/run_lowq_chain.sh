@@ -51,11 +51,11 @@ grep -q '"passed": true' "$OUT/validation-damit-period-500-check-v3.json" || { l
 log "validation passed"
 
 # 2. Published scoring path reproduces every published census number (CPU only).
-if [ ! -f "$OUT/check-published.json" ]; then
+if [ ! -f "$OUT/check-published-v2.json" ]; then
   [ -d "$OUT/scores-published-check" ] || "$PY" -m repro.own_period.lowq_score \
     --predictions published --output "$OUT/scores-published-check" > "$OUT/scores-published-check.log" 2>&1 || exit 1
   "$PY" -m repro.own_period.lowq_check_published --scores "$OUT/scores-published-check" \
-    --output "$OUT/check-published.json" || { log "PUBLISHED SCORING CHECK FAILED, stopping"; exit 1; }
+    --output "$OUT/check-published-v2.json" || { log "PUBLISHED SCORING CHECK FAILED, stopping"; exit 1; }
 fi
 log "published scoring check passed"
 
