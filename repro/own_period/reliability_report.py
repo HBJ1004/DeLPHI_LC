@@ -283,6 +283,26 @@ def command_results(args) -> int:
         v = classes[k]
         w(f"| {k} | {v['n']} | {fmt(v.get('own_mean_deg'))} | {fmt(v.get('published_mean_deg'))} |")
     w("")
+    w("## Compute cost (measured)\n")
+    main_recs = R.read_jsonl(R.OUT / "search" / "periods-main.jsonl")
+    distinct = [r for r in main_recs if r.get("reused_from") is None]
+    pilot = main_recs[:400]
+    pf = [r["seconds"] for r in pilot if r["condition"] == "full" and r.get("reused_from") is None]
+    po = [r["seconds"] for r in pilot if r["condition"] != "full" and r.get("reused_from") is None]
+    w(f"- Timing pilot (first 400 cells, one search at a time on the RTX 4070): complete data {fmt(np.mean(pf) if pf else None, 1)} s "
+      f"per search (n={len(pf)}, max {fmt(max(pf) if pf else None, 1)} s); reduced or noisy data "
+      f"{fmt(np.mean(po) if po else None, 1)} s (n={len(po)}).")
+    w(f"- Main searches: {len(main_recs)} cells, {len(distinct)} distinct searches, "
+      f"{sum(r['seconds'] for r in distinct) / 3600:.1f} h of summed search time "
+      f"(run with 3 parallel workers after the pilot); timeouts: {sum(r['status'] == 'timeout' for r in main_recs)}.")
+    own_pred = R.read_jsonl(R.OUT / "predictions" / "own.jsonl")
+    w(f"- Network inference, own period: {len(own_pred)} cells, {sum(r['runtime_s'] for r in own_pred) / 3600:.2f} h.")
+    fits_log = R.OUT / "withheld-fits-own.log"
+    if fits_log.exists():
+        secs = [float(x.split()[-1].rstrip("s")) for x in fits_log.read_text().splitlines()
+                if x.startswith("asteroid_")]
+        w(f"- Withheld convexinv fits, own period: {len(secs)} fit cells, {sum(secs) / 3600:.2f} h (6 workers).")
+    w("")
     notes = (R.OUT / "NOTES.md")
     if notes.exists():
         w(notes.read_text())
