@@ -107,7 +107,16 @@ def corrected(files, catalog):
 
 
 def summary(args) -> int:
-    files = sorted(glob.glob(str(args.runs / "fold-*-seed-*.npz")))
+    value = compute_summary(args.runs, args.compare_published)
+    write_json_once(args.output, value)
+    print(json.dumps({g["group"]: [round(100 * g["percentile_share"], 1), g["share_seed_range_percent"]] for g in value["groups"]}, indent=1))
+    if args.compare_published:
+        print(json.dumps(value["comparison_with_published"], indent=1))
+    return 0
+
+
+def compute_summary(runs: Path, compare_published: bool = False) -> dict:
+    files = sorted(glob.glob(str(runs / "fold-*-seed-*.npz")))
     if not files:
         raise SystemExit("no Shapley runs found")
     catalog = {}
@@ -158,9 +167,9 @@ def summary(args) -> int:
             "fraction_raising_error": float(np.mean(shap_e[:, g] > 0.0)),
         })
     value = {
-        "runs": str(args.runs),
-        "period_source": json.loads((args.runs / "period-source.json").read_text())
-        if (args.runs / "period-source.json").exists()
+        "runs": str(runs),
+        "period_source": json.loads((runs / "period-source.json").read_text())
+        if (runs / "period-source.json").exists()
         else "published run directory",
         "networks": len(files),
         "asteroids": len(names),
@@ -173,7 +182,7 @@ def summary(args) -> int:
         "efficiency_max_abs_error": efficiency,
         "groups": groups,
     }
-    if args.compare_published:
+    if compare_published:
         rows = []
         for name in files:
             new, old = np.load(name), np.load(PUBLISHED / Path(name).name)
@@ -185,11 +194,7 @@ def summary(args) -> int:
                 "max_abs_shared_means_diff": max_abs(new["shared_means"], old["shared_means"]),
             })
         value["comparison_with_published"] = rows
-    write_json_once(args.output, value)
-    print(json.dumps({g["group"]: [round(100 * g["percentile_share"], 1), g["share_seed_range_percent"]] for g in groups}, indent=1))
-    if args.compare_published:
-        print(json.dumps(value["comparison_with_published"], indent=1))
-    return 0
+    return value
 
 
 def main() -> int:
