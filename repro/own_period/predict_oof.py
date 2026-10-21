@@ -19,10 +19,13 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from lc_pipeline.k3.damit import load_damit_object
-from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid, oracle_at_k_error_deg
+from lc_pipeline.k3.evaluation import (
+    ensemble_score_grids,
+    modes_from_score_grid,
+    oracle_at_k_error_deg,
+)
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.publication_run import K3_OOF_SEEDS
 from lc_pipeline.k3.tokenizer import tokenize_epochs
@@ -41,11 +44,19 @@ INPUT_KEYS = {"phase_features", "phase_mask", "geometry_features", "epoch_featur
 
 def load_periods(spec: str, catalog: dict[str, dict]) -> tuple[dict[str, float | None], str, str]:
     if spec == "damit":
-        periods = {oid: float(row["solutions"][0]["period_hours"]) for oid, row in catalog.items()}
+        periods = {
+            oid: float(row["solutions"][0]["period_hours"])
+            for oid, row in catalog.items()
+            if row.get("solutions")
+        }
         return periods, "frozen-DAMIT-primary-solution-fixed-period", "damit-catalog"
     path = Path(spec)
     value = json.loads(path.read_text())
-    return value["periods_hours"], value["provenance"], hashlib.sha256(path.read_bytes()).hexdigest()
+    return (
+        value["periods_hours"],
+        value["provenance"],
+        hashlib.sha256(path.read_bytes()).hexdigest(),
+    )
 
 
 def main() -> int:
@@ -56,10 +67,25 @@ def main() -> int:
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
-    catalog = {row["object_id"]: row for row in map(json.loads, (DATA / "catalog.jsonl").read_text().splitlines())}
-    folds = sorted(json.loads((DATA / "publication-splits-v2.3.json").read_text())["folds"], key=lambda r: int(r["fold"]))
+    catalog = {
+        row["object_id"]: row
+        for row in map(json.loads, (DATA / "catalog.jsonl").read_text().splitlines())
+    }
+    folds = sorted(
+        json.loads((DATA / "publication-splits-v2.3.json").read_text())["folds"],
+        key=lambda r: int(r["fold"]),
+    )
     periods, provenance, period_source = load_periods(args.periods, catalog)
-    ids, fold_of, used, axes_out, starts_out, scores_out, errors, seconds = [], [], [], [], [], [], [], []
+    ids, fold_of, used, axes_out, starts_out, scores_out, errors, seconds = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     for row in folds:
         fold = int(row["fold"])
         models, _, _ = _load_models(MODELS, MODEL_MANIFEST, (fold,), args.device)
@@ -81,11 +107,22 @@ def main() -> int:
             source = load_damit_object(DUMP, oid)
             example = K3TrainingExample(
                 object_id=oid,
-                tokenized=tokenize_epochs(source.epochs, known_period=KnownPeriod(float(period), provenance)),
+                tokenized=tokenize_epochs(
+                    source.epochs, known_period=KnownPeriod(float(period), provenance)
+                ),
                 target_axes=targets,
             )
-            inputs = {k: v.to(args.device) for k, v in collate_examples((example,)).items() if k in INPUT_KEYS}
-            grids = np.stack([np.asarray(score_axial_grid(m, inputs, chunk_size=1024), dtype=np.float64) for m in models])
+            inputs = {
+                k: v.to(args.device)
+                for k, v in collate_examples((example,)).items()
+                if k in INPUT_KEYS
+            }
+            grids = np.stack(
+                [
+                    np.asarray(score_axial_grid(m, inputs, chunk_size=1024), dtype=np.float64)
+                    for m in models
+                ]
+            )
             modes = modes_from_score_grid(ensemble_score_grids(grids[:, None, :])[0])
             starts = np.asarray([mode.axis_xyz for mode in modes], dtype=np.float64)
             axes, scores = refine_ensemble_axes(models, inputs, starts)
@@ -113,7 +150,16 @@ def main() -> int:
             inference_seconds=np.asarray(seconds),
         )
     valid = np.asarray(errors)[np.isfinite(errors)]
-    print(json.dumps({"output": str(args.output), "n": len(ids), "n_valid": int(valid.size), "mean_deg": float(valid.mean())}))
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "n": len(ids),
+                "n_valid": int(valid.size),
+                "mean_deg": float(valid.mean()),
+            }
+        )
+    )
     return 0
 
 
