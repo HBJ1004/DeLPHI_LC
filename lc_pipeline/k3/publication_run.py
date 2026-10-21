@@ -160,8 +160,16 @@ def load_real_examples(
     catalog_path: str | Path,
     dump_root: str | Path,
     object_ids: Sequence[str],
+    period_hours: Mapping[str, float] | None = None,
+    period_provenance: str | None = None,
 ) -> tuple[K3TrainingExample, ...]:
-    """Build fixed-period real examples with every catalogue axis positive."""
+    """Build fixed-period real examples with every catalogue axis positive.
+
+    ``period_hours`` (default None) is an opt-in override used only by
+    revision analyses: when given, each object is folded with
+    ``period_hours[object_id]`` (with ``period_provenance``) instead of the
+    primary DAMIT period.  The default leaves the published behaviour unchanged.
+    """
     try:
         rows = {
             row["object_id"]: row
@@ -190,9 +198,15 @@ def load_real_examples(
         # axes remain valid oracle targets, but one deployable fixed period is
         # required at inference; this affects only asteroid_3572 in the cohort.
         period = float(periods[0])
+        provenance = "frozen-DAMIT-primary-solution-fixed-period"
+        if period_hours is not None:
+            period = float(period_hours[object_id])
+            if not np.isfinite(period) or period <= 0:
+                raise K3PublicationRunError(f"{object_id} has an invalid override period")
+            provenance = period_provenance or "override-period"
         tokenized = tokenize_epochs(
             source.epochs,
-            known_period=KnownPeriod(period, "frozen-DAMIT-primary-solution-fixed-period"),
+            known_period=KnownPeriod(period, provenance),
         )
         examples.append(
             K3TrainingExample(
