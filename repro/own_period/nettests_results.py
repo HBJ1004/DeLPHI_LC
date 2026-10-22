@@ -210,9 +210,15 @@ def main() -> int:
     w("")
     if so:
         w(f"Full input: percentile {so['full_percentile']:.3f} (published {ps['full_percentile']:.3f}, `\\ShapFullPercentile`), grid error {so['full_grid_error_deg']:.2f} deg (published {ps['full_grid_error_deg']:.2f}); efficiency error {so['efficiency_max_abs_error']:.1e}. Source `shapley-own-summary.json`.")
+    sc = load(OUT / "shapley-damit-summary-check.json")
+    if sc:
+        w(f"Validation (DAMIT period, fold 0 seed 17): the published run is not reproduced cell by cell (near-tied peaks change single grid errors), "
+          f"but the reported quantities agree: shares within {sc['max_abs_share_diff_percentage_points']:.3f} percentage points, grid-error effects within "
+          f"{sc['max_abs_effect_diff_deg']:.3f} deg, full-input percentile within {sc['full_percentile_diff']:.1e}; a repeat of the rerun is identical "
+          f"(max difference {sc['repeat_max_abs_diff']:.1e}). Source `shapley-damit-summary-check.json`.")
     if sv:
         rows = sv["comparison_with_published"]
-        w(f"Validation (DAMIT period, fold 0 seed 17, 34 asteroids x 256 combinations): max abs percentile difference {max(r['max_abs_percentile_diff'] for r in rows):.1e}, "
+        w(f"Cell-level comparison (34 asteroids x 256 combinations, raw stored values including the flat-map combinations that the summary corrects): max abs percentile difference {max(r['max_abs_percentile_diff'] for r in rows):.1e}, "
           f"grid error {max(r['max_abs_grid_error_diff_deg'] for r in rows):.1e} deg, shared means {max(r['max_abs_shared_means_diff'] for r in rows):.1e}. Source `shapley-damit-validation.json`.")
     w("Text values: I12 brightness 44%, Sun 35%, product 15%, sampling 12%, observer -5%, period -2%, ranges 37-50% and 28-46%; I13 brightness lowers by >1 deg for 95%, Sun term lowers for 72% and raises for 25% (both by more than 1 deg, reproduced from the published runs); I14 phase angle and distances 0.3% share.")
     w("Figure: `figures/own/shapley.pdf`.")
