@@ -85,7 +85,10 @@ def failed_at_90(excluded: dict, predictions: Path) -> dict:
             object_id = item["object_id"]
             if object_id in analyzed:
                 rows.append({**analyzed[object_id], "own_period_failed": False})
-            elif item["status"] == "no_period":
+            elif item["status"] == "no_period" and item.get("search_status") != "input_rejected_published":
+                # damit:1015 was rejected before the networks in the published census
+                # (an epoch with one observation) and keeps that status: it is not
+                # an own-period failure and is not counted at 90 deg.
                 refs = np.asarray(
                     [r["axis"] for r in reference_by_id[object_id]["references"]], dtype=np.float64
                 )
@@ -290,7 +293,10 @@ def main() -> int:
     with jsonl.open() as handle:
         for line in handle:
             item = json.loads(line)
-            statuses[item["status"]] = statuses.get(item["status"], 0) + 1
+            status = item["status"]
+            if item.get("search_status") == "input_rejected_published":
+                status = "input_rejected_published"
+            statuses[status] = statuses.get(status, 0) + 1
     report["prediction_status_counts"] = statuses
     if statuses.get("no_period"):
         at90 = failed_at_90(excluded, jsonl)

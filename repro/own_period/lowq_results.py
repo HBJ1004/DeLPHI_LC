@@ -243,6 +243,10 @@ def main() -> int:
         "angle formula (arccos of the dot product of float32-normalized axes gives 0.03 deg, and 1.7e-6 deg after "
         "normalizing, for bit-identical vectors). All 499 axis sets were bit-identical in every version; `-check-v3.json` "
         "uses the atan2 form and passes. The rerun itself was not repeated.")
+    add("- damit:1015 (rejected before the networks in the published census) was written as `no_period` in "
+        "`own-period-lowq-predictions.jsonl` (search status `input_rejected_published`). A first scoring pass counted "
+        "it as an own-period failure at 90 deg (n 9,784); those outputs are kept in `superseded-1015-at90/`. "
+        "The scoring here keeps its published rejected status, so the 90-deg variant has n 9,783.")
     add("- Census inputs are read from the raw `lc.txt` exactly as the published census does (there is no "
         "separate prepared-object directory for the 9,783); the search receives those same observations.")
     add("- Only the lower-quality rows are recomputed. Main-sample, ZTF and ALCDEF rows of Figure 7 and the "
