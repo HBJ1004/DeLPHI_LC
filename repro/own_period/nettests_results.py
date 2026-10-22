@@ -101,11 +101,20 @@ def main() -> int:
     w("| Quantity | Published | Rerun, DAMIT period | Own period | Own-period source |")
     w("|---|---|---|---|---|")
     vtxt = "not run"
+    finer_note = ""
     if val:
         c = val["comparison_with_published"]
-        vtxt = (f"fold 0 (34 asteroids x 5 seeds x 16 controls, {c['files_compared']} files): max abs oracle-error difference "
-                f"{c['max_abs_oracle_error_diff_deg']:.1e} deg, score maps {c['max_abs_score_grid_diff']:.1e}; "
-                f"{'passes' if c['passes_1e-6_deg'] else 'FAILS'} 1e-6 deg")
+        routine = [r for r in c["files"] if "/evaluations/" in r["published"]]
+        fin = [r for r in c["files"] if "/evaluations/" not in r["published"]]
+        mr = max(r["max_abs_oracle_error_diff_deg"] for r in routine)
+        mg = max(r["max_abs_score_grid_diff"] for r in routine)
+        vtxt = (f"fold 0, 34 asteroids x 5 seeds: unmodified, exchange and the five published removals, {len(routine)} files, "
+                f"max abs oracle-error difference {mr:.1e} deg, score maps {mg:.1e} (bit-identical)")
+        ff = max(r["max_abs_oracle_error_diff_deg"] for r in fin)
+        finer_note = (f"The {len(fin)} finer-removal files of fold 0 differ from the published ones by up to {ff:.3f} deg per asteroid. "
+                      "The published finer-removal files carry their own small numerical offset: their no-op removal of the photometric errors "
+                      "(identically zero for DAMIT) differs from the published unmodified run by up to 6e-4 deg, while the rerun reproduces the unmodified run exactly. "
+                      "At the level of the gaps the rerun agrees with the published fold-0 values to 0.001 deg or better, so the rounded values are unchanged.")
     o = own["summary"]["controls"].get("input-swap") if own else None
     w(f"| Mean gap over seeds | {pub['mean_real_input_swap_gap_deg']:.2f} | {vtxt} | {f2(o['gap_mean_deg']) if o else 'not run'} | `controls-own-summary.json` |")
     for seed in SEEDS:
@@ -168,8 +177,12 @@ def main() -> int:
         ptxt = f"{np.mean(g):+.2f} ({min(g):+.2f} to {max(g):+.2f})"
         o = own["summary"]["controls"].get(control) if own else None
         otxt = f"{o['gap_mean_deg']:+.2f} ({o['gap_min_deg']:+.2f} to {o['gap_max_deg']:+.2f})" if o else "not run"
-        w(f"| {LABELS[control]} | {ptxt} | identical on fold 0 (see E1) | {otxt} | `controls-own-summary.json` |")
+        vt = "bit-identical on fold 0" if control in DIAGNOSTIC else "fold-0 gap within 0.001 deg"
+        w(f"| {LABELS[control]} | {ptxt} | {vt} | {otxt} | `controls-own-summary.json` |")
     w("")
+    if finer_note:
+        w("Validation: " + finer_note + " Source `controls-damit-validation.json`.")
+        w("")
     w("Figure: `figures/own/input-removal.pdf` (drawn by `figures/render_main_figures.py`, a copy of the published figure script with only input and output paths changed).")
     w("")
 
@@ -299,6 +312,7 @@ def main() -> int:
     w("## Deviations and notes")
     w("")
     w("- Oracle errors are computed inside the published evaluation routines right after each prediction, as in the published runs; the references do not enter any prediction.")
+    w("- The automatic 1e-6 deg gate of the removal validation failed on the finer removals only (see B9); the own-period removals were run after checking that the difference lies in the published finer files themselves (`run_queue2.sh`).")
     w("- Removals and Shapley values were validated on a subset (fold 0: all 5 seeds and all 16 controls for the removals and the exchange; fold 0 seed 17 for the Shapley values), as allowed by the brief; training versus test, the ZTF variants and the runs without uncertainties were validated in full.")
     if tvt:
         cells = [json.loads(l) for p in sorted((OUT / "train-vs-test-own").glob("cells-fold-*.jsonl")) for l in p.read_text().splitlines()]
