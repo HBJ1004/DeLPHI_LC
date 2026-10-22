@@ -384,9 +384,12 @@ def command_predict(args) -> int:
 
 def axial_angle_deg(a, b) -> float:
     a, b = np.asarray(a, float), np.asarray(b, float)
-    a /= np.linalg.norm(a, axis=1, keepdims=True)
-    b /= np.linalg.norm(b, axis=1, keepdims=True)
-    return float(np.degrees(np.arccos(np.clip(np.abs(np.sum(a * b, axis=1)), 0, 1))).max())
+    if a.shape == b.shape and np.array_equal(a, b):
+        return 0.0  # bit-identical axes
+    # atan2(|a x b|, |a . b|) is exact near zero, unlike arccos of a rounded dot product.
+    cross = np.linalg.norm(np.cross(a, b), axis=1)
+    dot = np.abs(np.sum(a * b, axis=1))
+    return float(np.degrees(np.arctan2(cross, dot)).max())
 
 
 def command_validate(args) -> int:

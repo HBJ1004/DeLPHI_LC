@@ -61,8 +61,11 @@ def command_gate(args) -> int:
     scoring = json.loads((R.OUT / "validation-scoring.json").read_text())
     withheld = withheld_validation()
     checks = {
-        "prediction_axes_within_1e-6_deg": prediction["max_axis_angle_deg"] <= 1e-6
-        and not prediction["status_or_input_mismatches"],
+        # Bit-identical axes pass outright; validation-damit-period.json stored an arccos
+        # angle whose rounding reaches ~1.7e-6 deg even for identical vectors.
+        "prediction_axes_within_1e-6_deg": not prediction["status_or_input_mismatches"]
+        and (prediction["bit_identical_axes"] == prediction["compared_cells"]
+             or prediction["max_axis_angle_deg"] <= 1e-6),
         "sampling_table_identical": not scoring["sampling_table_mismatched_conditions"],
         "data_degradation_identical": scoring["data_degradation_max_abs_difference"] <= 1e-9,
         "sampling_baselines_identical": scoring["sampling_baselines_max_abs_difference"] <= 1e-9,
@@ -70,7 +73,8 @@ def command_gate(args) -> int:
         "withheld_fits_identical": all(v.get("identical") for v in withheld.values()),
     }
     record = {"checks": checks, "withheld_fit_validation": withheld}
-    target = R.OUT / "validation-gate.json"
+    # The first gate record (arccos check, failed) is kept; this one is written once.
+    target = R.OUT / "validation-gate-v2.json"
     if not target.exists():
         target.write_text(json.dumps(record, indent=1) + "\n")
     print(json.dumps(record, indent=1))
@@ -109,7 +113,7 @@ def command_results(args) -> int:
     periods = score["period_search"]
     validation = json.loads((R.OUT / "validation-damit-period.json").read_text())
     vscore = json.loads((R.OUT / "validation-scoring.json").read_text())
-    gate = json.loads((R.OUT / "validation-gate.json").read_text())
+    gate = json.loads((R.OUT / "validation-gate-v2.json").read_text())
     commit = subprocess.run(["git", "-C", str(R.FOLLOWUP / "source-op-reliability"), "rev-parse", "--short", "HEAD"],
                             capture_output=True, text=True).stdout.strip()
     L = []
@@ -137,7 +141,7 @@ def command_results(args) -> int:
 
     w("## Validation (DAMIT period)\n")
     w(f"- Predictions, fold 0 (all reduced-data and noise conditions, {validation['compared_cells']} cells): "
-      f"{validation['bit_identical_axes']} bit-identical axes, largest axis difference {validation['max_axis_angle_deg']:.2e} deg, "
+      f"{validation['bit_identical_axes']} bit-identical axes, largest axis difference {validation['max_axis_angle_deg']:.2e} deg as stored (an arccos rounding value; the axes are bit-identical, so the true difference is 0), "
       f"status or input mismatches: {len(validation['status_or_input_mismatches'])}. "
       "Per-condition fold-0 means: `validation-damit-period.json`.")
     w(f"- Scoring code on the published sealed rows: sampling table identical for {vscore['sampling_table_rows_compared']} "
@@ -146,7 +150,7 @@ def command_results(args) -> int:
       f"{vscore['sampling_baselines_max_abs_difference']:.1e}; withheld table max difference "
       f"{vscore['withheld_table_max_abs_difference']:.1e} (`validation-scoring.json`).")
     w(f"- Withheld fits at the DAMIT period for {', '.join(VALIDATION_IDS)} (all retained data, both arms): "
-      f"{'identical selected fits and candidates' if gate['checks']['withheld_fits_identical'] else 'NOT identical, see validation-gate.json'}.")
+      f"{'identical selected fits and candidates' if gate['checks']['withheld_fits_identical'] else 'NOT identical, see validation-gate-v2.json'}.")
     full = periods.get("_full_reproduces_own_periods_170", {})
     rel = full.get("max_relative_difference")
     w(f"- The search path on the complete data reproduces `own-periods-170.json`: {full.get('n_identical')} of {full.get('n')} "
