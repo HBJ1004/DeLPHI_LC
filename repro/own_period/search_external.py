@@ -21,13 +21,15 @@ import numpy as np
 
 from repro.period_search.search import Curve, estimate
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 PREPARED = {
     "ztf": FOLLOWUP / "data/generalization-20260910/mapped-ztf/prepared-current-endpoint",
     "alcdef": FOLLOWUP / "data/generalization-20260910/locked-cohort/alcdef-prepared-30-20260911",
 }
-OUT = FOLLOWUP / "data/own-period-20261021"
+OUT = DataPath()
 PROVENANCE = "own-fourier-gpu-top1"
 
 

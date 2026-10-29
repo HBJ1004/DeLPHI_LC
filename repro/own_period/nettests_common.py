@@ -13,8 +13,10 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 REPO = Path(__file__).resolve().parents[2]
 CATALOG = REPO / "repro/data/damit-20250610T000301Z/catalog.jsonl"
 SPLITS = REPO / "repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
@@ -23,7 +25,7 @@ ARTIFACTS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092"
 MODELS = ARTIFACTS / "models"
 EVALUATIONS = ARTIFACTS / "evaluations"
 MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
-OP = FOLLOWUP / "data/own-period-20261021"
+OP = DataPath()
 OUT = OP / "nettests"
 OWN_PERIODS_170 = OP / "own-periods-170.json"
 SEEDS = (17, 42, 137, 777, 2027)

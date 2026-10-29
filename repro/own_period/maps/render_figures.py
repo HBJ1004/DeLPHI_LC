@@ -30,8 +30,10 @@ _ARGS.add_argument("--run", type=Path, required=True, help="directory holding ev
 _ARGS.add_argument("--periods", required=True, help="damit or a periods JSON (worked-example folding)")
 _ARGS.add_argument("--out", type=Path, required=True)
 ARGS = _ARGS.parse_args()
-ROOT = Path(__file__).resolve().parents[5] / "paper"
-FOLLOWUP = Path(__file__).resolve().parents[4]
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../../paper")
+FOLLOWUP = DataPath("../..")
 DAMIT_DUMP = ROOT.parent / "damit-20250610T000301Z"
 ENSEMBLE = ARGS.run / "evaluations" / "real-oof-ensemble.npz"
 ANALYSES = ARGS.analyses
@@ -42,7 +44,6 @@ INTERPRETATION_EXAMPLE_OBJECT = "asteroid_121"  # DAMIT asteroid 121, (41) Daphn
 CANDIDATE_SKY_SAMPLE = 25
 CANDIDATE_SKY_SEED = 20260922
 OUT = FIG_OUT
-OUT.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update(
     {
@@ -1575,6 +1576,7 @@ def render_inversion() -> None:
 
 
 def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
     render_worked_example()
     render_oracle_error()
     render_candidate_sky()

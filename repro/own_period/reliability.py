@@ -43,11 +43,13 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 RUN = FOLLOWUP / "data/reliability-20260915/run-1"
-OUT = FOLLOWUP / "data/own-period-20261021/reliability"
-OWN_FULL = FOLLOWUP / "data/own-period-20261021/own-periods-170.json"
+OUT = DataPath('reliability')
+OWN_FULL = DataPath('own-periods-170.json')
 SEEDS = (20260915, 20260916, 20260917)
 SEARCH = dict(method="fourier_gpu", resolution=1, timeout=180, sparse_fallback=True)
 PROVENANCE = "supplied-historical-period-reliability-study"  # label only, as published

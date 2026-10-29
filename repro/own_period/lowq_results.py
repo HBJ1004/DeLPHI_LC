@@ -18,7 +18,9 @@ from repro import compute_reference_baselines as base
 
 from .lowq_search import FOLLOWUP
 
-OUT = FOLLOWUP / "data/own-period-20261021/lowq"
+from repro.own_period import DataPath
+
+OUT = DataPath('lowq')
 REVISION = FOLLOWUP / "data/publication-revision-20260917-r2"
 BASELINES = FOLLOWUP / "source/repro/baselines_out/reference-baselines.json"
 MIRROR = FOLLOWUP / "data/interpretation-20260926/mirror-symmetry.json"

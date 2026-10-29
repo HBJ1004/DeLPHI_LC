@@ -7,16 +7,24 @@
 # 4. V7 own-period timed run, chunks of ~50 min, each under gpu_wait + the GPU lock
 # 5. scoring of both (only after each run is complete)
 set -u
-WT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-op-v67"
-OP="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/own-period-20261021"
+WT="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+: "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
+PY="${PYTHON:-python}"
+OP="$DELPHI_DATA"
 V="$OP/v67"
-PIN="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/pole-grid-benchmark/runtime/python-venv-20260912/bin/python-pinned"
-GPUWAIT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-quality-ladder/repro/quality_ladder/gpu_wait.sh"
-LOCKFILE=/home/onlyb/MERCUDA-paper/.gpu.lock
+PIN="${CONVEXINV_PYTHON:-$PY}"
 IDS="asteroid_103 asteroid_111 asteroid_118 asteroid_120 asteroid_116 asteroid_125 asteroid_134 asteroid_153 asteroid_101 asteroid_104 asteroid_115 asteroid_117 asteroid_105 asteroid_106 asteroid_107 asteroid_121 asteroid_108 asteroid_109 asteroid_114 asteroid_123"
 export PYTHONPATH="$WT"
 cd "$WT" || exit 1
 log() { echo "$(date -u +%FT%TZ) $*"; }
+gpu() {
+  if [ -n "${GPU_WAIT:-}" ]; then bash "$GPU_WAIT"; fi
+  if [ -n "${GPU_LOCK:-}" ]; then
+    flock "$GPU_LOCK" "$@"
+  else
+    "$@"
+  fi
+}
 
 log "waiting for phase B"
 until grep -qE '^PHASE_B_(DONE|FAILED)' "$OP/reliability/phaseB2.log" 2>/dev/null; do sleep 300; done
@@ -24,8 +32,7 @@ log "phase B finished: $(grep -E '^PHASE_B_(DONE|FAILED)' "$OP/reliability/phase
 
 # 2. guided validation on the GPU (published periods)
 if [ ! -f "$V/v7-validation-guided-gpu/validation-vs-published.json" ]; then
-  bash "$GPUWAIT"
-  flock "$LOCKFILE" "$PIN" repro/own_period/v7_grid.py execute --lock "$V/v7-validation-published-gpu-lock.json" \
+  gpu "$PIN" repro/own_period/v7_grid.py execute --lock "$V/v7-validation-published-gpu-lock.json" \
       --output "$V/v7-validation-guided-gpu" --ids $IDS --repeats 0 --arms guided20 || { log "V7 GPU validation run failed"; exit 1; }
   "$PIN" repro/own_period/v7_grid.py validate --execution "$V/v7-validation-guided-gpu" || { log "V7 GPU validation FAILED; stopping before timed runs"; exit 1; }
 fi
@@ -33,8 +40,7 @@ log "V7 guided GPU validation passed"
 
 # 3. V6 timed, chunks
 while true; do
-  bash "$GPUWAIT"
-  flock "$LOCKFILE" "$PIN" repro/own_period/v6_fixed_period.py run --periods "$V/own-periods-170-rounded6.json" \
+  gpu "$PIN" repro/own_period/v6_fixed_period.py run --periods "$V/own-periods-170-rounded6.json" \
       --axes "$OP/own-period-oof.npz" --output "$V/v6-own-period" --max-seconds 1800
   code=$?
   log "V6 chunk exit $code"
@@ -46,8 +52,7 @@ log "V6 scored"
 
 # 4. V7 timed, chunks
 while true; do
-  bash "$GPUWAIT"
-  flock "$LOCKFILE" "$PIN" repro/own_period/v7_grid.py execute --lock "$V/v7-own-period-lock.json" \
+  gpu "$PIN" repro/own_period/v7_grid.py execute --lock "$V/v7-own-period-lock.json" \
       --output "$V/v7-own-period" --max-seconds 3000
   code=$?
   log "V7 chunk exit $code"

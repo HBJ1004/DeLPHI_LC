@@ -33,8 +33,10 @@ from lc_pipeline.k3.training import K3TrainingExample, collate_examples
 from lc_pipeline.k3.ztf_prediction import _load_models
 from lc_pipeline.v2.preprocessing import KnownPeriod
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 DATA = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
 DUMP = ROOT / "damit-20250610T000301Z"
 MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"

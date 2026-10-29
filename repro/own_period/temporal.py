@@ -36,15 +36,17 @@ import numpy as np
 from lc_pipeline.physics.axial import axial_angular_error_deg
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO.parent / "data"
-OUTPUT = DATA / "own-period-20261021/temporal"
+from repro.own_period import DataPath
+
+DATA = DataPath("..")
+OUTPUT = DataPath('temporal')
 PREPARED = DATA / "temporal-prepared-final"
 PUBLISHED = DATA / "temporal-predictions-final"
 PUBLISHED_SCORES = DATA / "temporal-scores-final"
 REFERENCES = DATA / "temporal-references-final.json"
-MODELS = REPO.parent / "inputs/frozen-artifacts/k3-definitive-7874092/models"
+MODELS = DataPath('../../inputs/frozen-artifacts/k3-definitive-7874092/models')
 MODEL_MANIFEST = DATA / "external-models-final.json"
-SPLITS = REPO.parent / "inputs/training-run/repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
+SPLITS = DataPath('../../inputs/training-run/repro/data/damit-20250610T000301Z/publication-splits-v2.3.json')
 OBJECT_IDS = ("asteroid_49", "asteroid_279", "asteroid_366")
 PROVENANCE = "own-fourier-gpu-top1"
 POLICY = "post_cutoff_damit_record"
@@ -81,7 +83,10 @@ def save_new(outputs: dict[Path, object]) -> None:
 
 def require_gpu_lock() -> None:
     """Same inherited-fd/conflicting-flock check as refine_chain_post."""
-    path = Path(os.environ.get("LOCK", "/home/hangbin9/MERCUDA-paper/.gpu.lock"))
+    lock = os.environ.get("LOCK")
+    if not lock:
+        return
+    path = Path(lock)
     try:
         inherited, actual = os.fstat(9), path.stat()
         if (inherited.st_dev, inherited.st_ino) != (actual.st_dev, actual.st_ino):
@@ -94,7 +99,7 @@ def require_gpu_lock() -> None:
             fcntl.flock(probe, fcntl.LOCK_UN)
     except (OSError, ValueError):
         pass
-    command = [str(DATA / "own-period-20261021/runners/lock_run.sh"), "--",
+    command = [str(DataPath('runners/lock_run.sh')), "--",
                sys.executable, "-m", "repro.own_period.temporal", *sys.argv[1:]]
     raise RuntimeError("GPU work requires runners/lock_run.sh: " + shlex.join(command))
 

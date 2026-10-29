@@ -2,10 +2,11 @@
 # Queued GPU runs of the maps package: DAMIT-period validation, then own period.
 # Each period choice takes the GPU lock once (expected well under one hour).
 set -euo pipefail
-WT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-op-maps"
-OP="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/own-period-20261021"
+WT="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+: "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
+PY="${PYTHON:-python}"
+OP="$DELPHI_DATA"
 OUT="$OP/maps"
-PY=/home/onlyb/.venvs/delphi-reliability-20260915/bin/python
 MARK="$OP/benchmark/explore-timed.log"
 export PYTHONPATH="$WT"
 cd "$WT"
@@ -14,9 +15,11 @@ echo "$(date -u +%FT%TZ) marker seen"
 for choice in damit-period own-period; do
   if [ "$choice" = damit-period ]; then periods=damit; else periods="$OP/own-periods-170.json"; fi
   if [ ! -f "$OUT/$choice/predictions/pred-ensemble-fold-4.npz" ]; then
-    bash "/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-quality-ladder/repro/quality_ladder/gpu_wait.sh"
+    if [ -n "${GPU_WAIT:-}" ]; then bash "$GPU_WAIT"; fi
     echo "$(date -u +%FT%TZ) $choice predict start"
-    flock /home/onlyb/MERCUDA-paper/.gpu.lock "$PY" -m repro.own_period.predict_oof_full \
+    gpu_command=("$PY" -m repro.own_period.predict_oof_full)
+    if [ -n "${GPU_LOCK:-}" ]; then gpu_command=(flock "$GPU_LOCK" "${gpu_command[@]}"); fi
+    "${gpu_command[@]}" \
       --output-dir "$OUT/$choice" predict --periods "$periods" --device cuda
     echo "$(date -u +%FT%TZ) $choice predict done"
   fi

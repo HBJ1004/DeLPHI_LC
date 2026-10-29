@@ -24,6 +24,96 @@ A few terms are used throughout.
 - **K3** is the name of the DeLPHI model in the code and in file names (`k3-`,
   `delphi-k3`); it refers to the three candidate axes.
 
+## Paper I revision (paper-v2)
+
+The `paper-v2` code adds the exploratory Paper I revision analyses with our
+own rotation periods, using the frozen networks. Data, predictions and fits
+are supplied in a separate Zenodo data record (**DOI: to be added**). Its
+`own-period-20261021/PROTOCOL.md` and the protocols in `census7/`,
+`refine-chain/`, `period-cost/` and `spacecraft/` record the fixed choices,
+validation gates and later amendments. Use the amended network policy where
+specified: the lower-quality census uses the five networks of run 0; ALCDEF
+uses all 25. The main 170 and ZTF use the five networks of their test fold.
+
+The Python runners and shell drivers under `repro/own_period/` use
+`DELPHI_DATA` for the **own-period results folder itself**, containing
+`benchmark/`, `lowq/`, `reliability/` and `own-periods-170.json`. This replaces
+the earlier shell setting that named its parent `data/` folder. Settings:
+
+| Setting | Meaning and default |
+|---|---|
+| `DELPHI_REPO` | Code folder; defaults to the repository root found from the shell script's location. |
+| `DELPHI_DATA` | Required own-period results folder, with `benchmark/` directly underneath. Python data paths read this setting lazily when used; imports and `--help` need no setting. An unset or empty value stops a shell driver or Python data access. |
+| `PYTHON` | Python executable; default `python`. |
+| `CONVEXINV_PYTHON` | Interpreter for `v67_queue.sh` and `v67_finalize.sh`; defaults to `PYTHON`. Set it to the pinned interpreter recorded by the inversion locks. |
+| `GPU_LOCK` | Optional lock-file path. The shell GPU steps use `flock "$GPU_LOCK"` when set. |
+| `GPU_WAIT` | Optional Bash script, called before each shell GPU step. |
+| `LOCK` | Optional lock-file path for the Python runners `refine_chain_post.py` and `temporal.py`. When set, they require a held lock inherited on file descriptor 9; when unset or empty, they skip that check. This is separate from the shell drivers' `GPU_LOCK`. |
+
+For example, with the layout below:
+
+```bash
+export DELPHI_REPO=/path/to/DeLPHI-followup/source
+export DELPHI_DATA=/path/to/DeLPHI-followup/data/own-period-20261021
+export PYTHON=/path/to/venv/bin/python
+# For locked inversion reruns, also set CONVEXINV_PYTHON to the recorded interpreter.
+```
+
+Python data paths are resolved from the current `DELPHI_DATA` at use time,
+including paths imported from another runner and command-line defaults.
+The checkout can live independently of the data tree. Keep the data record's
+relative layout: earlier data folders are siblings of the own-period folder;
+`inputs/` and `experiments/` are two levels above it, and the DAMIT snapshot
+is three levels above it. Source-file paths used to import or hash this
+checkout still come from the source location.
+
+Frozen evidence also refers to historical code folders (`source-op-maps`,
+`source-op-lowq`, `source-op-reliability`, `source-op-nettests`, `source-op-v67`
+and `source-bench-8a67c52`) alongside `inputs/` and `data/`. Preserve the
+source files and hashes named in the record: inversion reruns verify their
+runtime sources and environment, and median tools hash or extract functions
+from the historical renderers. Setting `DELPHI_DATA` to the recorded
+`data/own-period-20261021/` folder preserves that input layout.
+
+In the table, **O/** means the `DELPHI_DATA` folder itself. Other paths are
+also relative to `DELPHI_DATA`; `../` reaches its parent `data/` folder.
+Script names without a prefix are in `repro/own_period/`.
+CLI-selected output paths below describe the recorded runs.
+
+| Result family | Scripts | Reads | Writes |
+|---|---|---|---|
+| Own periods, main 170 | `manifest.py`; search implementation `repro/period_search/search.py` | `../../experiments/period-refinement-20260921/end-to-end/candidates-v1.jsonl` (top Fourier GPU period, alias P) | **O/**`own-periods-170.json` |
+| Out-of-fold poles, 170 | `predict_oof.py`, `score.py`; `predict_oof_full.py` for the per-seed and score-map files | **O/**`own-periods-170.json`; `../../inputs/training-run/repro/data/damit-20250610T000301Z/`; frozen models and evaluations in `../../inputs/frozen-artifacts/k3-definitive-7874092/` | **O/**`own-period-oof.npz`, `validation-damit-period-oof.npz`, `own-period-scores-main.json` or `own-period-scores.json`; full predictions under **O/**`maps/` |
+| ZTF | `search_external.py --cohort ztf`, `predict_external.py --cohort ztf`, `score.py` | `../generalization-20260910/mapped-ztf/prepared-current-endpoint/`; `../external-models-final.json`; frozen models; scoring references in `../publication-revision-20260917-r2/error-channel-sensitivity.json` | **O/**`own-periods-ztf.json`, `validation-ztf-published.jsonl`, `own-period-ztf.jsonl`, ZTF block of `own-period-scores.json` |
+| ALCDEF | `search_external.py --cohort alcdef`, `predict_external.py --cohort alcdef`, `score.py` | `../generalization-20260910/locked-cohort/alcdef-prepared-30-20260911/` and `alcdef-gaia-transfer-analysis-30-20260911.json`; `../external-models-final.json`; frozen models | **O/**`own-periods-alcdef.json`, `validation-alcdef-published.jsonl`, `own-period-alcdef.jsonl`, ALCDEF block of `own-period-scores.json` |
+| Inversion benchmark, including full grid and loaded runs | `benchmark_lock.py`, `benchmark_relock.py`, `full_grid.py`; frozen copies of `repro/direct_workflow_benchmark/run_direct_benchmark.py`, `run_loaded_benchmark.py`, `time_exploratory_budgets.py`, `score_exploratory_timing.py`, `score_classical_ladder.py`, `budget_equivalence.py`, `candidate_accuracy_cost.py` beside the locks | `../direct-workflow-benchmark/` scripts and locks; **O/**`own-periods-170.json`; frozen models, solver and hash-bound benchmark code | **O/**`benchmark/evaluation-lock.json`, `scoring-lock.json`, `evaluation/`, `evaluation-loaded/`, `full-grid/`, `exploratory-loaded-ladder/`, `score.json`, `score-loaded.json`, `classical-ladder-*.json`, `budget-equivalence.json`, `candidate-accuracy-cost.json` |
+| Maps and candidate count | `maps/run_predictions.sh`, `maps/run_analyses.sh`; `predict_oof_full.py`, `maps/validate_damit_run.py`, `maps/analyses.py`, `maps/render_figures.py`, `maps/build_results.py` | **O/**`own-periods-170.json`; frozen evaluations; `../reliability-20260915/run-1/`; published interpretation records | **O/**`maps/damit-period/` and `maps/own-period/` (`predictions/`, `evaluations/`, `analyses/`, including `candidate-count.json`); `maps/published-check/`, `maps/figures/`; result table on standard output |
+| Lower-quality census | `run_lowq_chain.sh`; `lowq_search.py`, `lowq_predict.py`, `lowq_validate.py`, `lowq_score.py`, `lowq_check_published.py`, `lowq_results.py`, `lowq_figures/render_main_figures.py` | `../../source/experiments/lowq_damit_census_20260917/`; DAMIT snapshot; frozen models; `../publication-revision-20260917-r2/`; published reference baselines | **O/**`lowq/search.jsonl`, `own-periods-lowq.json`, `own-period-lowq-predictions.jsonl`, validation records, `scores-own/`, `scores-published-check/`, `scores-damit-period-500/`, `figures/`, `RESULTS.md` |
+| Reduced-data and noise reliability | `reliability_chunks.sh`; `reliability.py`, `reliability_score.py`, `reliability_report.py` | `../reliability-20260915/run-1/study.json`, `schedule.json`, scored rows and fits; **O/**`own-periods-170.json`; frozen models | **O/**`reliability/search/`, `predictions/`, validation files, `score/scored-rows-own.json`, `score/reliability-own-period.json`, `RESULTS.md` |
+| Network tests and external variants | `network_controls.py`, `summarize_controls.py`, `train_vs_test.py`, `shapley_op.py`, `shapley_check.py`, `external_variants.py`, `nettests_results.py` | **O/**`own-periods-170.json`; frozen models and evaluations; `../internal-validation-20260916/run-1/`; `../interpretation-20260926/shapley/`; external prepared inputs above | **O/**`nettests/controls-{damit,own}/`, `train-vs-test-{damit,own}/`, `shapley-{damit,own}/`, summary and validation JSON; `ztf-variants/`, `no-uncertainty/`, `RESULTS.md` |
+| V6 fixed-period and V7 guided search | `v67_periods.py`, `v6_fixed_period.py`, `v7_grid.py`, `v67_queue.sh`, `v67_finalize.sh`, `v67_results.py` | **O/**`own-periods-170.json`, `own-period-oof.npz`, `benchmark/evaluation-lock.json`; `../pole-grid-benchmark/20260912-environment-relocked-v3/`; earlier paper summaries | **O/**`v67/own-periods-170-rounded6.json`, validation runs, `v6-own-period/`, `v7-own-period/`, score JSON, `v7-own-period/crosscheck-own-period-full-grid.json`, `RESULTS.md` |
+| Withheld-lightcurve test | `reliability.py search --scope withheld`, `withheld-candidates`, `withheld-fits`; corresponding stages in `reliability_chunks.sh`; `reliability_score.py`, `reliability_report.py` | Retained lightcurves and schedule from `../reliability-20260915/run-1/`; searches use only retained observations; fixed 15.8-degree radius | **O/**`reliability/search/periods-withheld.jsonl`, `reliability/withheld/{damit,own}/` candidates and fits; withheld block of `reliability/score/reliability-own-period.json` |
+| Median statistics | `median_stats.py` | Explicit `--input-list` macro inventory and optional `--manuscript`; per-object evidence under **O/**`maps/`, `lowq/`, `reliability/`, `nettests/`, `benchmark/`, `v67/`, `failed-excluded-derived/`, plus published reference records | **O/**`median-stats.json` by default (`--out` overrides); required `--report` path |
+| Median figures | `median_figures.py` | **O/**`median-stats.json` and the same frozen evidence; historical renderers; manuscript and original figures in `../../../paper-rev-20261021/` | Required `--out-dir`: PDFs, PNGs and `values.json`; `f1-report.md` and `f2-report.md` in its parent folder |
+
+The main protocol fixes the top Fourier period without choosing P/2 or 2P
+after scoring. Reduced, noisy, external-variant and retained-lightcurve inputs
+receive their own searches. Failures are reported at 90 degrees and also
+excluded. Validation at published periods precedes the corresponding own-period
+run. Shell drivers are resumable queues: maps, lower-quality and reliability
+wait for `O/benchmark/explore-timed.log`; V67 waits for
+`O/reliability/phaseB2.log`, and its finalizer waits for `O/v67/queue.log`.
+Keep these logs with the data record when using those drivers.
+
+Median commands require explicit scratch destinations, for example:
+
+```bash
+"$PYTHON" -m repro.own_period.median_stats \
+  --input-list /path/to/mean-macros.txt --report /path/to/median-report.md
+"$PYTHON" -m repro.own_period.median_figures \
+  --figures candidate-count inversion-benchmark --out-dir /path/to/median-figures
+```
+
 ## 1. What to download
 
 Two releases of the repository [HBJ1004/DeLPHI_LC](https://github.com/HBJ1004/DeLPHI_LC)

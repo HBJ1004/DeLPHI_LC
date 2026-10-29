@@ -108,6 +108,14 @@ The README inside the `paper-v1` archive lists the files behind each section of
 the paper. All other releases (`v1.0`, `v1.0.1`, and the
 `publication-evidence-*` releases) are earlier versions and are superseded.
 
+## Paper I revision
+
+The `paper-v2` code includes the own-period revision analyses, inversion
+benchmarks, reliability and network tests, and median statistics and figures.
+See [Paper I revision (paper-v2)](docs/reproduction.md#paper-i-revision-paper-v2)
+for the settings, scripts and data layout. Data and fits are in a separate
+Zenodo data record (DOI: to be added).
+
 ## Results in the paper
 
 All numbers are for the 170 DAMIT asteroids, each analyzed by the networks of

@@ -18,12 +18,14 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 PUBLISHED = FOLLOWUP / "data/direct-workflow-benchmark"
 CODE_ROOT = FOLLOWUP / "source-bench-8a67c52"
-PERIODS = FOLLOWUP / "data/own-period-20261021/own-periods-170.json"
-OUT = FOLLOWUP / "data/own-period-20261021/benchmark"
+PERIODS = DataPath('own-periods-170.json')
+OUT = DataPath('benchmark')
 SCRIPTS = (
     "run_direct_benchmark.py",
     "run_loaded_benchmark.py",

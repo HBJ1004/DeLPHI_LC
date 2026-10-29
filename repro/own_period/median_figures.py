@@ -27,14 +27,11 @@ import numpy as np
 
 sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[2]
-FOLLOWUP = REPO.parent
-DATA = FOLLOWUP / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
+DATA = DataPath()
 PAPER = FOLLOWUP.parent / "paper-rev-20261021"
-SCRATCH = Path(
-    "/tmp/claude-1000/-mnt-d-Downloads-Colab-Notebooks/"
-    "3fa212d5-e372-4122-b9a4-788df746770f/scratchpad/p1map"
-)
-DEFAULT_OUT = SCRATCH / "median-figures"
 MAPS_RENDERER = FOLLOWUP / "source-op-maps/repro/own_period/maps/render_figures.py"
 LOWQ_RENDERER = FOLLOWUP / "source-op-lowq/repro/own_period/lowq_figures/render_main_figures.py"
 RELIABILITY_RENDERER = DATA / "reliability/figures/render_main_figures.py"

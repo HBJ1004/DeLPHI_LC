@@ -31,12 +31,13 @@ def inputs(tmp_path, monkeypatch):
     output = data / "chain"
     output.mkdir(parents=True)
     benchmark.mkdir()
-    monkeypatch.setattr(post, "DATA", data)
+    monkeypatch.setenv("DELPHI_DATA", str(data))
     monkeypatch.setattr(post, "_validate_runtime", lambda lock: None)
     protocol = output / "PROTOCOL.md"
     protocol.write_text("synthetic binding")
     (data.parent / "external-models-final.json").write_text("{}")
-    shutil.copyfile(post.BENCHMARK / "run_direct_benchmark.py", benchmark / "run_direct_benchmark.py")
+    shutil.copyfile(post.REPO / "repro/direct_workflow_benchmark/run_direct_benchmark.py",
+                    benchmark / "run_direct_benchmark.py")
     rows, refined = [], []
     for i, oid in enumerate(PROTOCOL_OBJECTS):
         lc = tmp_path / f"{oid}.txt"
@@ -58,6 +59,53 @@ def inputs(tmp_path, monkeypatch):
     return SimpleNamespace(output_dir=output, benchmark_dir=benchmark, protocol=protocol,
                            cpus=(23,), workers=1, device="cuda", published_dir=data / "published",
                            cost_summary=data / "cost-summary.json")
+
+
+def test_data_paths_follow_environment_after_import(tmp_path, monkeypatch):
+    import pickle
+
+    from repro.own_period import DataPath, period_cost, refine_chain, temporal
+    from repro.own_period import manifest, nettests_common, search_external, v67_periods
+    from repro.own_period.spacecraft import reference_poles
+
+    # These defaults and imported aliases already exist before changing the setting.
+    benchmark = post.BENCHMARK
+    copied = pickle.loads(pickle.dumps(benchmark))
+    for folder in (tmp_path / "first", tmp_path / "second"):
+        monkeypatch.setenv("DELPHI_DATA", str(folder))
+        assert Path(benchmark) == folder / "benchmark"
+        assert Path(copied) == folder / "benchmark"
+        assert Path(post.OUTPUT) == folder / "refine-chain"
+        assert Path(refine_chain.EVALUATION_LOCK) == folder / "benchmark/evaluation-lock.json"
+        assert Path(period_cost.COHORT) == folder / "own-periods-170.json"
+        assert Path(temporal.OUTPUT) == folder / "temporal"
+        assert Path(temporal.MODEL_MANIFEST) == folder.parent / "external-models-final.json"
+        assert Path(manifest.OUT) == folder
+        assert Path(nettests_common.OUT) == folder / "nettests"
+        assert Path(search_external.OUT) == folder
+        assert Path(v67_periods.SOURCE) == folder / "own-periods-170.json"
+        assert Path(reference_poles.OUTPUT) == folder / "spacecraft"
+        # Standard pathlib / and parent operations stay lazy until file access.
+        assert (DataPath() / "benchmark").parent == folder
+        assert DataPath() == folder
+        assert folder == DataPath()
+
+
+def test_data_paths_import_without_configuration_and_help_works(monkeypatch):
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="")
+    env.pop("DELPHI_DATA", None)
+    code = ("from repro.own_period import refine_chain_post as post; "
+            "from repro.own_period import median_figures, median_stats, period_cost, temporal; "
+            "from repro.own_period.spacecraft import convert, fetch, reference_poles; "
+            "assert repr(post.BENCHMARK).startswith('DataPath(')")
+    result = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    result = subprocess.run([sys.executable, "-m", "repro.own_period.refine_chain_post", "--help"],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    monkeypatch.delenv("DELPHI_DATA", raising=False)
+    with pytest.raises(ValueError, match="set DELPHI_DATA"):
+        Path(post.BENCHMARK)
 
 
 def one_success(args):
@@ -204,7 +252,7 @@ def test_save_preflights_all_outputs(tmp_path):
     assert post.read(b) == {"old": 1}
 
 
-def test_predict_requires_real_inherited_flock(tmp_path):
+def test_predict_requires_real_inherited_flock(tmp_path, temporary_delphi_data):
     path = tmp_path / "gpu.lock"
     path.touch()
     env = {**os.environ, "LOCK": str(path), "PYTHONDONTWRITEBYTECODE": "1"}
@@ -574,12 +622,11 @@ def test_invalid_cpus(spec):
         post.parse_cpus(spec)
 
 
-def test_real_one_start_smoke_cpu23_nice19():
+def test_real_one_start_smoke_cpu23_nice19(require_delphi_files):
     from repro.own_period import period_cost as cost
 
     binary = cost.SOURCE / "convexinv"
-    if not binary.is_file():
-        pytest.skip("expanded convexinv executable absent")
+    require_delphi_files(binary)
     if 23 not in os.sched_getaffinity(0):
         pytest.skip("CPU 23 unavailable")
     with tempfile.TemporaryDirectory(prefix="refine-chain-post-smoke-", dir="/tmp") as temporary:

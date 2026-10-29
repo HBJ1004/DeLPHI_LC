@@ -24,8 +24,10 @@ from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Rectangle
 
 
 # Own-period copy: the paths of the published layout, resolved from this worktree.
-FOLLOWUP = Path(__file__).resolve().parents[4]
-ROOT = FOLLOWUP / "data/own-period-20261021/lowq"
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
+ROOT = DataPath('lowq')
 DAMIT_DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
 SCORES = ROOT / "scores-own"
 VARIANTS = {"at90": "no period counted at 90 deg", "excluded": "no period excluded"}
@@ -35,7 +37,6 @@ INTERPRETATION_EXAMPLE_OBJECT = "asteroid_121"  # DAMIT asteroid 121, (41) Daphn
 CANDIDATE_SKY_SAMPLE = 25
 CANDIDATE_SKY_SEED = 20260922
 OUT = ROOT / "figures"
-OUT.mkdir(parents=True, exist_ok=True)
 
 plt.rcParams.update(
     {
@@ -1585,6 +1586,7 @@ def render_inversion() -> None:
 
 
 def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
     # Own-period copy: only Figures 11 and 7, for both failure variants.
     for variant in VARIANTS:
         render_latitude(variant)

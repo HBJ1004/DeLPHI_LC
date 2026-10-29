@@ -25,8 +25,10 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 WORKTREE = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(WORKTREE))
-FOLLOWUP = WORKTREE.parent
-OWN = FOLLOWUP / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
+OWN = DataPath()
 OUTPUT = OWN / "spacecraft"
 SNAPSHOT = FOLLOWUP.parent / "damit-20250610T000301Z"
 TRAINING = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"

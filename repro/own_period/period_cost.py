@@ -34,13 +34,15 @@ from lc_pipeline.v2.convexinv import (
 from lc_pipeline.v2.serialization import sha256_file
 
 REPO = Path(__file__).resolve().parents[2]
-BASE = REPO.parent
+from repro.own_period import DataPath
+
+BASE = DataPath("../..")
 ROOT = BASE.parent
 SOURCE = BASE / "data/solver-internal-capacity-corrected/20260911/expanded-solver/convexinv"
 CATALOG = BASE / "inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl"
-COHORT = BASE / "data/own-period-20261021/own-periods-170.json"
+COHORT = DataPath('own-periods-170.json')
 LIGHTCURVES = ROOT / "damit-20250610T000301Z"
-OUTPUT = BASE / "data/own-period-20261021/period-cost"
+OUTPUT = DataPath('period-cost')
 SAMPLE_OBJECTS = tuple(f"asteroid_{n}" for n in (
     101, 103, 104, 105, 106, 107, 108, 109, 111, 114,
     115, 116, 117, 118, 120, 121, 123, 125, 134, 153,

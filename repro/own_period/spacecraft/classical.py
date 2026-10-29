@@ -56,7 +56,9 @@ from lc_pipeline.v2.convexinv import (  # noqa: E402
 )
 from lc_pipeline.v2.preprocessing import Observation, ObservationEpoch  # noqa: E402
 
-OWN = WORKTREE.parent / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+OWN = DataPath()
 SPACECRAFT = OWN / "spacecraft"
 BENCHMARK = OWN / "benchmark"
 OUTPUT = SPACECRAFT / "classical"

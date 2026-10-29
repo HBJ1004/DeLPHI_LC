@@ -19,7 +19,9 @@ from statistics import median
 
 from repro.own_period import period_cost as cost
 
-DATA = cost.BASE / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+DATA = DataPath()
 OUTPUT = DATA / "refine-chain"
 EVALUATION_LOCK = DATA / "benchmark/evaluation-lock.json"
 COST_SUMMARY = cost.OUTPUT / "period-cost-summary.json"

@@ -18,8 +18,10 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-FOLLOWUP = Path(__file__).resolve().parents[4]
-OUTPUT = FOLLOWUP / "data/own-period-20261021/spacecraft"
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
+OUTPUT = DataPath('spacecraft')
 RAW = OUTPUT / "raw"
 ARCHIVE = FOLLOWUP / "data/training-expansion-cache/ALCDEF_ALL-20250428.zip"
 PUBLISHED = FOLLOWUP / "data/generalization-20260910/locked-cohort/alcdef-raw-30-20260911.json"

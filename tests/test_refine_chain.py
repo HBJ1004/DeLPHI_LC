@@ -290,10 +290,9 @@ def test_reference_free_minima_reject_invalid_rows(rows):
         refine.score_periods(rows)
 
 
-def test_real_two_trial_refinement_smoke(tmp_path):
+def test_real_two_trial_refinement_smoke(tmp_path, require_delphi_files):
     binary = cost.SOURCE / "period_scan"
-    if not binary.is_file():
-        pytest.skip("expanded period_scan binary absent")
+    require_delphi_files(binary)
     assert os.access(binary, os.X_OK)
     lightcurve = tmp_path / "tiny-lightcurve.txt"
     lines = ["2"]

@@ -9,8 +9,10 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
-OP = ROOT / "DeLPHI-followup/data/own-period-20261021"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+OP = DataPath()
 V = OP / "v67"
 PUB_V6 = ROOT / "paper/k3-reproduction/publication-summary.json"
 PUB_V7 = ROOT / "paper/k3-followup/transfer/followup-summary.json"

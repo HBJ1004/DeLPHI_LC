@@ -172,10 +172,11 @@ def test_manifest_rejects_invalid_periods(bad):
         t.period_manifest(periods, "x", t.PROVENANCE)
 
 
-def test_published_predictions_reproduce_saved_scores():
-    # External artifacts are optional in a standalone checkout, mandatory here.
-    if not t.PUBLISHED.is_dir():
-        pytest.skip("published follow-up artifacts are unavailable")
+def test_published_predictions_reproduce_saved_scores(require_delphi_files):
+    # Missing optional inputs skip; present files must still satisfy every check.
+    require_delphi_files(t.REFERENCES,
+                         *(t.PUBLISHED / f"{oid}.json" for oid in t.OBJECT_IDS),
+                         *(t.PUBLISHED_SCORES / f"{oid}.json" for oid in t.OBJECT_IDS))
     references = t.read(t.REFERENCES)
     predictions = t.published_predictions(t.PUBLISHED)
     errors = []
@@ -312,7 +313,7 @@ def test_exclusive_create_preflights_siblings_and_rejects_dangling_symlink(tmp_p
     assert first.read_text() == "original"
 
 
-def test_predict_requires_real_inherited_gpu_lock(tmp_path):
+def test_predict_requires_real_inherited_gpu_lock(tmp_path, temporary_delphi_data):
     path = tmp_path / "gpu.lock"
     path.touch()
     env = {**os.environ, "LOCK": str(path), "PYTHONDONTWRITEBYTECODE": "1", "CUDA_VISIBLE_DEVICES": ""}

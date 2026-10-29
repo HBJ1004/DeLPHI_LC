@@ -27,7 +27,9 @@ from repro.own_period import predict_oof as prediction
 sys.dont_write_bytecode = True
 
 OBJECT_ID = "asteroid_1714"
-OWN = prediction.FOLLOWUP / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+OWN = DataPath()
 SPACECRAFT = OWN / "spacecraft"
 EXPECTED_ERROR_DEG = 71.67375588798046
 TOLERANCE = 1e-3  # GPU-to-GPU rounding; attempt 2 differed by 1.52e-06 per axis component, 1.0e-04 deg

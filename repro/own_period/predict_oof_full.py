@@ -53,8 +53,10 @@ from lc_pipeline.k3.tokenizer import tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, collate_examples
 from lc_pipeline.v2.preprocessing import KnownPeriod
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 DATA = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
 CATALOG = DATA / "catalog.jsonl"
 SPLITS = DATA / "publication-splits-v2.3.json"

@@ -19,8 +19,10 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-FOLLOWUP = Path(__file__).resolve().parents[4]
-OUTPUT = FOLLOWUP / "data/own-period-20261021/spacecraft"
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
+OUTPUT = DataPath('spacecraft')
 ALCDEF_ZIP = FOLLOWUP / "data/training-expansion-cache/ALCDEF_ALL-20250428.zip"
 PDS = "https://sbnarchive.psi.edu/pds4/non_mission/orex.gbo.ast-bennu.lightcurves-images_V1_0/"
 PCK_URLS = {

@@ -4,21 +4,24 @@
 # Every GPU chunk waits for an idle GPU, takes the shared lock, and stops after
 # about 55 minutes; the next chunk resumes from the records already written.
 set -euo pipefail
-W="$(cd "$(dirname "$0")/../.." && pwd)"
-PY=/home/onlyb/.venvs/delphi-reliability-20260915/bin/python
-OUT="$W/../data/own-period-20261021/reliability"
-MARK="$W/../data/own-period-20261021/benchmark/explore-timed.log"
-GPU_WAIT="$W/../source-quality-ladder/repro/quality_ladder/gpu_wait.sh"
-LOCK=/home/onlyb/MERCUDA-paper/.gpu.lock
+W="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+: "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
+PY="${PYTHON:-python}"
+OUT="$DELPHI_DATA/reliability"
+MARK="$DELPHI_DATA/benchmark/explore-timed.log"
 export PYTHONPATH="$W" OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}" MKL_NUM_THREADS="${OMP_NUM_THREADS:-2}" OPENBLAS_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 cd "$W"
 
 until grep -q "exploratory timing done" "$MARK" 2>/dev/null; do sleep 300; done
 
 gpu() {  # one locked GPU chunk
-  bash "$GPU_WAIT"
+  if [ -n "${GPU_WAIT:-}" ]; then bash "$GPU_WAIT"; fi
   echo "$(date -u +%FT%TZ) chunk: $*"
-  flock "$LOCK" "$PY" -m repro.own_period.reliability "$@"
+  if [ -n "${GPU_LOCK:-}" ]; then
+    flock "$GPU_LOCK" "$PY" -m repro.own_period.reliability "$@"
+  else
+    "$PY" -m repro.own_period.reliability "$@"
+  fi
 }
 
 until_marker() {  # repeat a chunked GPU command until its marker exists

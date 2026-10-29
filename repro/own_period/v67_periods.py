@@ -18,8 +18,10 @@ import hashlib
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
-OP = ROOT / "DeLPHI-followup/data/own-period-20261021"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+OP = DataPath()
 SOURCE = OP / "own-periods-170.json"
 LOCK = OP / "benchmark/evaluation-lock.json"
 OUT = OP / "v67/own-periods-170-rounded6.json"

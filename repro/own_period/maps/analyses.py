@@ -38,9 +38,11 @@ from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
 from lc_pipeline.k3.internal_validation_reporting import reassignment_null  # noqa: E402
 from lc_pipeline.k3.reliability_supplement import _unseal  # noqa: E402
 
-FOLLOWUP = REPRO.parents[1]
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
 RELIABILITY = FOLLOWUP / "data/reliability-20260915/run-1"
-OWN = FOLLOWUP / "data/own-period-20261021"
+OWN = DataPath()
 SEEDS = (17, 42, 137, 777, 2027)
 
 

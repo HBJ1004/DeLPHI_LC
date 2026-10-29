@@ -8,12 +8,11 @@
 # idle GPU and taking the shared lock separately.  A restart skips finished
 # asteroids (append-only JSONL) and finished steps (existing output files).
 set -u
-WT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-op-lowq"
-PY=/home/onlyb/.venvs/delphi-reliability-20260915/bin/python
-OUT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/own-period-20261021/lowq"
-MARK="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/own-period-20261021/benchmark/explore-timed.log"
-GPUWAIT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-quality-ladder/repro/quality_ladder/gpu_wait.sh"
-LOCK=/home/onlyb/MERCUDA-paper/.gpu.lock
+WT="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+: "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
+PY="${PYTHON:-python}"
+OUT="$DELPHI_DATA/lowq"
+MARK="$DELPHI_DATA/benchmark/explore-timed.log"
 export PYTHONPATH="$WT" OMP_NUM_THREADS=2
 cd "$WT" || exit 1
 mkdir -p "$OUT"
@@ -23,8 +22,12 @@ log() { echo "$(date -u +%FT%TZ) $*"; }
 # Exit code 3 means "more chunks needed".
 gpu_chunks() {
   while true; do
-    bash "$GPUWAIT"
-    flock "$LOCK" "$@"
+    if [ -n "${GPU_WAIT:-}" ]; then bash "$GPU_WAIT"; fi
+    if [ -n "${GPU_LOCK:-}" ]; then
+      flock "$GPU_LOCK" "$@"
+    else
+      "$@"
+    fi
     rc=$?
     if [ "$rc" -eq 0 ]; then return 0; fi
     if [ "$rc" -ne 3 ]; then log "chunk failed with exit code $rc: $*"; return "$rc"; fi
@@ -33,7 +36,7 @@ gpu_chunks() {
 
 log "chain start, waiting for the timed benchmark marker"
 until grep -q "exploratory timing done" "$MARK" 2>/dev/null; do sleep 300; done
-log "marker found; lc_pipeline from $($PY -c 'import lc_pipeline; print(lc_pipeline.__file__)')"
+log "marker found; lc_pipeline from $("$PY" -c 'import lc_pipeline; print(lc_pipeline.__file__)')"
 
 # 1. Validation: published prediction path with the DAMIT period, first 500 asteroids.
 V="$OUT/validation-damit-period-500.jsonl"

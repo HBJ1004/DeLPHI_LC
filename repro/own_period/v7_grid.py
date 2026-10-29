@@ -40,8 +40,10 @@ import numpy as np
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline.k3 import grid_benchmark_scoring as gs
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 PUBLISHED = FOLLOWUP / "data/pole-grid-benchmark/20260912-environment-relocked-v3"
 PUBLISHED_LOCK = PUBLISHED / "lock.json"
 PUBLISHED_FULL = PUBLISHED / "full"
@@ -260,7 +262,7 @@ def validate(args: argparse.Namespace) -> int:
 def crosscheck(args: argparse.Namespace) -> int:
     """Compare the classical20 fits with the own-period full grid of the 140 (read only)."""
     output = args.execution.resolve()
-    grid_root = FOLLOWUP / "data/own-period-20261021/benchmark/full-grid/cases"
+    grid_root = DataPath('benchmark/full-grid/cases')
     worst, differing, compared, cases = 0.0, [], 0, 0
     for other in sorted(grid_root.glob("*-r0-classical20-cold")):
         oid = other.name.split("-r0-")[0]

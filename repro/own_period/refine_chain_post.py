@@ -30,10 +30,12 @@ import time
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO.parent / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+DATA = DataPath()
 OUTPUT = DATA / "refine-chain"
 BENCHMARK = DATA / "benchmark"
-PUBLISHED = REPO.parent / "data/direct-workflow-benchmark"
+PUBLISHED = DataPath("../direct-workflow-benchmark")
 PROVENANCE = "own-fourier-gpu-top1+narrow-refine"
 ARMS = ("delphi6", "classical12", "classical146")
 SAVED_ARMS = ("delphi", "standard6", "classical20")
@@ -158,7 +160,10 @@ def command_lock(args) -> int:
 
 def require_gpu_lock() -> None:
     """Check the inherited fd and an independent conflicting flock, not a flag."""
-    path = Path(os.environ.get("LOCK", "/home/hangbin9/MERCUDA-paper/.gpu.lock"))
+    lock = os.environ.get("LOCK")
+    if not lock:
+        return
+    path = Path(lock)
     try:
         inherited, actual = os.fstat(9), path.stat()
         if (inherited.st_dev, inherited.st_ino) != (actual.st_dev, actual.st_ino):

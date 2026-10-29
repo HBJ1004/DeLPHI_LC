@@ -10,8 +10,9 @@ from pathlib import Path
 
 import numpy as np
 
-PUBLISHED = Path(__file__).resolve().parents[4] / (
-    "inputs/frozen-artifacts/k3-definitive-7874092/evaluations")
+from repro.own_period import DataPath
+
+PUBLISHED = DataPath("../../inputs/frozen-artifacts/k3-definitive-7874092/evaluations")
 SEEDS = (17, 42, 137, 777, 2027)
 
 

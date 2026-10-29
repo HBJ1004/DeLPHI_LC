@@ -31,8 +31,10 @@ import numpy as np
 from lc_pipeline.v2.data import parse_damit_lightcurve
 from repro.period_search.search import Curve, estimate
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 SNAPSHOT = ROOT / "damit-20250610T000301Z"
 CENSUS = FOLLOWUP / "source/experiments/lowq_damit_census_20260917"
 INDEX = CENSUS / "input-index.json"

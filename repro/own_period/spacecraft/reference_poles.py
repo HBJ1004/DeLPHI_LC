@@ -9,7 +9,9 @@ import math
 import re
 from pathlib import Path
 
-OUTPUT = Path(__file__).resolve().parents[4] / "data/own-period-20261021/spacecraft"
+from repro.own_period import DataPath
+
+OUTPUT = DataPath('spacecraft')
 OBJECTS = (
     ("Ceres", 1, 3414, "pck00011.tpc"),
     ("Vesta", 4, 3415, "pck00011.tpc"),

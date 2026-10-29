@@ -13,10 +13,12 @@ import hashlib
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 CANDIDATES = FOLLOWUP / "experiments/period-refinement-20260921/end-to-end/candidates-v1.jsonl"
-OUT = FOLLOWUP / "data/own-period-20261021"
+OUT = DataPath()
 PROVENANCE = "own-fourier-gpu-top1"
 
 

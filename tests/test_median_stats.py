@@ -143,7 +143,7 @@ def test_reassignment_bounds_are_draw_quantiles_not_bootstrap_limits():
     assert result["parent_median"] == 6
 
 
-def test_alcdef_positive_difference_reverses_both_arms_and_interval():
+def test_alcdef_positive_difference_reverses_both_arms_and_interval(temporary_delphi_data):
     evidence = Evidence()
     evidence.cache[OWN / "own-period-scores.json"] = {"alcdef": {
         "objects": [{"object_id": i, "own_error_deg": v} for i, v in zip("abc", [1, 10, 20])],

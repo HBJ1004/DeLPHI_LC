@@ -223,7 +223,7 @@ def test_bootstrap_cost_and_incomplete_calls():
         cost.estimate_cost(blocks, 1000)
 
 
-def test_lower_bound_keeps_timed_out_blocks(tmp_path):
+def test_lower_bound_keeps_timed_out_blocks(tmp_path, temporary_delphi_data):
     blocks = [{"wall_seconds": 20, "cpu_seconds": 10, "rows_returned": 10,
                "status": "complete", "timed_out": False} for _ in range(10)]
     blocks[0].update(status="not_finished", timed_out=True, rows_returned=0,
@@ -266,7 +266,7 @@ def fake_complete(task, cpu_seconds=10):
             "wall_seconds": cpu_seconds * 2, "fitted_rows": []}
 
 
-def test_calibration_repeats_identical_blocks_without_startup(tmp_path):
+def test_calibration_repeats_identical_blocks_without_startup(tmp_path, temporary_delphi_data):
     counts = fixture_counts()
     sample = cost._sample_tasks(counts, tmp_path, cost.SOURCE)
     calibration = cost._sample_tasks(counts, tmp_path, cost.SOURCE, True)
@@ -280,7 +280,7 @@ def test_calibration_repeats_identical_blocks_without_startup(tmp_path):
         assert task["timeout_seconds"] == 600
 
 
-def test_sample_validation_does_not_drop_failed_or_missing_blocks(tmp_path):
+def test_sample_validation_does_not_drop_failed_or_missing_blocks(tmp_path, temporary_delphi_data):
     counts = fixture_counts()
     records = [fake_complete(task) for task in cost._sample_tasks(counts, tmp_path, cost.SOURCE)]
     assert len(cost._validated_samples(records, counts)) == 242
@@ -312,7 +312,7 @@ def test_count_cli_reads_observation_span_without_reference_solutions(tmp_path):
         cost.main(command)
 
 
-def test_score_waits_for_full_scans_before_reading_references(tmp_path):
+def test_score_waits_for_full_scans_before_reading_references(tmp_path, temporary_delphi_data):
     counts = fixture_counts()
     cost._write_json(tmp_path / "trial-counts.json", {"objects": list(counts.values())})
     with (tmp_path / "sample.jsonl").open("x") as stream:
@@ -325,7 +325,7 @@ def test_score_waits_for_full_scans_before_reading_references(tmp_path):
     assert not (tmp_path / "period-cost-summary.json").exists()
 
 
-def test_score_end_to_end_with_synthetic_tables(tmp_path):
+def test_score_end_to_end_with_synthetic_tables(tmp_path, temporary_delphi_data):
     counts = fixture_counts()
     grid = cost.TrialGrid(0, 1)
     for oid in cost.FULL_OBJECTS:
@@ -367,10 +367,9 @@ def test_score_end_to_end_with_synthetic_tables(tmp_path):
         cost.main(["score", "--output-dir", str(tmp_path), "--catalog", str(catalog)])
 
 
-def test_real_two_trial_smoke(tmp_path):
+def test_real_two_trial_smoke(tmp_path, require_delphi_files):
     binary = cost.SOURCE / "period_scan"
-    if not binary.is_file():
-        pytest.skip("expanded period_scan binary absent")
+    require_delphi_files(binary)
     lightcurve = tmp_path / "tiny-lightcurve.txt"
     write_lightcurve(lightcurve)
     span = cost.lightcurve_span(lightcurve)

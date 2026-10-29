@@ -28,16 +28,12 @@ from repro import compute_reference_baselines as reference
 
 
 REPO = Path(__file__).resolve().parents[2]
-FOLLOWUP = REPO.parent
+from repro.own_period import DataPath
+
+FOLLOWUP = DataPath("../..")
 NOTEBOOKS = FOLLOWUP.parent
-OWN = FOLLOWUP / "data/own-period-20261021"
-SCRATCH = Path(
-    "/tmp/claude-1000/-mnt-d-Downloads-Colab-Notebooks/"
-    "3fa212d5-e372-4122-b9a4-788df746770f/scratchpad/p1map"
-)
-INPUT = SCRATCH / "mean-macros.txt"
+OWN = DataPath()
 OUTPUT = OWN / "median-stats.json"
-REPORT = SCRATCH / "m1b-report.md"
 PAPER = NOTEBOOKS / "paper-rev-20261021/sample701.tex"
 RESAMPLES = 10_000
 CONDITION = "two_d-block_count-1-per_block_cap-None"
@@ -269,7 +265,7 @@ def randomized_paired_statistics(values, own, indices) -> dict:
 
 
 def source_path(comment: str) -> Path | None:
-    match = re.search(r"(?:/mnt/d/Downloads/Colab Notebooks/)?DeLPHI-followup/[^:]+?\.json", comment)
+    match = re.search(r"(?:/[^:\n]*?)?DeLPHI-followup/[^:\n]+?\.json", comment)
     if match:
         path = Path(match.group())
         return path if path.is_absolute() else NOTEBOOKS / path
@@ -1183,7 +1179,9 @@ def write_report(result: dict, path: Path, pytest_output: str, *, output_path: P
                   "  Sources: " + "; ".join(f"`{p}`" for p in e["source_files"]) + "."]
     lines += ["", "## Pytest output", "", "```text", pytest_output.rstrip(), "```"]
     command = ["taskset", "-c", "12-23", "nice", "-n", "19", "env", "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "MKL_NUM_THREADS=1", "PYTHONDONTWRITEBYTECODE=1",
-               sys.executable, "-m", "repro.own_period.median_stats", "--out", str(output_path), "--report", str(path)]
+               sys.executable, "-m", "repro.own_period.median_stats", "--input-list", result["input_list"],
+               "--manuscript", result.get("manuscript", str(PAPER)),
+               "--out", str(output_path), "--report", str(path)]
     lines += ["", "## Regenerate", "", f"From `{REPO}`:", "", "```bash", shlex.join(command), "```",
               "", "No manuscript edits, refine-chain imports/edits, GPU use, commits, or pushes. One process with one numerical-library thread."]
     for title, args in [("git diff --stat", ["git", "diff", "--stat"]),
@@ -1201,13 +1199,15 @@ def write_report(result: dict, path: Path, pytest_output: str, *, output_path: P
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input-list", type=Path, default=INPUT)
+    parser.add_argument("--input-list", type=Path, help="macro inventory (required unless --report-only)")
     parser.add_argument("--out", "--output", dest="output", type=Path, default=OUTPUT)
     parser.add_argument("--manuscript", type=Path, default=PAPER)
-    parser.add_argument("--report", type=Path, default=REPORT)
+    parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--pytest-output", type=Path)
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
+    if not args.report_only and args.input_list is None:
+        parser.error("--input-list is required unless --report-only")
     result = read_json(args.output) if args.report_only else build(args.input_list, args.manuscript)
     output_error = None
     if not args.report_only:

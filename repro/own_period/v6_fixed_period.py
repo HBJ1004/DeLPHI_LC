@@ -46,8 +46,10 @@ from lc_pipeline.k3.downstream import (
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from lc_pipeline.physics.axial import axial_angular_error_deg
 
-ROOT = Path(__file__).resolve().parents[4]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 DATA = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
 CATALOG = DATA / "catalog.jsonl"
 SPLITS = DATA / "publication-splits-v2.3.json"

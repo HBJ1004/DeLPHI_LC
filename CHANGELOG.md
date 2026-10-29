@@ -1,5 +1,19 @@
 # Release notes
 
+## paper-v2 (software version 2.0.0) — 2026-10-29
+
+Code for the exploratory Paper I revision analyses, using the frozen networks.
+
+- Own-period predictions for the 170-asteroid sample, ZTF and ALCDEF; inversion
+  benchmarks including full-grid and loaded-network runs; score-map and
+  candidate-count analyses; lower-quality census; reliability, network and
+  withheld-lightcurve tests; V6/V7 comparisons; median statistics and figures.
+- Configurable shell driver paths, interpreters and optional GPU coordination;
+  explicit scratch destinations for the median tools.
+- A reproduction guide mapping result families to scripts and data folders.
+  Data, predictions and fits are in a separate Zenodo data record
+  (DOI: to be added).
+
 ## paper-v1 (software version 1.1) — 2026-10-01
 
 The code and evidence for the paper (Jo, Ishiguro and Lee, "DeLPHI: Pole-Axis

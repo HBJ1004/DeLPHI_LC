@@ -25,7 +25,9 @@ PUB_GRID = R.FOLLOWUP / "data/reliability-publication-20260916-final/k3_data_deg
 PUB_TABLE = R.RUN / "sampling-table.csv"
 PUB_BASE = R.FOLLOWUP / "data/interpretation-20260930/sampling-baselines.json"
 PUB_SUPP = R.FOLLOWUP / "data/reliability-supplement-20260916-final-v8/k3_supplement_numbers.json"
-OWN_SCORES = R.FOLLOWUP / "data/own-period-20261021/own-period-scores-main.json"
+from repro.own_period import DataPath
+
+OWN_SCORES = DataPath('own-period-scores-main.json')
 VALIDATION_IDS = ("asteroid_3521", "asteroid_1727")
 
 

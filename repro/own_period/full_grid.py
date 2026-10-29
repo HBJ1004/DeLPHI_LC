@@ -21,8 +21,10 @@ from lc_pipeline import grid_benchmark as grid
 from lc_pipeline import workflow_benchmark as prior
 from lc_pipeline.v2.convexinv import _parse_lightcurve_brightness
 
-ROOT = Path(__file__).resolve().parents[4]
-BENCH = ROOT / "DeLPHI-followup/data/own-period-20261021/benchmark"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+BENCH = DataPath('benchmark')
 OUT = BENCH / "full-grid"
 ARMS = ("standard6", "classical20")
 

@@ -20,7 +20,9 @@ import numpy as np
 
 from repro.own_period import predict_oof as prediction
 
-OWN = prediction.FOLLOWUP / "data/own-period-20261021"
+from repro.own_period import DataPath
+
+OWN = DataPath()
 SPACECRAFT = OWN / "spacecraft"
 OBJECT_ID = "asteroid_1714"
 MIN_POINTS = 15

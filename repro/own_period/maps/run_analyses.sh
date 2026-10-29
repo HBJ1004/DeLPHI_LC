@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # CPU analyses and figures of the maps package, after run_predictions.sh.
 set -euo pipefail
-WT="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/source-op-maps"
-OP="/mnt/d/Downloads/Colab Notebooks/DeLPHI-followup/data/own-period-20261021"
+WT="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+: "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
+PY="${PYTHON:-python}"
+OP="$DELPHI_DATA"
 OUT="$OP/maps"
-PY=/home/onlyb/.venvs/delphi-reliability-20260915/bin/python
 export PYTHONPATH="$WT" OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2
 cd "$WT"
 until grep -q "exploratory timing done" "$OP/benchmark/explore-timed.log" 2>/dev/null; do sleep 300; done
