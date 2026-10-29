@@ -1,5 +1,16 @@
+> **Archive location (2026-10-29).** The dated text below records the
+> original-period comparison. Its scores and execution summaries are in
+> [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz),
+> folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`, in
+> [Zenodo data record 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
+> The revised own-period results and saved fits are separate archives in that
+> record, as described in [the reproduction guide](../../docs/reproduction.md#paper-i-results).
+> The new fits archive covers the own-period tree; the original-period raw
+> fits mentioned below are a different set. Recorded hashes and numerical
+> results below are preserved.
+
 > **Note added 2026-10-01.** This is a record written at the time of the run
-> and is kept unchanged. The scored comparison is in release `paper-v1`,
+> and keeps its numerical results. The scored comparison is in the Zenodo evidence archive,
 > folder `part-b-analyses/workflow-benchmark/` of
 > `delphi-paper-v1-evidence.tar.gz` (`score.json`, `score-loaded.json` and the
 > execution summaries `evaluation/execution.json` and

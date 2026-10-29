@@ -11,7 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_identity_is_consistent():
     citation = yaml.safe_load((ROOT / "CITATION.cff").read_text(encoding="utf-8"))
-    assert __version__ == citation["version"] == "2.0.0"
-    assert citation["url"].endswith("/releases/tag/paper-v2")
+    assert __version__ == citation["version"] == "1.0.0"
+    assert citation["url"] == "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0"
+    assert str(citation["date-released"]) == "2026-10-29"
+    assert any(identifier["type"] == "doi" and identifier["value"] == "10.5281/zenodo.23757942"
+               for identifier in citation["identifiers"])
+    for authors in (citation["authors"], citation["preferred-citation"]["authors"]):
+        lee = next(author for author in authors if author["family-names"] == "Lee")
+        assert lee["orcid"] == "https://orcid.org/0000-0002-6839-075X"
     assert get_version_info()["scientific_release_approved"] is True
     assert "Phase 37" not in (ROOT / "LICENSE").read_text(encoding="utf-8")

@@ -24,16 +24,16 @@ inversion should start from all six.
 
 ## 2. Download and check one network set
 
-The trained networks are in release
-[`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0) as five
+Use the code at tag `v1.0.0`. The trained networks are in the
+[Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942), as five
 files `k3-oof-fold-0.tar.gz` to `k3-oof-fold-4.tar.gz`. Each holds the five
 networks trained in one of the five cross-validation runs of the paper
 (the `fold` in the name is the run). They are not in the Git source tree.
 
 ```bash
 mkdir -p networks && cd networks
-curl -LO https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/k3-oof-fold-0.tar.gz
-curl -LO https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/SHA256SUMS
+curl -LO https://zenodo.org/records/23757942/files/k3-oof-fold-0.tar.gz
+curl -LO https://zenodo.org/records/23757942/files/SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0.tar.gz: OK"
 tar -xzf k3-oof-fold-0.tar.gz
 cd ..
@@ -206,7 +206,8 @@ standard starting poles used in the paper (Appendix E) are, in ecliptic
 longitude and latitude, (0°, 0°), (180°, 0°), (90°, 60°), (240°, 60°),
 (90°, −60°) and (240°, −60°).
 
-The period must be well constrained (Section 6.3.3): errors of up to 1% changed the mean
+The period must be well constrained. In the original published-period
+sensitivity check (Section 6.3.3), errors of up to 1% changed the mean
 oracle error by about 0.4° or less, but half or twice the period raised it from
 15.8° to 19.3° and 17.7° (still better than the standard poles on these
 asteroids), and choosing between a period and its half or double is the main

@@ -1,6 +1,17 @@
+> **Archive location (2026-10-29).** The dated text below records the
+> original-period comparison. Its scores and execution summaries are in
+> [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz),
+> folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`, in
+> [Zenodo data record 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
+> The revised own-period results and saved fits are separate archives in that
+> record, as described in [the reproduction guide](../../docs/reproduction.md#paper-i-results).
+> The new fits archive covers the own-period tree; the original-period raw
+> fits mentioned below are a different set. Recorded hashes and numerical
+> results below are preserved.
+
 > **Note added 2026-10-01.** This is a record written at the time of the run
-> and is kept unchanged except for the corrected last sentence. Its results are
-> in release `paper-v1`, folder `part-b-analyses/workflow-benchmark/` of
+> and keeps its numerical results; archive locations were updated above. Its results are
+> in the Zenodo evidence archive, folder `part-b-analyses/workflow-benchmark/` of
 > `delphi-paper-v1-evidence.tar.gz`, and are reported in Section 6.4.2 and
 > Appendix E of the paper. The 96-start difference in mean DAMIT-pole
 > disagreement given below as 2.41° is −2.414° in
@@ -57,7 +68,7 @@ The timing run has 420/420 hashed cases. Every newly timed selected axis
 agrees with its saved counterpart to within 0.000002°, and every fitted RMS
 matches exactly. The machine-readable records are
 `classical-ladder-exploratory.json`, `classical-ladder-intervals.json`, and
-`exploratory-loaded-ladder/score.json`. They are in release `paper-v1`
+`exploratory-loaded-ladder/score.json`. They are in the Zenodo evidence archive
 (`part-b-analyses/workflow-benchmark/`). [Corrected 2026-10-01. The note first
 said that the records were local and not in the public evidence release that
 existed then.]

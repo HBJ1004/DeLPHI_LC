@@ -1,80 +1,21 @@
 # Release notes
 
-## paper-v2 (software version 2.0.0) — 2026-10-29
+## 1.0.0 (2026-10-29)
 
-Code for the exploratory Paper I revision analyses, using the frozen networks.
+DeLPHI estimates the rotation period with its own Fourier search and proposes
+three unranked pole-axis candidates from asteroid lightcurves, the observing
+geometry and that period (or a supplied one), for use as six signed
+starting poles in convex lightcurve inversion. This is the software behind
+Paper I as revised.
 
-- Own-period predictions for the 170-asteroid sample, ZTF and ALCDEF; inversion
-  benchmarks including full-grid and loaded-network runs; score-map and
-  candidate-count analyses; lower-quality census; reliability, network and
-  withheld-lightcurve tests; V6/V7 comparisons; median statistics and figures.
-- Configurable shell driver paths, interpreters and optional GPU coordination;
-  explicit scratch destinations for the median tools.
-- A reproduction guide mapping result families to scripts and data folders.
-  Data, predictions and fits are in a separate Zenodo data record
-  (DOI: to be added).
+- K3 scoring, simulated pretraining, real-data training, prediction, safe
+  inference bundles, custom-data training and protocol checks.
+- Own-period predictions and inversion benchmarks; score-map, candidate-count,
+  lower-quality census, reliability, network and withheld-lightcurve analyses;
+  median statistics and figures, with reproduction guides and automated tests.
+- Code at tag `v1.0.0`; trained networks, synthetic data, predictions, results
+  and saved benchmark fits in the single [Zenodo data record,
+  DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
 
-## paper-v1 (software version 1.1) — 2026-10-01
-
-The code and evidence for the paper (Jo, Ishiguro and Lee, "DeLPHI: Pole-Axis
-Candidates for Asteroid Lightcurve Inversion", submitted to PSJ). The trained
-networks and their test predictions are unchanged from `v1.0.0`; this release
-adds everything else the paper reports.
-
-- Evidence archive `delphi-paper-v1-evidence.tar.gz`, whose README lists the
-  files behind each section of the paper.
-- Analysis scripts under `repro/` for the inversion comparison, the
-  interpretation of the score maps, the reduced-data tests, the experimental
-  period search, and the DAMIT census.
-- Rewritten user guides: a first-prediction walk-through with a worked example,
-  a DAMIT converter, geometry from JPL Horizons, an explanation of every output
-  field, and a reproduction guide organized by paper section.
-- A table of the 170 benchmark asteroids with the cross-validation run in which
-  each is a test asteroid (`repro/data/benchmark-asteroids.csv`), and a clearer
-  error when a benchmark asteroid is given to a network set that trained on it.
-- Internal development logs were removed from `docs/`; they remain in the git
-  history and in the earlier tags.
-
-All releases before `paper-v1`, except the trained networks in `v1.0.0`, are
-superseded.
-
-## v1.0 — 2026-09-07 (superseded by paper-v1)
-
-A maintenance release of the DeLPHI K3 software. It closes the independent
-third-audit compatibility findings by:
-
-- supporting the declared NumPy 1.26 floor throughout both the K3 and retained
-  V2 utility modules; and
-- limiting the Matplotlib/pyparsing warning exception to the affected
-  Matplotlib module without importing a version-specific warning class; and
-- supporting gradient scaling across the declared PyTorch 2.2--2.x range.
-
-The earlier `v1.0.0` scientific evidence release and `v1.0.1` audit candidate
-remain available as immutable provenance. This release does not retrain the
-published models or alter the frozen scientific results.
-
-## v1.0.1 — 2026-09-06
-
-- Restored the declared NumPy 1.26 compatibility and added a minimum-dependency
-  CI job.
-- Added safe, checksum-bound inference bundles for models trained with
-  `repro.train_k3_custom`; the standard prediction command now loads published
-  and custom bundles.
-- Marked the three returned candidates as an unordered axial proposal set and
-  clarified that internal scores are not a validated physical-pole ranking.
-- Converted malformed prediction inputs into concise command-line errors.
-- Added a reproducible derivation of control, fixed-work timing, recovery,
-  sensitivity, and refinement disclosures from the frozen evidence.
-- Expanded tests for arbitrary 3-D rotation invariance, bundle tampering,
-  command-line validation, and disclosure provenance.
-- Clarified the fixed-work inversion benchmark (later superseded by the
-  complete pole-search comparison of the paper) and CUDA-versus-CPU numerical
-  parity limits in the user and reproduction guides.
-
-The v1.0.1 maintenance release does not retrain the published models or alter
-the frozen v1.0.0 scientific predictions.
-
-## v1.0.0 — 2026-09-06
-
-Initial public K3 implementation, evaluated fold bundles, and frozen
-publication evidence.
+Earlier development releases (1.0, 1.0.1, 1.1/paper-v1 and the dated evidence
+releases) were withdrawn and superseded by this release.

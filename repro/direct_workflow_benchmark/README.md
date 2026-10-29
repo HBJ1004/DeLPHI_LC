@@ -7,13 +7,21 @@ the exploratory comparison with 18 and 96 classical starts (Tables 4, 10 and
 11). Both searches fit the lightcurves with `convexinv` at the published DAMIT
 period and keep the fit of lowest RMS residual.
 
-The results are in release
-[`paper-v1`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v1),
-archive `delphi-paper-v1-evidence.tar.gz`, folder
-`part-b-analyses/workflow-benchmark/`. That folder holds the locks, the
-execution summaries, the scored files and the three run notes kept here. The
-raw `convexinv` fits of every start (2.6 GB) are not in the release and are
-available from the authors on request.
+The original-period results are in
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz)
+in the [Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942),
+folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`. It holds
+the locks, execution summaries, scores and the three historical run notes kept
+here. The dated notes describe original-period comparisons, rather than the
+revised own-period medians.
+
+Use this repository at tag `v1.0.0` for Paper I as revised. Its own-period
+benchmark results are in `delphi-own-period-results-v1.0.0.tar.gz`, and saved
+fits are in `delphi-benchmark-fits-v1.0.0.tar.gz` in the same data record; both
+extract into `own-period-20261021/`. Set `DELPHI_DATA` to that extracted folder.
+The [Paper I results map](../../docs/reproduction.md#paper-i-results) describes
+the corresponding scripts and frozen sources. The new fits archive covers
+that tree; the historical notes' original-period raw fits are a separate set.
 
 ## Prerequisites
 
@@ -23,7 +31,7 @@ available from the authors on request.
   limits in `convexinv/constants.h`: `MAX_LC` to 210 lightcurves, `MAX_N_OBS`
   to 26,612 observations and `POINTS_MAX` to 1,549 observations per
   lightcurve. The fitting algorithm is unchanged.
-- The trained networks of release `v1.0.0` (`k3-oof-fold-0.tar.gz` to
+- The trained networks in the Zenodo data record (`k3-oof-fold-0.tar.gz` to
   `k3-oof-fold-4.tar.gz`) and a CUDA GPU for the DeLPHI arm.
 - The folder layout of [docs/reproduction.md](../../docs/reproduction.md), with
   the released `workflow-benchmark/` folder copied to
@@ -55,7 +63,7 @@ and of the scored files. They apply to that computer only.
 Steps 7 to 12 were decided after the scores of step 4 were known and are
 exploratory, as stated in Appendix E.
 
-## What can be rerun from the release
+## Rerunning the original-period comparison
 
 - Steps 8, 11 and 13 need only released files and run on a CPU.
   `budget_equivalence.py` and `plot_direct_workflow.py` run from this folder of
@@ -72,7 +80,7 @@ exploratory, as stated in Appendix E.
   absolute paths on the authors' computer and the checksums of the Python
   interpreter, hardware description, solver, lightcurves and networks, and
   every run checks them. Step 1 also reads an earlier lock and the saved fits of the
-  full 146-start search, which are not in the release. A new run on another
+  full 146-start search, which are not in the unchanged evidence archive. A new run on another
   computer needs new locks made with steps 1 and 2 and gives new times.
 
 Every script refuses to overwrite an existing output.
@@ -86,7 +94,8 @@ Every script refuses to overwrite an existing output.
   comparison.
 
 These are records written at the time of the runs. Their numbers are those of
-the scored files and of the paper.
+the original-period scored files. The revised own-period results and medians
+are mapped separately in the reproduction guide.
 
 ## Provenance
 

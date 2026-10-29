@@ -26,11 +26,11 @@ SOURCES = {
         "table3.dat": "https://cdsarc.cds.unistra.fr/ftp/J/A+A/675/A24/table3.dat",
     },
     "synthetic-evidence": {
-        "SHA256SUMS": "https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/SHA256SUMS",
-        "delphi-k3-synthetic-data-v1.0.0.tar.gz": "https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/delphi-k3-synthetic-data-v1.0.0.tar.gz",
+        "SHA256SUMS": "https://zenodo.org/records/23757942/files/SHA256SUMS",
+        "delphi-k3-synthetic-data-v1.0.0.tar.gz": "https://zenodo.org/records/23757942/files/delphi-k3-synthetic-data-v1.0.0.tar.gz",
     },
     "publication-index": {
-        "publication-archive-manifest.json": "https://github.com/HBJ1004/DeLPHI_LC/releases/download/v1.0.0/publication-archive-manifest.json",
+        "publication-archive-manifest.json": "https://zenodo.org/records/23757942/files/publication-archive-manifest.json",
     },
 }
 

@@ -7,11 +7,12 @@ the main results from the released predictions without rerunning any analysis,
 which file and script lie behind each result, and how to arrange the files to
 rerun the analyses.
 
-**Shortest route.** To confirm the main numbers of the paper, you need only the
-16 MB `paper-v1` archive, the code, and Check A: follow
-[the minimal download](#minimal-download-for-check-a), [Install](#install), and
-[Check A](#check-a-main-numbers-from-the-paper-v1-archive). The rest of this
-guide is for checking individual results in detail.
+**Shortest route.** Use this repository at tag `v1.0.0` and the
+[Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
+Download the own-period results and `SHA256SUMS` using the
+[minimal download](#minimal-download-for-check-a), then follow
+[Install](#install) and [Check A](#check-a-paper-i-own-period-results).
+The other archives support the detailed comparisons and reruns below.
 
 A few terms are used throughout.
 
@@ -24,11 +25,11 @@ A few terms are used throughout.
 - **K3** is the name of the DeLPHI model in the code and in file names (`k3-`,
   `delphi-k3`); it refers to the three candidate axes.
 
-## Paper I revision (paper-v2)
+## Paper I results
 
-The `paper-v2` code adds the exploratory Paper I revision analyses with our
-own rotation periods, using the frozen networks. Data, predictions and fits
-are supplied in a separate Zenodo data record (**DOI: to be added**). Its
+The code at tag `v1.0.0` provides the Paper I analyses with our own rotation
+periods, using the frozen networks. Data, predictions and fits are in the
+single [Zenodo data record](https://doi.org/10.5281/zenodo.23757942). Its
 `own-period-20261021/PROTOCOL.md` and the protocols in `census7/`,
 `refine-chain/`, `period-cost/` and `spacecraft/` record the fixed choices,
 validation gates and later amendments. Use the amended network policy where
@@ -36,14 +37,14 @@ specified: the lower-quality census uses the five networks of run 0; ALCDEF
 uses all 25. The main 170 and ZTF use the five networks of their test fold.
 
 The Python runners and shell drivers under `repro/own_period/` use
-`DELPHI_DATA` for the **own-period results folder itself**, containing
+`DELPHI_DATA` for **the extracted `own-period-20261021/` folder**, containing
 `benchmark/`, `lowq/`, `reliability/` and `own-periods-170.json`. This replaces
 the earlier shell setting that named its parent `data/` folder. Settings:
 
 | Setting | Meaning and default |
 |---|---|
 | `DELPHI_REPO` | Code folder; defaults to the repository root found from the shell script's location. |
-| `DELPHI_DATA` | Required own-period results folder, with `benchmark/` directly underneath. Python data paths read this setting lazily when used; imports and `--help` need no setting. An unset or empty value stops a shell driver or Python data access. |
+| `DELPHI_DATA` | The extracted `own-period-20261021/` folder, with `benchmark/` directly underneath. Python data paths read this setting lazily when used; imports and `--help` need no setting. An unset or empty value stops a shell driver or Python data access. |
 | `PYTHON` | Python executable; default `python`. |
 | `CONVEXINV_PYTHON` | Interpreter for `v67_queue.sh` and `v67_finalize.sh`; defaults to `PYTHON`. Set it to the pinned interpreter recorded by the inversion locks. |
 | `GPU_LOCK` | Optional lock-file path. The shell GPU steps use `flock "$GPU_LOCK"` when set. |
@@ -94,6 +95,9 @@ CLI-selected output paths below describe the recorded runs.
 | Network tests and external variants | `network_controls.py`, `summarize_controls.py`, `train_vs_test.py`, `shapley_op.py`, `shapley_check.py`, `external_variants.py`, `nettests_results.py` | **O/**`own-periods-170.json`; frozen models and evaluations; `../internal-validation-20260916/run-1/`; `../interpretation-20260926/shapley/`; external prepared inputs above | **O/**`nettests/controls-{damit,own}/`, `train-vs-test-{damit,own}/`, `shapley-{damit,own}/`, summary and validation JSON; `ztf-variants/`, `no-uncertainty/`, `RESULTS.md` |
 | V6 fixed-period and V7 guided search | `v67_periods.py`, `v6_fixed_period.py`, `v7_grid.py`, `v67_queue.sh`, `v67_finalize.sh`, `v67_results.py` | **O/**`own-periods-170.json`, `own-period-oof.npz`, `benchmark/evaluation-lock.json`; `../pole-grid-benchmark/20260912-environment-relocked-v3/`; earlier paper summaries | **O/**`v67/own-periods-170-rounded6.json`, validation runs, `v6-own-period/`, `v7-own-period/`, score JSON, `v7-own-period/crosscheck-own-period-full-grid.json`, `RESULTS.md` |
 | Withheld-lightcurve test | `reliability.py search --scope withheld`, `withheld-candidates`, `withheld-fits`; corresponding stages in `reliability_chunks.sh`; `reliability_score.py`, `reliability_report.py` | Retained lightcurves and schedule from `../reliability-20260915/run-1/`; searches use only retained observations; fixed 15.8-degree radius | **O/**`reliability/search/periods-withheld.jsonl`, `reliability/withheld/{damit,own}/` candidates and fits; withheld block of `reliability/score/reliability-own-period.json` |
+| Period-search cost | `period_cost.py` | Own-period manifest, `period-cost/PROTOCOL.md`, lightcurves and period-search records | **O/**`period-cost/` (`trial-counts.json`, `period-cost-summary.json`) |
+| Period and pole refinement | `refine_chain.py`, `refine_chain_post.py` | `refine-chain/PROTOCOL.md`, frozen sources, solver and manifests | **O/**`refine-chain/` (`refine-medians.json`, selected fits and scores) |
+| Spacecraft reference checks | `spacecraft/fetch.py`, `convert.py`, `run.py`, `classical.py`, `classical_freep.py`, `posthoc.py`, `eros_loo.py`, `eros_context.py`, `reference_poles.py` | `spacecraft/` protocols, acquired photometry, geometry and independent reference poles | **O/**`spacecraft/` (acquisition, predictions, fits and scores) |
 | Median statistics | `median_stats.py` | Explicit `--input-list` macro inventory and optional `--manuscript`; per-object evidence under **O/**`maps/`, `lowq/`, `reliability/`, `nettests/`, `benchmark/`, `v67/`, `failed-excluded-derived/`, plus published reference records | **O/**`median-stats.json` by default (`--out` overrides); required `--report` path |
 | Median figures | `median_figures.py` | **O/**`median-stats.json` and the same frozen evidence; historical renderers; manuscript and original figures in `../../../paper-rev-20261021/` | Required `--out-dir`: PDFs, PNGs and `values.json`; `f1-report.md` and `f2-report.md` in its parent folder |
 
@@ -117,91 +121,92 @@ Median commands require explicit scratch destinations, for example:
 
 ## 1. What to download
 
-Two releases of the repository [HBJ1004/DeLPHI_LC](https://github.com/HBJ1004/DeLPHI_LC)
-are needed, and the tag `paper-v1` marks the code that produced the results.
-All other releases are earlier versions of this material and are superseded.
+Use the code from the sole software release
+[`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0).
+All files below are in the single
+[Zenodo data record](https://doi.org/10.5281/zenodo.23757942), under
+`https://zenodo.org/records/23757942/files/<name>`.
 
-| Release | File | Size | Contents | Needed for |
-|---|---|---|---|---|
-| [`paper-v1`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v1) | `delphi-paper-v1-evidence.tar.gz` | 16.1 MB | Results of every analysis that is not in `v1.0.0`, with a `README.md` that maps each paper section to its files. `part-a-validation/` holds the reduced-data tests, other photometry, internal checks and withheld-lightcurve test; `part-b-analyses/` holds the reference baselines, interpretation, inversion comparison, period search and DAMIT census | Every check |
-| | `SHA256SUMS` | 98 B | Checksum of the archive | |
-| [`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0) | `delphi-k3-artifacts-v1.0.0.tar.gz` | 0.93 GB | Extracts to `artifact-root/`: test predictions and score maps of the 170 asteroids (`evaluations/`), the 25 trained networks as PyTorch checkpoints with their training logs (`models/`), the control tests, and the summary of release `v1.0.0` (`release/`) | Main results, controls, reruns |
-| | `delphi-k3-synthetic-data-v1.0.0.tar.gz` | 1.58 GB | Extracts to `synthetic-data/`: the 20,000 / 2,000 / 2,000 simulated training, validation and test asteroids | Retraining, DAMIT census, full verification |
-| | `k3-oof-fold-0.tar.gz` ... `k3-oof-fold-4.tar.gz` | 12.2 MB each | The five networks of each cross-validation run, as used by `delphi-k3-predict` | Running DeLPHI, inversion comparison |
-| | `delphi-k3-source-v1.0.0.tar.gz` | 0.35 MB | The code at release `v1.0.0` (commit `4d1bf13`) | Not needed with the `paper-v1` code |
-| | `delphi-k3-v1-comparator-v1.0.0.npz` | 33 kB | Results of an earlier, different model, used only by the `v1.0.0` summary and its verification; not used in the paper | Check C, full verification |
-| | `SHA256SUMS` | | Checksums of the five network archives | |
-| | `publication-archive-manifest.json` | | Checksums and sizes of the four archives above and `VERIFY.md` | |
-| | `VERIFY.md`, `release-manifest.json`, `parity.json`, `DeLPHI-v1.0-publication-*.json` | | Records of how the release was built and checked | |
+| File | Contents and extraction layout |
+|---|---|
+| [`delphi-own-period-results-v1.0.0.tar.gz`](https://zenodo.org/records/23757942/files/delphi-own-period-results-v1.0.0.tar.gz) | Paper I revision predictions, scores, protocols, median statistics and figures; extracts to `own-period-20261021/`, the folder `DELPHI_DATA` points to |
+| [`delphi-benchmark-fits-v1.0.0.tar.gz`](https://zenodo.org/records/23757942/files/delphi-benchmark-fits-v1.0.0.tar.gz) | Saved `convexinv` fits of the inversion benchmark; extracts into the same `own-period-20261021/` tree |
+| [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/23757942/files/delphi-supporting-results-v1.0.0.tar.gz) | Other result folders cited by the paper; extracts to sibling folders of `own-period-20261021/` |
+| [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz) | Supporting validation and original-period analyses, unchanged bytes; extracts to `delphi-paper-v1-evidence/`, containing `part-a-validation/` and `part-b-analyses/` (abbreviated **A/** and **B/** below) |
+| [`delphi-k3-artifacts-v1.0.0.tar.gz`](https://zenodo.org/records/23757942/files/delphi-k3-artifacts-v1.0.0.tar.gz) | Extracts to `artifact-root/`: predictions and score maps (`evaluations/`), 25 trained checkpoints and logs (`models/`), controls and original summary (`release/`) |
+| [`delphi-k3-synthetic-data-v1.0.0.tar.gz`](https://zenodo.org/records/23757942/files/delphi-k3-synthetic-data-v1.0.0.tar.gz) | Extracts to `synthetic-data/`: 20,000 training, 2,000 validation and 2,000 test simulated asteroids |
+| [`k3-oof-fold-0.tar.gz`](https://zenodo.org/records/23757942/files/k3-oof-fold-0.tar.gz), [`k3-oof-fold-1.tar.gz`](https://zenodo.org/records/23757942/files/k3-oof-fold-1.tar.gz), [`k3-oof-fold-2.tar.gz`](https://zenodo.org/records/23757942/files/k3-oof-fold-2.tar.gz), [`k3-oof-fold-3.tar.gz`](https://zenodo.org/records/23757942/files/k3-oof-fold-3.tar.gz), [`k3-oof-fold-4.tar.gz`](https://zenodo.org/records/23757942/files/k3-oof-fold-4.tar.gz) | One five-network safe inference bundle per test fold; each extracts to `k3-oof-fold-<fold>/`, with `bundle.json` and five `seed-*.safetensors` files |
+| [`parity.json`](https://zenodo.org/records/23757942/files/parity.json) | Stored inference-bundle parity verification |
+| [`publication-archive-manifest.json`](https://zenodo.org/records/23757942/files/publication-archive-manifest.json) | Unchanged original archive manifest, used for model provenance |
+| [`release-manifest.json`](https://zenodo.org/records/23757942/files/release-manifest.json) | Original release provenance |
+| [`DeLPHI-v1.0-publication-archive-verification.json`](https://zenodo.org/records/23757942/files/DeLPHI-v1.0-publication-archive-verification.json) | Stored archive verification |
+| [`DeLPHI-v1.0-publication-package-determinism.json`](https://zenodo.org/records/23757942/files/DeLPHI-v1.0-publication-package-determinism.json) | Stored package determinism verification |
+| [`README.md`](https://zenodo.org/records/23757942/files/README.md) | Data record inventory and layout |
+| [`SHA256SUMS`](https://zenodo.org/records/23757942/files/SHA256SUMS) | Checksums for the files distributed in this data record |
 
-Both releases contain a file called `SHA256SUMS`, so download them into separate
-folders. The commands below work in a new folder, `delphi-check/`, and clone the
-code at tag `paper-v1` as `DeLPHI_LC/`.
+The original artifacts, synthetic data, fold bundles and small verification
+JSON files retain their recorded bytes and hashes. The original manifest and
+verification reports describe the historical package, including files that
+are no longer distributed. Use the data record's `SHA256SUMS` to verify the
+current downloads; do not use the historical four-archive package verifier as
+a check of this data record.
 
-```bash
-mkdir delphi-check && cd delphi-check
-git clone --branch paper-v1 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
-
-mkdir paper-v1 v1.0.0
-URL=https://github.com/HBJ1004/DeLPHI_LC/releases/download
-(cd paper-v1 && for f in delphi-paper-v1-evidence.tar.gz SHA256SUMS; do
-   curl -L -O $URL/paper-v1/$f; done)
-(cd v1.0.0 && for f in delphi-k3-artifacts-v1.0.0.tar.gz delphi-k3-synthetic-data-v1.0.0.tar.gz \
-     delphi-k3-source-v1.0.0.tar.gz delphi-k3-v1-comparator-v1.0.0.npz VERIFY.md \
-     publication-archive-manifest.json SHA256SUMS \
-     k3-oof-fold-0.tar.gz k3-oof-fold-1.tar.gz k3-oof-fold-2.tar.gz k3-oof-fold-3.tar.gz k3-oof-fold-4.tar.gz; do
-   curl -L -O $URL/v1.0.0/$f; done)
-```
-
-Leave out the archives you do not need; the checks below say which they use.
-
-#### Minimal download for Check A
+For the complete set, start in an empty folder:
 
 ```bash
 mkdir delphi-check && cd delphi-check
-git clone --branch paper-v1 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
-mkdir paper-v1 && cd paper-v1
-curl -L -O https://github.com/HBJ1004/DeLPHI_LC/releases/download/paper-v1/delphi-paper-v1-evidence.tar.gz
-curl -L -O https://github.com/HBJ1004/DeLPHI_LC/releases/download/paper-v1/SHA256SUMS
-sha256sum -c SHA256SUMS && cd ..
-tar xzf paper-v1/delphi-paper-v1-evidence.tar.gz
+git clone --branch v1.0.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
+mkdir downloads
+cd downloads
+URL=https://zenodo.org/records/23757942/files
+for f in delphi-own-period-results-v1.0.0.tar.gz delphi-benchmark-fits-v1.0.0.tar.gz \
+    delphi-supporting-results-v1.0.0.tar.gz delphi-paper-v1-evidence.tar.gz \
+    delphi-k3-artifacts-v1.0.0.tar.gz delphi-k3-synthetic-data-v1.0.0.tar.gz \
+    k3-oof-fold-0.tar.gz k3-oof-fold-1.tar.gz k3-oof-fold-2.tar.gz \
+    k3-oof-fold-3.tar.gz k3-oof-fold-4.tar.gz parity.json \
+    publication-archive-manifest.json release-manifest.json \
+    DeLPHI-v1.0-publication-archive-verification.json \
+    DeLPHI-v1.0-publication-package-determinism.json README.md SHA256SUMS; do
+  curl --fail -L -O "$URL/$f"
+done
+sha256sum --check SHA256SUMS
+cd ..
 ```
 
-### Verify the downloads
+Leave out files you do not need, and add `--ignore-missing` to check only the
+files downloaded. On macOS use `shasum -a 256 --check SHA256SUMS --ignore-missing`.
+Each checked file should end in `OK`. Extract the three results archives to
+one parent folder so the two own-period archives merge and supporting folders
+remain alongside them:
 
 ```bash
-# paper-v1 archive
-(cd paper-v1 && sha256sum -c SHA256SUMS)
-# v1.0.0 networks
-(cd v1.0.0 && sha256sum -c SHA256SUMS)
-# v1.0.0 archives, against the manifest
-(cd v1.0.0 && python3 -c "import json; [print(f['sha256'] + '  ' + f['filename']) for f in json.load(open('publication-archive-manifest.json'))['files']]" | sha256sum -c -)
-```
-
-Each line should end in `OK`. With only some of the archives downloaded, add
-`--ignore-missing` to the third command. On macOS, use `shasum -a 256 -c`
-instead of `sha256sum -c`.
-
-Then extract the archives into `delphi-check/` and check the files inside the
-`paper-v1` archive (no output means that all files match):
-
-```bash
-tar xzf paper-v1/delphi-paper-v1-evidence.tar.gz
+mkdir -p data
+for f in delphi-own-period-results-v1.0.0.tar.gz delphi-benchmark-fits-v1.0.0.tar.gz \
+    delphi-supporting-results-v1.0.0.tar.gz; do
+  tar xzf "downloads/$f" -C data
+done
+export DELPHI_DATA="$PWD/data/own-period-20261021"
+tar xzf downloads/delphi-paper-v1-evidence.tar.gz
 (cd delphi-paper-v1-evidence && sha256sum -c --quiet SHA256SUMS)
-tar xzf v1.0.0/delphi-k3-artifacts-v1.0.0.tar.gz          # only for Checks B and C; creates artifact-root/
+tar xzf downloads/delphi-k3-artifacts-v1.0.0.tar.gz
+# Retraining and the census also need:
+tar xzf downloads/delphi-k3-synthetic-data-v1.0.0.tar.gz
 ```
 
-To check every one of the 9,797 files of release `v1.0.0` after extraction,
-install the package (next section) and run, from `DeLPHI_LC/`,
+### Minimal download for Check A
 
 ```bash
-python -m repro.verify_publication_package --package-directory ../v1.0.0 \
-  --extract-to ../v1.0.0-verified --output ../v1.0.0-verification.json
+mkdir delphi-check && cd delphi-check
+git clone --branch v1.0.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
+mkdir downloads data
+cd downloads
+curl --fail -LO https://zenodo.org/records/23757942/files/delphi-own-period-results-v1.0.0.tar.gz
+curl --fail -LO https://zenodo.org/records/23757942/files/SHA256SUMS
+sha256sum --check SHA256SUMS --ignore-missing
+cd ..
+tar xzf downloads/delphi-own-period-results-v1.0.0.tar.gz -C data
+export DELPHI_DATA="$PWD/data/own-period-20261021"
 ```
-
-This needs the four archives, the manifest and `VERIFY.md`, extracts them again
-into the new folder `../v1.0.0-verified`, and prints a report with
-`"file_count": 9797` and `"passed": true`.
 
 ### Install
 
@@ -223,64 +228,58 @@ The last command checks that the fixed configuration file of the model,
 ## 2. Quick checks without rerunning anything
 
 Run the checks from `delphi-check/` inside the environment created under
-[Install](#install), which provides NumPy and the package. Checks A and B need
-nothing else; Checks C and D are described with their prerequisites.
+[Install](#install). Check A uses the own-period results; Checks B and C
+use the unchanged supporting archives as specified.
 
-### Check A: main numbers from the `paper-v1` archive
+### Check A: Paper I own-period results
 
-This recomputes Section 5.2 and Table 2 from the per-asteroid oracle errors of
-DeLPHI, the six standard starting poles and three random axes (the random value
-of each asteroid is already averaged over 10,000 draws), with the bootstrap
-seeds used by the scripts.
+Recompute the main sample's median from the per-object own-period errors,
+then read the standard-pole and random-axis medians from `median-stats.json`.
+That file records sources, bootstrap intervals and the statistic of each
+entry; the random-axis value is the mean of the draw-wise medians.
 
 ```bash
 python - <<'EOF'
 import json
+import os
+from pathlib import Path
 import numpy as np
 
-catalog = [json.loads(line) for line in open("DeLPHI_LC/repro/data/damit-20250610T000301Z/catalog.jsonl")]
-sample = [row for row in catalog if row["eligible"]]
-print("sample: %d asteroids, %d pole solutions, %d observations" % (
-    len(sample), sum(len(row["solutions"]) for row in sample),
-    sum(row["lightcurve"]["n_observations"] for row in sample)))
-
-d = np.load("delphi-paper-v1-evidence/part-b-analyses/baselines/reference-baselines-per-object.npz")
-delphi, standard, random_axes = d["delphi_errors_deg"], d["standard_errors_deg"], d["random_errors_deg"]
-
-def interval(x, seed):
-    rng = np.random.default_rng(seed)
-    means = [x[rng.integers(0, len(x), len(x))].mean() for _ in range(10000)]
-    return "(%.2f to %.2f)" % tuple(np.percentile(means, [2.5, 97.5]))
-
-print("DeLPHI: mean %.2f %s, median %.2f, within 20 deg %.1f%%, within 30 deg %.1f%%" % (
-    delphi.mean(), interval(delphi, 20260930), np.median(delphi),
-    100 * (delphi <= 20).mean(), 100 * (delphi <= 30).mean()))
-print("six standard poles: mean %.2f, median %.2f" % (standard.mean(), np.median(standard)))
-print("three random axes: mean %.2f" % random_axes.mean())
-print("standard minus DeLPHI: %.2f %s" % ((standard - delphi).mean(), interval(standard - delphi, 20260922)))
-print("random minus DeLPHI: %.2f %s" % ((random_axes - delphi).mean(), interval(random_axes - delphi, 20260923)))
+root = Path(os.environ["DELPHI_DATA"])
+main = json.loads((root / "own-period-scores.json").read_text())["main_sample"]
+errors = np.array([row["own_error_deg"] for row in main["objects"]])
+entries = {row["mean_macro"]: row for row in
+           json.loads((root / "median-stats.json").read_text())["entries"]}
+assert np.isclose(np.median(errors), entries["KThreeOofMean"]["median"])
+print("asteroids %d: median %.2f deg, within 20 deg %.1f%%" % (
+    len(errors), np.median(errors), 100 * (errors <= 20).mean()))
+for macro in ("KThreeStandardMean", "KThreeRandomMean"):
+    print("%s: %.2f deg (%s)" % (macro, entries[macro]["median"], entries[macro]["statistic"]))
 EOF
 ```
 
 Expected output:
 
 ```text
-sample: 170 asteroids, 267 pole solutions, 652197 observations
-DeLPHI: mean 15.77 (13.89 to 17.83), median 12.09, within 20 deg 74.1%, within 30 deg 89.4%
-six standard poles: mean 24.42, median 24.13
-three random axes: mean 33.84
-standard minus DeLPHI: 8.65 (5.95 to 11.25)
-random minus DeLPHI: 18.07 (16.00 to 20.00)
+asteroids 170: median 13.58 deg, within 20 deg 71.8%
+KThreeStandardMean: 24.13 deg (median)
+KThreeRandomMean: 32.33 deg (mean_of_randomization_draw_medians)
 ```
 
-The median of the random axes in Table 2 (32.33°) is a median over the
-individual draws and is in `part-b-analyses/baselines/reference-baselines.json`.
+The `Mean` strings in the macro names are historical identifiers. The
+`statistic` fields describe the revised median calculation. Inversion
+medians are in the `WorkflowDelphiError` and `WorkflowClassicalError` entries
+(27.44° and 45.58°); their underlying per-object records are in
+`benchmark/score.json`. Timing ratios are in that file and
+`benchmark/score-loaded.json`. Do not substitute the original-period evidence
+for these own-period results.
 
-### Check B: oracle errors recomputed from the candidate axes (release `v1.0.0`)
+### Check B: original-period oracle errors from archived candidate axes
 
-This recomputes the oracle error of every test asteroid from its three stored
-candidate axes and the DAMIT reference poles, and gives Tables 6 and 7 and the
-network time of Section 5.3. It needs `artifact-root/` from
+This recomputes the original published-period comparison from the three
+stored candidate axes and the DAMIT reference poles, with per-fold, per-seed
+and network-time diagnostics. These are comparison evidence; Check A is the
+revised own-period result. It needs `artifact-root/` from
 `delphi-k3-artifacts-v1.0.0.tar.gz`.
 
 ```bash
@@ -333,40 +332,14 @@ seed 2027 alone: mean 16.57
 network time per asteroid: median 0.51 s, mean 0.61 s
 ```
 
-These match Tables 6 and 7 of the paper. (The run-4 value 14.695 in
-`part-a-validation/k3-followup/supplement/k3_fold_metrics.csv` is already
-rounded; the unrounded mean is 14.6946°, which the paper gives as 14.69°.) The
-same file, `real-oof-ensemble.npz`, also holds `grid_oracle_errors_deg`, whose mean
+These are the original-period mean diagnostics. The run-4 value 14.695 in
+`delphi-paper-v1-evidence/part-a-validation/k3-followup/supplement/k3_fold_metrics.csv`
+is already rounded; the unrounded mean is 14.6946°. The ensemble file,
+`artifact-root/evaluations/real-oof-ensemble.npz`, also holds `grid_oracle_errors_deg`, whose mean
 (15.32°) is the oracle error before the final small adjustment of the
 candidates (Appendix A).
 
-### Check C: rebuild the `v1.0.0` summary
-
-With the package installed, this regenerates the summary file and LaTeX values
-of release `v1.0.0` from the stored predictions and requires them to match the
-released files byte for byte. It also recomputes every oracle error from the
-axes, as in Check B. From `DeLPHI_LC/`:
-
-```bash
-python -m repro.reproduce_k3_paper --artifact-root ../artifact-root \
-  --comparators ../v1.0.0/delphi-k3-v1-comparator-v1.0.0.npz \
-  --catalog repro/data/damit-20250610T000301Z/catalog.jsonl \
-  --output ../v1.0.0-summary
-```
-
-It prints one line of JSON containing `"frozen_summary_and_macros_match": true`.
-The output folder then holds `k3-results.tex`, whose values include the
-simulated-test mean (11.59°), the main results, the lightcurve-exchange gap
-(17.31°) and the label-shuffle gap (37.99°) of Section 6.1.1, and
-`oof-object-results.csv` with one row per test asteroid. The summary of release
-`v1.0.0` also contains results that the paper does not use: a comparison with
-the earlier model in the comparator file, an inversion benchmark with a fixed
-amount of work per asteroid, and the pass or fail decisions that were set for
-that release. The inversion comparison of the paper (Section 6.4.2) replaces
-that benchmark. The plots it writes are those of release `v1.0.0`, not the
-paper's figures.
-
-### Check D: the Part A tables of the `paper-v1` archive
+### Check C: supporting validation tables
 
 `part-a-validation/` carries its own checks (its `VERIFY.md`). From
 `delphi-check/delphi-paper-v1-evidence/part-a-validation/`:
@@ -378,12 +351,10 @@ python manuscript-derived/derive_followup.py --verify
 
 They print `{"files": 64, "passed": true}` and `{"passed": true, "files": 7}`.
 The second command re-derives, from the Part A records, the DeLPHI values of
-the reduced-data tests, the internal checks, the lower-quality models, ZTF and
-ALCDEF (Tables 8 and 9) and the withheld-lightcurve test (Table 12), and checks
-them against `k3-followup-*.tex`. Those files also list a comparison with a
-fixed set of directions learned from the training poles (labelled "atlas"),
-which the paper replaced by the six standard starting poles; the standard-pole
-and random-axes values of Tables 8 and 9 are in
+the original-period reduced-data tests, internal checks, lower-quality models,
+ZTF, ALCDEF and withheld-lightcurve test, and checks
+them against `k3-followup-*.tex`. Those files also list a train-only fixed-axis
+baseline (labelled "atlas"); the standard-pole and random-axes values of those comparisons are in
 `part-b-analyses/baselines/reference-baselines.json`.
 
 ## 3. Where each result comes from
@@ -393,36 +364,42 @@ paper scored each asteroid with the average score map of all 25 networks,
 because none of them was trained on these asteroids
 ([repro/predict_k3_alcdef_transfer.py](../repro/predict_k3_alcdef_transfer.py),
 policy `all_25_frozen_models_for_new_identity`). That script reads the 25
-networks as PyTorch checkpoints from `artifact-root/models/` of release
-`v1.0.0`, with the [model binding file](#model-binding-file) of Section 4. The
+networks as PyTorch checkpoints from the data record's `artifact-root/models/`,
+with the [model binding file](#model-binding-file) of Section 4. The
 prediction command `delphi-k3-predict` uses one set of five networks instead,
 which is the supported way to run DeLPHI on a new asteroid.
 
-In this table `A/` and `B/` are `part-a-validation/` and `part-b-analyses/` of
-the `paper-v1` archive, `v1:` is `artifact-root/` of `v1.0.0`, and scripts are
-in the repository at tag `paper-v1`.
+The result-family table under [Paper I results](#paper-i-results) maps the
+revised own-period results (**O/**) to scripts and input files. The table below
+keeps the section-to-file map for the unchanged supporting and original-period
+comparisons; its section, table and figure numbers identify those comparisons.
+Use the O/ map and `median-stats.json` for the revised medians.
+
+Here `A/` and `B/` abbreviate `delphi-paper-v1-evidence/part-a-validation/`
+and `delphi-paper-v1-evidence/part-b-analyses/`; `K/` is `artifact-root/`,
+all from the Zenodo data record. Scripts are in this repository at tag `v1.0.0`.
 "DAMIT" means the June 2025 DAMIT lightcurves and tables (Section 4).
 
 | Paper | Result files | Script | Needs |
 |---|---|---|---|
-| Section 2, Table 1, Figure 1 (sample, coverage) | `repro/data/damit-20250610T000301Z/catalog.jsonl` and `publication-splits-v2.3.json` (repository); `A/k3-followup/supplement/k3_data_summary.csv`, `k3_observing_structure.csv` | `repro/export_k3_reliability_supplement.py` | DAMIT |
-| Section 5.2, Table 2 (DeLPHI), Tables 6 and 7, Section 5.3 | `v1:evaluations/real-oof-ensemble.npz`, `v1:evaluations/real-fold-<run>-seed-<seed>.npz`, `v1:release/publication-summary.json` | training sequence (Section 5); summary rebuilt by `repro/reproduce_k3_paper.py` | Checks B and C |
-| Section 5.2 intervals, random-axes band of Figure 6 | `B/interpretation/primary-intervals.json`, `random-axes-cdf.npz` | `repro/primary_intervals.py` | `repro/baselines_out/` (repository); CPU |
-| Section 5.2, Table 2 (standard poles, random axes); reference rows of Section 6.1.2, Table 9 and Figure 7 | `B/baselines/reference-baselines.json`, `reference-baselines-per-object.npz` (also in `repro/baselines_out/`) | `repro/compute_reference_baselines.py` | `v1:` ensemble, DAMIT model table, `A/k3-followup/revision/`, `A/evidence/source-records/alcdef-gaia-analysis.json`, Gaia DR3 spin table; CPU |
-| Figures 3, 4 and 5 (worked example, oracle-error illustration, candidates on the sky) | `v1:evaluations/real-oof-ensemble.npz`, catalog | figure script of the manuscript (see Section 6) | |
-| Section 6.1.1, lightcurve exchange and label shuffle | `v1:evaluations/*-input-swap.npz`, `synthetic-test-seed-17.npz`, `synthetic-label-shuffle-test-seed-17.npz`, `v1:release/publication-summary.json` | `delphi-k3` control commands (Section 5) | Check C |
-| Section 6.1.1, candidate spread, random baseline | `B/interpretation/label-shuffle-spread.json` | `repro/label_shuffle_spread.py` | `v1:evaluations/`; CPU |
-| Section 6.1.2, Appendix D, Tables 8 and 9, Figure 7 | `A/k3-followup/revision/` (`lowq-*`, `error-channel-*`), `A/k3-followup/transfer/`, `A/evidence/source-records/` (`mapped-ztf-score.json`, `alcdef-gaia-analysis.json`), `A/k3-followup-results.tex` | lower-quality models: `repro/run_k3_lowq_census.py`, `run_k3_lowq_damit.py`, `analyze_k3_lowq_lineage.py`, `audit_k3_lowq_exposure.py`; ZTF: `repro/prepare_k3_followup_inputs.py`, `prepare_k3_mapped_ztf.py`, `delphi-k3 predict-ztf-external` and `score-ztf-external`; ALCDEF: `repro/fetch_k3_alcdef_periods.py` to `score_k3_alcdef_gaia_transfer.py`; uncertainties removed: `repro/run_k3_error_channel_sensitivity.py`; collected by `repro/export_k3_revision_evidence.py` and `export_k3_followup_transfer.py` | DAMIT (all models), ZTF photometry from the Fink broker, JPL Horizons geometry, ALCDEF, Gaia DR3 tables (download addresses in `repro/fetch_k3_generalization_sources.py`); GPU for the predictions. Check D re-derives the tables |
-| Section 6.1.3, Figure 8, Appendix B (noise), Figure 14 | `A/k3-followup/reliability/k3_data_degradation.csv`, `A/k3-followup/supplement/k3_supplement_numbers.json`, `A/evidence/source-records/reliability-scored-rows.json`, `reliability-sampling-table.csv`; `B/interpretation/sampling-baselines.json` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_publication.py`, `export_k3_reliability_supplement.py`; `repro/sampling_baselines.py <reliability-scored-rows.json>` | DAMIT, `v1:` networks; `sampling_baselines.py` CPU only |
-| Appendix B, training versus test, reference reassignment, Figure 15 | `A/k3-followup/internal/summary.json`, `train-oof-pairs.csv` | `repro/run_k3_internal_validation.py`, `export_k3_internal_validation_report.py` | DAMIT, `v1:` networks |
-| Sections 6.2.1 and 6.3.1 (mirror ambiguity, latitude, longitude), Figures 9 and 11 | `B/interpretation/mirror-symmetry.json`; `A/k3-followup/revision/lowq-analysis.json`; `A/k3-followup/supplement/k3_reference_strata.csv`, `k3_descriptive_spearman_matrix.csv` | `repro/mirror_symmetry.py`; the two supplement files from `export_k3_reliability_supplement.py` | `v1:` ensemble, DAMIT; CPU |
-| Section 6.2.2, amplitude-aspect relation, Figure 9 | `B/interpretation/amplitude-aspect.json`, `.npz`, `amplitude-aspect-paired.json` | `repro/amplitude_aspect_comparison.py`, then `amplitude_aspect_paired.py` | `v1:` ensemble, DAMIT; CPU |
-| Section 6.2.3, Appendix B, Shapley values, Figure 10 | `B/interpretation/shapley/*.npz`, `shapley-summary.json` | `repro/group_shapley.py --output-dir <dir>`, then `group_shapley_summary.py` | `v1:models/*.pt`, DAMIT; GPU by default (`--device`) |
-| Appendix B, input removals, Figure 16 | `B/interpretation/input-removal-errors.csv` (the per-asteroid errors of all runs in one table) | `repro/interpretation_ablations.py --output-dir <dir>` | `v1:models/*.pt`, DAMIT; GPU by default |
-| Section 6.3.3, Appendix C, period errors, Figure 17 | `A/k3-followup/supplement/k3_supplement_numbers.json` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_supplement.py` | DAMIT, `v1:` networks |
-| Section 6.4.1, Figure 12 | `B/interpretation/candidate-count.json` | `repro/candidate_count.py` | `v1:` ensemble; CPU |
-| Section 6.4.2, Appendix E, Tables 3, 4, 10, 11, Figure 13 | `B/workflow-benchmark/` | `repro/direct_workflow_benchmark/` (see its [README](../repro/direct_workflow_benchmark/README.md)) | DAMIT, patched `convexinv`, networks, GPU; raw fits on request |
-| Appendix E.1, withheld-lightcurve test, Table 12 | `A/evidence/source-records/withheld-rows.json`, `A/k3-followup/supplement/k3_withheld_rms.csv` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_supplement.py` | DAMIT, `v1:` networks, patched `convexinv` |
+| Section 2, Table 1, Figure 1 (sample, coverage) | `repro/data/damit-20250610T000301Z/catalog.jsonl` and `publication-splits-v2.3.json` (repository); `A/k3-followup/supplement/k3_data_summary.csv`, `A/k3-followup/supplement/k3_observing_structure.csv` | `repro/export_k3_reliability_supplement.py` | DAMIT |
+| Section 5.2, Table 2 (DeLPHI), Tables 6 and 7, Section 5.3 | `K/evaluations/real-oof-ensemble.npz`, `K/evaluations/real-fold-<run>-seed-<seed>.npz`, `K/release/publication-summary.json` | training sequence (Section 5); stored summary retained as provenance | Check B |
+| Section 5.2 intervals, random-axes band of Figure 6 | `B/interpretation/primary-intervals.json`, `B/interpretation/random-axes-cdf.npz` | `repro/primary_intervals.py` | `repro/baselines_out/` (repository); CPU |
+| Section 5.2, Table 2 (standard poles, random axes); reference rows of Section 6.1.2, Table 9 and Figure 7 | `B/baselines/reference-baselines.json`, `B/baselines/reference-baselines-per-object.npz` (also in `repro/baselines_out/`) | `repro/compute_reference_baselines.py` | `K/` ensemble, DAMIT model table, `A/k3-followup/revision/`, `A/evidence/source-records/alcdef-gaia-analysis.json`, Gaia DR3 spin table; CPU |
+| Figures 3, 4 and 5 (worked example, oracle-error illustration, candidates on the sky) | `K/evaluations/real-oof-ensemble.npz`, catalog | figure script of the manuscript (see Section 6) | |
+| Section 6.1.1, lightcurve exchange and label shuffle | `K/evaluations/*-input-swap.npz`, `K/evaluations/synthetic-test-seed-17.npz`, `K/evaluations/synthetic-label-shuffle-test-seed-17.npz`, `K/release/publication-summary.json` | `delphi-k3` control commands (Section 5) | Check B |
+| Section 6.1.1, candidate spread, random baseline | `B/interpretation/label-shuffle-spread.json` | `repro/label_shuffle_spread.py` | `K/evaluations/`; CPU |
+| Section 6.1.2, Appendix D, Tables 8 and 9, Figure 7 | `A/k3-followup/revision/` (`lowq-*`, `error-channel-*`), `A/k3-followup/transfer/`, `A/evidence/source-records/` (`mapped-ztf-score.json`, `alcdef-gaia-analysis.json`), `A/k3-followup-results.tex` | lower-quality models: `repro/run_k3_lowq_census.py`, `run_k3_lowq_damit.py`, `analyze_k3_lowq_lineage.py`, `audit_k3_lowq_exposure.py`; ZTF: `repro/prepare_k3_followup_inputs.py`, `prepare_k3_mapped_ztf.py`, `delphi-k3 predict-ztf-external` and `score-ztf-external`; ALCDEF: `repro/fetch_k3_alcdef_periods.py` to `score_k3_alcdef_gaia_transfer.py`; uncertainties removed: `repro/run_k3_error_channel_sensitivity.py`; collected by `repro/export_k3_revision_evidence.py` and `export_k3_followup_transfer.py` | DAMIT (all models), ZTF photometry from the Fink broker, JPL Horizons geometry, ALCDEF, Gaia DR3 tables (download addresses in `repro/fetch_k3_generalization_sources.py`); GPU for the predictions. Check C re-derives the tables |
+| Section 6.1.3, Figure 8, Appendix B (noise), Figure 14 | `A/k3-followup/reliability/k3_data_degradation.csv`, `A/k3-followup/supplement/k3_supplement_numbers.json`, `A/evidence/source-records/reliability-scored-rows.json`, `A/evidence/source-records/reliability-sampling-table.csv`; `B/interpretation/sampling-baselines.json` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_publication.py`, `export_k3_reliability_supplement.py`; `repro/sampling_baselines.py <reliability-scored-rows.json>` | DAMIT, `K/` networks; `sampling_baselines.py` CPU only |
+| Appendix B, training versus test, reference reassignment, Figure 15 | `A/k3-followup/internal/summary.json`, `A/k3-followup/internal/train-oof-pairs.csv` | `repro/run_k3_internal_validation.py`, `export_k3_internal_validation_report.py` | DAMIT, `K/` networks |
+| Sections 6.2.1 and 6.3.1 (mirror ambiguity, latitude, longitude), Figures 9 and 11 | `B/interpretation/mirror-symmetry.json`; `A/k3-followup/revision/lowq-analysis.json`; `A/k3-followup/supplement/k3_reference_strata.csv`, `A/k3-followup/supplement/k3_descriptive_spearman_matrix.csv` | `repro/mirror_symmetry.py`; the two supplement files from `export_k3_reliability_supplement.py` | `K/` ensemble, DAMIT; CPU |
+| Section 6.2.2, amplitude-aspect relation, Figure 9 | `B/interpretation/amplitude-aspect.json`, `B/interpretation/amplitude-aspect.npz`, `B/interpretation/amplitude-aspect-paired.json` | `repro/amplitude_aspect_comparison.py`, then `amplitude_aspect_paired.py` | `K/` ensemble, DAMIT; CPU |
+| Section 6.2.3, Appendix B, Shapley values, Figure 10 | `B/interpretation/shapley/*.npz`, `B/interpretation/shapley-summary.json` | `repro/group_shapley.py --output-dir <dir>`, then `group_shapley_summary.py` | `K/models/*.pt`, DAMIT; GPU by default (`--device`) |
+| Appendix B, input removals, Figure 16 | `B/interpretation/input-removal-errors.csv` (the per-asteroid errors of all runs in one table) | `repro/interpretation_ablations.py --output-dir <dir>` | `K/models/*.pt`, DAMIT; GPU by default |
+| Section 6.3.3, Appendix C, period errors, Figure 17 | `A/k3-followup/supplement/k3_supplement_numbers.json` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_supplement.py` | DAMIT, `K/` networks |
+| Section 6.4.1, Figure 12 | `B/interpretation/candidate-count.json` | `repro/candidate_count.py` | `K/` ensemble; CPU |
+| Section 6.4.2, Appendix E, Tables 3, 4, 10, 11, Figure 13 | `B/workflow-benchmark/` | `repro/direct_workflow_benchmark/` (see its [README](../repro/direct_workflow_benchmark/README.md)) | DAMIT, patched `convexinv`, networks, GPU; these original-period summaries differ from the own-period benchmark and fits in `O/benchmark/` |
+| Appendix E.1, withheld-lightcurve test, Table 12 | `A/evidence/source-records/withheld-rows.json`, `A/k3-followup/supplement/k3_withheld_rms.csv` | `repro/run_k3_reliability_study.py`, `export_k3_reliability_supplement.py` | DAMIT, `K/` networks, patched `convexinv` |
 | Appendix C, experimental period search, Figure 18 | `B/period-search/results/` | `repro/period_search/` (see its [README](../repro/period_search/README.md)) | DAMIT; GPU; patched `convexinv` for the physical pilot |
 | Section 6.5, DAMIT census of 2026-09-30 | `B/damit-census/` (`raw/` holds the DAMIT tables and lightcurves exported that day, `q3_current_classification.csv`, `candidate_lc_density.json`, and the input list of the lower-quality comparison, `lowq-input-index.json`) | `repro/damit_census/classify.py`, `lc_density.py` | DAMIT snapshot tables and lightcurves, `synthetic-data/` |
 | Appendix A, Table 5 | `repro/k3_redesign_spec.yaml` | `delphi-k3 validate-protocol`; see [configuration.md](configuration.md) | |
@@ -438,13 +415,15 @@ folder is required, because several scripts contain it.
   damit-20250610T000301Z/                  DAMIT snapshot (tables/, files/)
   paper/figures/                           output folder of Figure 13 (create it)
   DeLPHI-followup/
-    source/                                this repository at tag paper-v1
+    source/                                this repository at tag v1.0.0
     inputs/
-      frozen-artifacts/k3-definitive-7874092/   v1.0.0 artifact-root/
-      frozen-artifacts/k3-2408c563/synthetic/   v1.0.0 synthetic-data/ (census only)
+      frozen-artifacts/k3-definitive-7874092/   Zenodo artifact-root/
+      frozen-artifacts/k3-2408c563/synthetic/   Zenodo synthetic-data/ (census only)
       training-run/repro/data/damit-20250610T000301Z/
                                            copy of source/repro/data/damit-20250610T000301Z
     data/
+      own-period-20261021/                own-period results and benchmark-fits archives
+      ...                                sibling folders from supporting-results archive
       interpretation-20260926/             from B/interpretation/
       interpretation-20260930/             from B/interpretation/
       direct-workflow-benchmark/           B/workflow-benchmark/
@@ -458,16 +437,21 @@ folder is required, because several scripts contain it.
                                            repro/period_search/*.py and B/period-search/results/
 ```
 
-### Arrange the releases
+### Arrange the archives
 
-Work in an empty folder `<parent>`. Extract the `v1.0.0` archives there (they
-create `artifact-root/` and `synthetic-data/`), extract the `paper-v1` archive
-anywhere, and set `E` to its folder:
+Work in an empty folder `<parent>`. Extract the artifacts and synthetic-data
+archives there (creating `artifact-root/` and `synthetic-data/`). Extract the
+unchanged evidence archive anywhere and set `E` to its folder. Put the
+own-period results and fits under `DeLPHI-followup/data/`, with the supporting
+results as siblings, as in the download instructions. The commands below
+arrange inputs for the retained original-period comparisons; if supporting
+results already supply a destination, use that copy rather than nesting a
+second copy inside it.
 
 ```bash
 E=/path/to/delphi-paper-v1-evidence
 T=DeLPHI-followup
-git clone --branch paper-v1 https://github.com/HBJ1004/DeLPHI_LC.git $T/source
+git clone --branch v1.0.0 https://github.com/HBJ1004/DeLPHI_LC.git $T/source
 mkdir -p $T/inputs/frozen-artifacts/k3-2408c563 $T/inputs/training-run/repro/data \
          $T/data/interpretation-20260926 $T/data/interpretation-20260930 \
          $T/data/generalization-20260910/locked-cohort \
@@ -501,9 +485,9 @@ CDS. Its SHA-256 on 2026-10-01 was
 `e7f9743ba094860e553342eff83fe310f6dfcf7e6f740e0794f798a5e81ef865`, the same as
 the copy used for the paper.
 
-The copies of the released results in `data/` serve as inputs of later scripts
-and are overwritten when a script is rerun, so compare a rerun with the copy in
-`$E`. Install the repository (`python -m pip install -e "$T/source[test,plot]"`)
+The arranged results in `data/` serve as inputs of later scripts. Keep the
+downloaded archives as comparison evidence before running scripts that write
+into that tree. Install the repository (`python -m pip install -e "$T/source[test,plot]"`)
 and run the scripts from `$T/source`, for example
 `python repro/primary_intervals.py`. When we tested this layout, rerunning
 `primary_intervals.py`, `candidate_count.py`, `label_shuffle_spread.py`,
@@ -588,19 +572,22 @@ through a binding file that records their checksums. Write it from
 python -m repro.prepare_k3_followup_inputs bind-models \
   --artifact-root ../inputs/frozen-artifacts/k3-definitive-7874092 \
   --archive-index ../inputs/frozen-artifacts/k3-definitive-7874092/release/archive-index.json \
-  --publication-package-manifest /path/to/v1.0.0/publication-archive-manifest.json \
+  --publication-package-manifest /path/to/downloads/publication-archive-manifest.json \
   --output ../data/external-models-final.json
 ```
 
-This reproduced the authors' file byte for byte.
+The binding checks model hashes against the unchanged archive manifest;
+keep that manifest even though some of its historical package members are no
+longer distributed.
 
 ### Scripts that cannot run from the released files alone
 
 - The run scripts of the inversion comparison (steps 1 to 7 and 9 in its
   [README](../repro/direct_workflow_benchmark/README.md)) check lock files that
-  store the authors' paths and computer, and need saved fits that are part of
-  the raw fits. `candidate_accuracy_cost.py` and `score_exploratory_timing.py`
-  also read the raw per-search records.
+  store the authors' paths and computer, and need the corresponding saved
+  fits and frozen source files. The new fits archive supplies the own-period
+  benchmark tree, rather than every historical original-period run.
+  `candidate_accuracy_cost.py` and `score_exploratory_timing.py` also read the raw per-search records.
 - The reruns of the lower-quality, ZTF and ALCDEF predictions need the
   external photometry (Fink, ALCDEF, Gaia DR3) and Horizons geometry, which are
   not redistributed.
@@ -609,8 +596,8 @@ This reproduced the authors' file byte for byte.
 
 The training sequence is run with the `delphi-k3` command (each subcommand has
 `--help`) on a clean Git checkout, whose commit it records. It needs
-`synthetic-data/` from `v1.0.0`, the DAMIT snapshot, the catalog and the
-cross-validation assignment of `repro/data/damit-20250610T000301Z/`
+`synthetic-data/` from the Zenodo data record, the DAMIT snapshot, the catalog
+and the cross-validation assignment of `repro/data/damit-20250610T000301Z/`
 (`catalog.jsonl`, `publication-splits-v2.3.json`), and a CUDA GPU.
 
 1. `delphi-k3 train-publication-synthetic --train-directory synthetic-data/train
@@ -650,19 +637,21 @@ Python 3.12 and PyTorch 2.5.1 with CUDA 12.4. The per-epoch training losses are 
   workstation described in Appendix E (Intel Core i5-13600KF under WSL2, RTX
   4070). Bootstrap intervals of times describe the asteroids on that computer
   only.
-- **Raw convex-inversion fits** of the inversion comparison (2.6 GB) are not in
-  the releases and are available from the authors on request. The released
-  files hold the selected fits, scores and times of every asteroid.
+- **Saved convex-inversion fits** of the own-period benchmark are distributed
+  in `delphi-benchmark-fits-v1.0.0.tar.gz`, alongside the scores and times in
+  `delphi-own-period-results-v1.0.0.tar.gz`. Historical original-period notes
+  describe a different set of fits; the benchmark-fits archive covers the
+  own-period tree.
 - **DAMIT data** are not redistributed. The DAMIT export of 1 June 2025 matches
   the files used (Section 4), but later DAMIT versions differ.
 - **External photometry** (ZTF through Fink, ALCDEF, Gaia DR3) and Horizons
-  geometry are not redistributed. The releases hold the prepared inputs'
+  geometry are not redistributed. The data record holds the prepared inputs'
   checksums, the predictions and the scores.
 - **Figures.** Figures 13 and 18 are drawn by
   `repro/direct_workflow_benchmark/plot_direct_workflow.py` and
   `repro/period_search/benchmark_end_to_end.py`. The other figures were drawn
   by the manuscript's plotting script, which is kept with the manuscript source
-  and included unchanged in the `paper-v1` archive as
+  and included unchanged in the Zenodo evidence archive as
   `B/figures-code/render_main_figures.py`. It reads the result files listed in
   Section 3 from the folder layout of Section 4 and writes PDF files; it is
   provided as a record of how each figure was drawn rather than as a supported

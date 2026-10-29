@@ -4,13 +4,15 @@ These scripts produced the experimental period search of Appendix C: the
 Fourier-series and phase-dispersion searches on the 170 asteroids, the
 candidate lists with P/2, P and 2P, the 20-asteroid pilot of a short physical
 fit, the check with the DeLPHI scores, and the Delta-chi^2 period intervals.
-None of these periods was used in the pole results of the paper, which use the
-published DAMIT period.
+Paper I as revised uses the top Fourier period for each asteroid, before
+any reference-pole scoring, through `repro/own_period/manifest.py`. The pilot,
+score-based checks and uncertainty intervals here remain supporting
+comparisons; they do not select the main own-period results.
 
-The results are in release
-[`paper-v1`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v1),
-archive `delphi-paper-v1-evidence.tar.gz`, folder
-`part-b-analyses/period-search/results/`. The same archive keeps a copy of
+Use this repository at tag `v1.0.0`. The supporting results are in
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz)
+in the [Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942),
+folder `delphi-paper-v1-evidence/part-b-analyses/period-search/results/`. The same archive keeps a copy of
 these scripts in `part-b-analyses/period-search/code/`.
 
 ## Scripts
@@ -43,7 +45,7 @@ they must be copied there to run again:
     inputs/training-run/repro/data/damit-20250610T000301Z/
                                        copy of source/repro/data/damit-20250610T000301Z
     inputs/frozen-artifacts/k3-definitive-7874092/
-                                       release v1.0.0 artifact-root/ (score-periods only)
+                                       Zenodo artifact-root/ (score-periods only)
     data/external-models-final.json    model binding file (score-periods only)
     data/solver-internal-capacity-corrected/20260911/expanded-solver/convexinv/
                                        convexinv with enlarged storage limits (screen only)
@@ -60,8 +62,8 @@ Requirements by step:
 - `end_to_end.py screen` needs `convexinv` compiled from DAMIT's
   `version_0.2.1.tar.gz` with the three storage limits raised as described in
   [docs/reproduction.md](../../docs/reproduction.md).
-- `end_to_end.py score-periods` needs CUDA, the trained networks of release
-  `v1.0.0` (`artifact-root/models/`), and `data/external-models-final.json`,
+- `end_to_end.py score-periods` needs CUDA, the trained networks in the Zenodo data record
+  (`artifact-root/models/`), and `data/external-models-final.json`,
   which `python -m repro.prepare_k3_followup_inputs bind-models` writes (see
   [docs/reproduction.md](../../docs/reproduction.md)).
 - `benchmark_end_to_end.py`, `period_uncertainty.py` and
@@ -109,7 +111,7 @@ same number of periods as `candidates-v1.jsonl`, and the periods agree to within
 a relative difference of 1.6e-7. On 2026-09-30 we also reran the physical pilot
 with the current `end_to_end.py` and the same settings
 (`pilot-screen-rerun-20260930.jsonl` and `pilot-screen-rerun-20260930-v2.jsonl`
-in the release). All 20 asteroids selected the same period with the same
+in the evidence archive). All 20 asteroids selected the same period with the same
 chi-squared as `pilot-screen-v2.jsonl`, giving the same 7 of 20 correct and 10
 ambiguous results. Only the run times differ.
 

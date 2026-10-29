@@ -2,11 +2,15 @@ cff-version: 1.2.0
 message: "If you use DeLPHI, please cite the paper below and this software release."
 title: "DeLPHI: pole-axis candidates for asteroid lightcurve inversion"
 type: software
-version: "2.0.0"
+version: "1.0.0"
 date-released: 2026-10-29
 license: MIT
 repository-code: "https://github.com/HBJ1004/DeLPHI_LC"
-url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/paper-v2"
+url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23757942"
+    description: "Paper I data, trained networks, predictions and results"
 keywords:
   - asteroids
   - asteroid rotation
@@ -24,6 +28,7 @@ authors:
     affiliation: "Seoul National University"
   - family-names: Lee
     given-names: Hee-jae
+    orcid: "https://orcid.org/0000-0002-6839-075X"
     affiliation: "Korea Astronomy and Space Science Institute"
 preferred-citation:
   type: article
@@ -40,3 +45,4 @@ preferred-citation:
       orcid: "https://orcid.org/0000-0002-7332-2479"
     - family-names: Lee
       given-names: Hee-jae
+      orcid: "https://orcid.org/0000-0002-6839-075X"

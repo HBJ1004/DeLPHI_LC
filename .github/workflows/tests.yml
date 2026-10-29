@@ -13,7 +13,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e '.[dev]'
       - run: python -m ruff check lc_pipeline tests repro
-      - run: python -m pytest -q tests repro/tests
+      - run: python -m pytest -q tests
       - run: delphi-k3 validate-protocol
       - run: delphi-k3 renderer-smoke --cases 8
       - run: python -m build
@@ -42,4 +42,4 @@ jobs:
           'coverage==7.5.0'
           'pytest-cov==5.0.0'
       - run: python -m pip install -e . --no-deps
-      - run: python -m pytest -q tests repro/tests
+      - run: python -m pytest -q tests
