@@ -7,6 +7,8 @@ preserves the other entries in values.json. Example::
         --figures generalization-checks sampling-caps data-degradation latitude \
         candidate-count inversion-benchmark --out-dir /path/to/scratch/median-figures
 
+Use --candidate-count-json /path/to/candidate-count.json to override that figure's input.
+
 Renderer bodies are extracted with AST, so worktree renderers' module-level
 mkdir, argument parsing, and output paths are never executed.
 """
@@ -29,6 +31,7 @@ sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[2]
 FOLLOWUP = REPO.parent
 DATA = FOLLOWUP / "data/own-period-20261021"
+CANDIDATE_COUNT_JSON = DATA / "maps/own-period/analyses/candidate-count.json"
 PAPER = FOLLOWUP.parent / "paper-rev-20261021"
 SCRATCH = Path(
     "/tmp/claude-1000/-mnt-d-Downloads-Colab-Notebooks/"
@@ -59,10 +62,11 @@ def replace_once(source, old, new):
 
 
 class Context:
-    def __init__(self, out):
+    def __init__(self, out, *, candidate_count_json=CANDIDATE_COUNT_JSON):
         from repro.own_period.median_stats import Evidence, bootstrap_indices, compute_statistics
 
         self.out = out
+        self.candidate_count_json = candidate_count_json
         self.evidence = Evidence()
         self.indices = bootstrap_indices
         self.statistics = compute_statistics
@@ -439,12 +443,14 @@ def latitude(ctx):
 
 
 def candidate_count(ctx):
-    """Replace pole-error means; keep the original fixed search-cone geometry."""
+    """Use median pole errors and median-error cone radii; retain p90 radii."""
     result = ctx.figure("candidate-count")
-    path = DATA / "maps/own-period/analyses/candidate-count.json"
+    path = ctx.candidate_count_json
     summary = ctx.read(path)
     rows = summary["k"]
     standard = ctx.macros["KThreeStandardMean"]["median"]
+    ctx.check(result, "Standard-pole cone radius: median error",
+              summary["standard_poles"]["median_error_deg"], standard)
     # The existing dashed-square median curve stays, coincident with the updated
     # solid-circle curve. One legend entry avoids implying two estimators.
     for row in rows:
@@ -456,16 +462,19 @@ def candidate_count(ctx):
             point["median_stats_check"] = "N/A: no macro; PASS frozen candidate-count median."
         result["points"].append(point)
         result["points"].append(dict(panel="b", k=row["k"],
-                                     mean_cone_radius_deg=row["mean_error_deg"],
+                                     median_cone_radius_deg=row["median_error_deg"],
                                      p90_cone_radius_deg=row["p90_error_deg"],
-                                     area_mean_radius_percent=100 * row["search_area_mean_radius"],
+                                     area_median_radius_percent=100 * row["search_area_median_radius"],
                                      area_p90_radius_percent=100 * row["search_area_p90_radius"]))
     result["points"].append(dict(panel="a", series="standard", n=170, median=standard))
-    result["points"].append(dict(panel="b", series="standard", **summary["standard_poles"],
-                                 area_mean_radius_percent=100 * summary["standard_poles"]["search_area_mean_radius"],
+    result["points"].append(dict(panel="b", series="standard", axes=summary["standard_poles"]["axes"],
+                                 median_cone_radius_deg=summary["standard_poles"]["median_error_deg"],
+                                 p90_cone_radius_deg=summary["standard_poles"]["p90_error_deg"],
+                                 area_median_radius_percent=100 * summary["standard_poles"]["search_area_median_radius"],
                                  area_p90_radius_percent=100 * summary["standard_poles"]["search_area_p90_radius"]))
     source = function_source(MAPS_RENDERER, "render_candidate_count")
     # Preserve all artist styles and subplot spacing from the maps renderer.
+    source = replace_once(source, '(ANALYSES / "candidate-count.json")', 'candidate_count_path')
     source = replace_once(source, 'mean = np.array([row["mean_error_deg"] for row in rows])',
                           'mean = np.array([row["median_error_deg"] for row in rows])')
     source = replace_once(source, 'label="Mean"', 'label="Median"')
@@ -476,6 +485,12 @@ def candidate_count(ctx):
                           'label="Standard poles, median")\n    ax.set_xlabel')
     source = replace_once(source, 'ax.set_ylabel("Oracle error (degrees)")',
                           'ax.set_ylabel("Median oracle error (degrees)")')
+    source = replace_once(source, 'area_mean = 100 * np.array([row["search_area_mean_radius"] for row in rows])',
+                          'area_median = 100 * np.array([row["search_area_median_radius"] for row in rows])')
+    source = replace_once(source, 'ax.plot(k, area_mean,', 'ax.plot(k, area_median,')
+    source = replace_once(source, 'label="Radius = mean error"', 'label="Radius = median error"')
+    source = replace_once(source, 'standard["search_area_mean_radius"]', 'standard["search_area_median_radius"]')
+    source = replace_once(source, 'label="Standard poles, mean"', 'label="Standard poles, median"')
     source = replace_once(source, '    fig, axes = plt.subplots(1, 2, figsize=(7.1, 2.9))',
                           '    fig, axes = ctx.canvas("candidate-count", '
                           '[[0.074, 0.176, 0.411, 0.726], [0.575, 0.176, 0.411, 0.726]])')
@@ -484,18 +499,20 @@ def candidate_count(ctx):
                           '    ctx.save(fig, "candidate-count")')
     import matplotlib.pyplot as plt
 
-    namespace = dict(np=np, plt=plt, json=json, ANALYSES=path.parent, standard_median=standard, ctx=ctx)
+    namespace = dict(np=np, plt=plt, json=json, candidate_count_path=path, standard_median=standard, ctx=ctx)
     exec(compile(source, str(MAPS_RENDERER), "exec"), namespace)
     namespace["render_candidate_count"]()
     ctx.sources_for(result, [path, MAPS_RENDERER, *ctx.macros["KThreeStandardMean"]["source_files"]])
     result["means_retained"] = [
-        "Panel (b): six fixed cone radii equal the original K-specific mean errors; the standard cone uses its original mean error. All areas and p90 radii remain frozen.",
+        "Panel (b) averages covered sky fractions across asteroids. Cone radii use the median or 90th-percentile error of the same axes; p90 areas are unchanged.",
     ]
     result["caption_change"] = ('In (a), replace "Mean and median oracle error" with "Median oracle error"; '
                                  'clarify that coincident solid-circle and dashed-square curves show the same median. '
-                                 'In the final sentence, standard poles use the median in (a) and the original fixed cone radii in (b). '
-                                 'Keep "mean" in (b).')
-    result["visual_message"] = "The second candidate still gives the largest gain. The two error curves in (a) now coincide; (b) is unchanged."
+                                 'In (b), replace mean-error cone radii with median-error cone radii, including standard poles; '
+                                 'retain the 90th-percentile radii.')
+    best_k = min(rows, key=lambda row: row["search_area_median_radius"])["k"]
+    result["visual_message"] = ("The second candidate still gives the largest error gain. The two error curves in (a) coincide; "
+                                f"(b) uses median-error cone radii, with the smallest covered area at K={best_k}. The p90 series are unchanged.")
 
 
 def inversion_benchmark(ctx):
@@ -1302,6 +1319,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--figures", nargs="+", required=True, help="Figure names, separated by spaces or commas")
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--candidate-count-json", type=Path, default=CANDIDATE_COUNT_JSON,
+                        help="Candidate-count input JSON (default: frozen own-period analysis)")
     args = parser.parse_args()
     names = list(dict.fromkeys(name for group in args.figures for name in group.split(",")))
     unknown = set(names) - FIGURES.keys()
@@ -1317,7 +1336,7 @@ def main():
         plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9, "axes.titlesize": 10,
                              "axes.labelsize": 9, "legend.fontsize": 8, "xtick.labelsize": 8,
                              "ytick.labelsize": 8, "pdf.fonttype": 42, "savefig.bbox": None})
-        ctx = Context(args.out_dir)
+        ctx = Context(args.out_dir, candidate_count_json=args.candidate_count_json)
         for name in names:
             print(f"Rendering {name}", flush=True)
             with plt.rc_context():
