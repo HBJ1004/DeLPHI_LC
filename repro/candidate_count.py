@@ -10,7 +10,7 @@ the note in main()).
 
 The search area follows the thesis manuscript: the fraction of a hemisphere of
 evenly spread directions that lies within a cone around at least one end of
-at least one candidate axis.  The cone radius is either the mean or the 90th
+at least one candidate axis.  The cone radius is the mean, median, or 90th
 percentile of the oracle error at that K.
 """
 from __future__ import annotations
@@ -104,6 +104,7 @@ def main():
     for k in KS:
         errors = rows[k]["errors"]
         mean_radius = float(errors.mean())
+        median_radius = float(np.median(errors))
         p90_radius = float(np.percentile(errors, 90))
         summary["k"].append({
             "k": k,
@@ -113,14 +114,17 @@ def main():
             "within_30": float(np.mean(errors < 30.0)),
             "p90_error_deg": p90_radius,
             "search_area_mean_radius": float(np.mean([covered_fraction(a, mean_radius, sky) for a in per_k_axes[k]])),
+            "search_area_median_radius": float(np.mean([covered_fraction(a, median_radius, sky) for a in per_k_axes[k]])),
             "search_area_p90_radius": float(np.mean([covered_fraction(a, p90_radius, sky) for a in per_k_axes[k]])),
         })
     summary["standard_poles"] = {
         "axes": int(len(standard)),
         "mean_error_deg": float(standard_errors.mean()),
+        "median_error_deg": float(np.median(standard_errors)),
         "within_20": float(np.mean(standard_errors < 20.0)),
         "p90_error_deg": float(np.percentile(standard_errors, 90)),
         "search_area_mean_radius": covered_fraction(standard, float(standard_errors.mean()), sky),
+        "search_area_median_radius": covered_fraction(standard, float(np.median(standard_errors)), sky),
         "search_area_p90_radius": covered_fraction(standard, float(np.percentile(standard_errors, 90)), sky),
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
