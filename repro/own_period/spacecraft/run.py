@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import platform
@@ -78,6 +79,16 @@ def checked(row: dict, root: Path | None = None) -> Path:
     return path
 
 
+def checked_append_only(row: dict) -> Path:
+    """The protocol may gain addenda after locking; its locked text must stay a byte prefix."""
+    path = Path(row["path"])
+    data = path.read_bytes()
+    if not any(hashlib.sha256(data[:end]).hexdigest() == row["sha256"]
+               for end in [len(data)] + [i + 1 for i, byte in enumerate(data) if byte == 0x0A]):
+        raise ValueError(f"hash mismatch: {path}")
+    return path
+
+
 def write(path: Path, value: object) -> None:
     guard_output(path)
     value = {**value, **json_metadata()}
@@ -128,8 +139,11 @@ def locked(out: Path) -> tuple[dict, list[dict]]:
     manifest = read(root / "manifest.json")
     lock_path = checked(manifest["cohort_lock"], root)
     lock = read(lock_path)
-    for entry in lock["files"].values():
-        checked(entry)
+    for key, entry in lock["files"].items():
+        if key == "protocol":
+            checked_append_only(entry)
+        else:
+            checked(entry)
     rows = manifest["inputs"]
     if [r["run_id"] for r in rows] != [r["run_id"] for r in lock["inputs"]]:
         raise ValueError("locked input order differs")

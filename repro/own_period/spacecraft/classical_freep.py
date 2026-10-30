@@ -170,7 +170,7 @@ def load_export(out: Path, addendum: int = 3) -> dict:
             or (c.checked(manifest["script"]) != Path(__file__).resolve() and not c.switched())
             or [r["run_id"] for r in manifest["inputs"]] != list(ADDENDUM4_RUNS if addendum == 4 else RUNS)):
         raise ValueError(f"export must use this script and exactly the Addendum {addendum} inputs")
-    c.checked(manifest["protocol"])
+    c.network_run.checked_append_only(manifest["protocol"])
     for entry in manifest["implementations"].values():
         c.checked(entry)
     proof = c.read(c.checked(manifest["round_trip"], out))

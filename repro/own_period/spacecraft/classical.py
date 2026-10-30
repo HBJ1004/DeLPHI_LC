@@ -451,7 +451,7 @@ def load_export(out: Path) -> dict:
     manifest = read(out / "export/manifest.json")
     if checked(manifest["script"]) != Path(__file__).resolve() and not switched():
         raise ValueError("export used another script")
-    checked(manifest["protocol"])
+    network_run.checked_append_only(manifest["protocol"])
     for entry in manifest["convention_sources"]:
         checked(entry)
     proof = read(checked(manifest["round_trip"], out))
