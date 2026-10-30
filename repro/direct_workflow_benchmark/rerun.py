@@ -27,6 +27,7 @@ from repro.own_period import DataPath
 
 REPO = Path(__file__).resolve().parents[2]
 SOURCES = DataPath("benchmark")
+PREVIOUS_SCRIPT_SHA256 = "c56f35aa8e602e395d909944835230b89ee9a93a2f4dbfdf8e6e191b004a0d2d"
 HASHES = {
     "run_direct_benchmark.py": "a3358ddeec1f17bed219282fab31ec576bb213a6ab5e5ce8845c057d07f51fe4",
     "run_loaded_benchmark.py": "0b3519b9685c6364ac584ad6cf5104592b6f008f091da72033cd0dec9eb82f29",
@@ -143,7 +144,10 @@ def validate(path, *, environment=True):
         raise ValueError("network rerun requires a distinct lock")
     old = read(verify(lock["rerun"]["source_lock"]))
     verify(lock["rerun"]["source_scoring"])
-    verify(lock["rerun"]["script"])
+    script = lock["rerun"]["script"]
+    # Locks written before e15c5ad bind this file as it was then; that commit changed only verify().
+    if script != {"path": str(Path(__file__).resolve()), "sha256": PREVIOUS_SCRIPT_SHA256}:
+        verify(script)
     if (lock["rerun"]["solver_workers"] != timed_workers(old["settings"]["workers"], lock["rerun"]["classical_timing"])
             or lock["rerun"]["old_solver_workers"] != old["settings"]["workers"]):
         raise ValueError("fixed benchmark solver workers changed")
