@@ -10,9 +10,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from repro import network_root as network
 
 
 def load(path):
+    network.check_json(path)
     return json.loads(Path(path).read_text())
 
 
@@ -22,6 +24,7 @@ def ecl(v):
 
 
 def metis(run):
+    network.check_npz(run / "evaluations/real-oof-ensemble.npz")
     e = np.load(run / "evaluations/real-oof-ensemble.npz")
     i = int(np.flatnonzero(e["object_ids"] == "asteroid_107")[0])
     parts = []
@@ -117,7 +120,9 @@ def column(base: Path):
 
 def main():
     out = Path(sys.argv[1])
-    cols = {"published-check": column(out / "published-check"),
+    cols = {"damit": column(out / "damit-period"),
+            "own": column(out / "own-period")} if network.switched() else {
+            "published-check": column(out / "published-check"),
             "damit": column(out / "damit-period"),
             "own": column(out / "own-period")}
     print(json.dumps(cols, indent=1))

@@ -29,9 +29,13 @@ import group_shapley as gs  # noqa: E402
 
 from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
 
+from repro import network_root as network  # noqa: E402
+
 FOLLOWUP = HERE.parents[1]
-RUNS = FOLLOWUP / "data/interpretation-20260926/shapley"
-OUTPUT = FOLLOWUP / "data/interpretation-20260926/shapley-summary.json"
+RUNS = network.NetworkPath("results", "shapley", "reference",
+                           legacy_path=FOLLOWUP / "data/interpretation-20260926/shapley")
+OUTPUT = network.NetworkPath("results", "shapley", "reference-summary.json",
+                             legacy_path=FOLLOWUP / "data/interpretation-20260926/shapley-summary.json")
 AXIS_GROUPS = (4, 5, 6)   # Sun term, observer term, product term
 
 
@@ -40,6 +44,7 @@ def flat_map_masks():
 
 
 def main():
+    network.guard_output(OUTPUT)
     files = sorted(glob.glob(str(RUNS / "fold-*-seed-*.npz")))
     if not files:
         raise SystemExit("no Shapley runs found")
@@ -50,6 +55,7 @@ def main():
     per_object = {}
     nsides = set()
     for name in files:
+        network.check_npz(name)
         data = np.load(name)
         nside = int(data["nside"])
         nsides.add(nside)
@@ -107,6 +113,9 @@ def main():
         "efficiency_max_abs_error": efficiency,
         "groups": groups,
     }
+    summary.update(network.json_metadata())
+    if network.switched():
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary, indent=1))
 

@@ -22,6 +22,8 @@ from pathlib import Path
 
 import numpy as np
 
+from repro import network_root as network
+
 from .network_controls import CONTROLS, DIAGNOSTIC, output_name
 from .nettests_common import EVALUATIONS, FOLLOWUP, SEEDS, max_abs, write_json_once
 
@@ -36,6 +38,8 @@ def published_path(fold, seed, control) -> Path:
 
 
 def compare(run_dir: Path) -> dict:
+    if network.switched():
+        raise ValueError("published comparison is only for the original networks; use Check 3")
     rows, worst_error, worst_grid = [], 0.0, 0.0
     for path in sorted(run_dir.glob("real-fold-*.npz")):
         stem = path.stem.split("-")
@@ -80,6 +84,7 @@ def summarize(run_dir: Path, folds) -> dict:
             path = run_dir / output_name(fold, seed, control)
             if not path.exists():
                 return None, None
+            network.check_npz(path)
             with np.load(path) as data:
                 values.append(np.asarray(data["oracle_errors_deg"], dtype=np.float64))
                 ids.extend(data["object_ids"].astype(str).tolist())
@@ -126,7 +131,10 @@ def main() -> int:
     parser.add_argument("--folds", type=int, nargs="+", default=list(range(5)))
     parser.add_argument("--compare-published", action="store_true")
     args = parser.parse_args()
+    network.guard_output(args.output)
+    network.check_json(args.run_dir / "period-source.json")
     value = {
+        **network.json_metadata(),
         "run_dir": str(args.run_dir),
         "period_source": json.loads((args.run_dir / "period-source.json").read_text()),
         "summary": summarize(args.run_dir, args.folds),

@@ -26,12 +26,17 @@ from lc_pipeline.k3 import publication_run as run
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.k3.tokenizer import K3_EPOCH_FEATURE_NAMES, K3_PHASE_FEATURE_NAMES
 
+from repro import network_root as network
+from repro.own_period import DataPath
+
 HERE = Path(__file__).resolve().parent
 FOLLOWUP = HERE.parents[1]
-ARTIFACTS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092"
+ARTIFACTS = network.NetworkPath("artifacts", legacy_followup=FOLLOWUP)
 CATALOG = HERE / "data/damit-20250610T000301Z/catalog.jsonl"
 SPLITS = HERE / "data/damit-20250610T000301Z/publication-splits-v2.3.json"
 DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
+if network.switched():
+    DUMP = DataPath("../../../damit-20250610T000301Z")
 SEEDS = (17, 42, 137, 777, 2027)
 
 EVEN = tuple(f"fourier_h{h}_{p}" for h in (2, 4, 6, 8) for p in ("cos", "sin"))
@@ -91,6 +96,7 @@ def set_geometric(control):
 
 
 def evaluate(control, output_dir, device):
+    network.guard_output(output_dir)
     split = json.loads(SPLITS.read_text())
     rows = []
     for fold_row in split["folds"]:
@@ -99,7 +105,9 @@ def evaluate(control, output_dir, device):
         for seed in SEEDS:
             checkpoint = ARTIFACTS / f"models/real-fold-{fold}-seed-{seed}.pt"
             output = output_dir / f"real-fold-{fold}-seed-{seed}-{control}.npz"
+            network.check_checkpoint(checkpoint)
             if output.exists():
+                network.check_npz(output)
                 errors = np.load(output)["oracle_errors_deg"]
             else:
                 transform = None
@@ -109,12 +117,14 @@ def evaluate(control, output_dir, device):
                 try:
                     run._evaluate_examples(
                         checkpoint, examples, output, device=device, batch_size=4,
-                        input_transform=transform,
+                        input_transform=transform, artifact_arrays=network.evaluation_metadata(len(examples)),
                     )
                 finally:
                     set_geometric(None)
                 errors = np.load(output)["oracle_errors_deg"]
-            base = np.load(ARTIFACTS / f"evaluations/real-fold-{fold}-seed-{seed}.npz")
+            baseline = ARTIFACTS / f"evaluations/real-fold-{fold}-seed-{seed}.npz"
+            network.check_npz(baseline)
+            base = np.load(baseline)
             rows.append({"fold": fold, "seed": seed, "control": control,
                          "mean_error": float(errors.mean()),
                          "baseline_mean_error": float(base["oracle_errors_deg"].mean())})
@@ -128,10 +138,12 @@ def main():
     parser.add_argument("--controls", nargs="+", default=list(CONTROLS))
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
+    network.guard_output(args.output_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for control in args.controls:
         rows = evaluate(control, args.output_dir, args.device)
-        (args.output_dir / f"summary-{control}.json").write_text(json.dumps(rows, indent=1))
+        value = {"rows": rows, **network.json_metadata()} if network.switched() else rows
+        (args.output_dir / f"summary-{control}.json").write_text(json.dumps(value, indent=1))
 
 
 if __name__ == "__main__":

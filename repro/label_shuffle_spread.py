@@ -20,11 +20,16 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from lc_pipeline.k3.evaluation import modes_from_score_grid  # noqa: E402
 
+from repro import network_root as network  # noqa: E402
+
 FOLLOWUP = HERE.parents[1]
-EVALUATIONS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations"
+EVALUATIONS = network.NetworkPath("evaluations", legacy_followup=FOLLOWUP)
+OUTPUT = network.NetworkPath("results", "controls-label-shuffle", "label-shuffle-spread.json",
+                             legacy_path=FOLLOWUP / "data/interpretation-20260930/label-shuffle-spread.json")
 
 
 def spread(path):
+    network.check_npz(path)
     data = np.load(path)
     largest = []
     for grid in data["score_grids"]:
@@ -51,13 +56,17 @@ def random_three_axes(draws=200000, seed=20260930):
 
 
 def main():
+    network.guard_output(OUTPUT)
     out = {
         "correct_axes": spread(EVALUATIONS / "synthetic-test-seed-17.npz"),
         "shuffled_axes": spread(EVALUATIONS / "synthetic-label-shuffle-test-seed-17.npz"),
         "random_three_axes_one_reference_deg_analytic": float(np.degrees(2.0 / 3.0)),
         "random_three_axes_one_reference_deg_simulated": random_three_axes(),
     }
-    target = FOLLOWUP / "data/interpretation-20260930/label-shuffle-spread.json"
+    out.update(network.json_metadata())
+    target = OUTPUT
+    if network.switched():
+        target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(out, indent=1))
     print(json.dumps(out, indent=1))
 

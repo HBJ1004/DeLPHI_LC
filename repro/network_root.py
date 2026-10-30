@@ -96,7 +96,9 @@ def guard_output(path) -> None:
     destination = Path(path).resolve()
     parts = destination.parts
     if ("own-period-20261021" in parts or "frozen-artifacts" in parts
-            or "DeLPHI-k3-release-assets-20260906" in parts):
+            or "DeLPHI-k3-release-assets-20260906" in parts
+            or any(p in parts for p in ("interpretation-20260923", "interpretation-20260926",
+                                       "interpretation-20260930", "publication-revision-20260917-r2"))):
         raise ValueError(f"network switch refuses published output folder: {destination}")
 
 
@@ -129,6 +131,11 @@ def network_metadata() -> dict:
 
 def json_metadata() -> dict:
     return {key: str(value) for key, value in network_metadata().items()}
+
+
+def evaluation_metadata(count: int) -> dict:
+    """The unchanged evaluation writer requires extras aligned with examples."""
+    return {key: np.full(count, value) for key, value in json_metadata().items()}
 
 
 def check_jsonl(path) -> None:
@@ -166,7 +173,8 @@ def check_npz(path) -> None:
             if digest not in known.values():
                 raise ValueError(f"network binding hash mismatch in {path}")
         if "network_binding_sha256" in arrays:
-            if arrays["network_binding_sha256"].item() != sha256(NetworkPath("binding")):
+            marker = arrays["network_binding_sha256"]
+            if not marker.size or not np.all(marker == sha256(NetworkPath("binding"))):
                 raise ValueError(f"network binding hash mismatch: {path}")
             return
     root = Path(NetworkPath("artifacts")).resolve()
@@ -175,6 +183,22 @@ def check_npz(path) -> None:
     except ValueError as exc:
         raise ValueError(f"unbound network artifact: {path}") from exc
     hashes = value.get("artifact_sha256", {})
+    if (value["schema"] == LOCAL_SCHEMA and relative ==
+            "evaluations/synthetic-label-shuffle-test-seed-17.npz"):
+        # The training queue evaluates this auxiliary network after headline binding.
+        # Bind its native receipt to the very same 31-checkpoint audit, not a new switch.
+        from repro.prepare_k3_followup_inputs import local_evaluation_receipt
+
+        audit_path = Path(NetworkPath("binding")).parent / "checkpoint-audit.json"
+        if sha256(audit_path) != value.get("checkpoint_audit_sha256"):
+            raise ValueError("network binding checkpoint audit hash mismatch")
+        audit = json.loads(audit_path.read_text())
+        checkpoint = root / "models/synthetic-label-shuffle-seed-17.pt"
+        digest = audit["checkpoint_sha256"].get(checkpoint.name)
+        receipt = local_evaluation_receipt(root, path, digest)
+        if not digest or sha256(checkpoint) != digest or receipt.get("checkpoint_sha256") != digest:
+            raise ValueError(f"network binding auxiliary checkpoint mismatch: {path}")
+        return
     if not hashes:
         index_path = root / "release/archive-index.json"
         if sha256(index_path) != value.get("archive_index_sha256"):

@@ -33,11 +33,16 @@ import compute_reference_baselines as base  # noqa: E402
 from lc_pipeline.k3.evaluation import modes_from_score_grid  # noqa: E402
 from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
 
+from repro import network_root as network  # noqa: E402
+from repro.own_period import DataPath  # noqa: E402
+
 FOLLOWUP = HERE.parents[1]
-ENSEMBLE = (
-    FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
-)
+ENSEMBLE = network.NetworkPath("evaluations", "real-oof-ensemble.npz", legacy_followup=FOLLOWUP)
 DUMP = FOLLOWUP.parent / "damit-20250610T000301Z/files"
+OUTPUT = network.NetworkPath("results", "amplitude-aspect", "amplitude-aspect.json",
+                             legacy_path=FOLLOWUP / "data/interpretation-20260930/amplitude-aspect.json")
+if network.switched():
+    DUMP = DataPath("../../../damit-20250610T000301Z/files")
 MIN_POINTS = 15
 AB = np.linspace(1.0, 3.0, 41)
 BC = np.linspace(1.0, 2.0, 21)
@@ -80,6 +85,10 @@ def amplitude_aspect_scores(amplitudes, directions, axes):
 
 
 def main():
+    network.guard_output(OUTPUT)
+    network.check_npz(ENSEMBLE)
+    if network.switched():
+        base.CATALOG = DataPath("../../inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl")
     ensemble = np.load(ENSEMBLE)
     grid = axial_healpix_grid(32)
     poles = base.reference_poles()
@@ -107,15 +116,17 @@ def main():
                 "standard_oracle_deg": base.axial_error_deg(standard, poles[name]),
             }
         )
-    output = FOLLOWUP / "data/interpretation-20260930/amplitude-aspect.json"
+    output = OUTPUT
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(rows, indent=1))
+    value = {"objects": rows, **network.json_metadata()} if network.switched() else rows
+    output.write_text(json.dumps(value, indent=1))
     maps = np.array(maps)
     delphi_maps = ensemble["score_grids"][kept].astype(float)
     np.savez_compressed(
         output.with_suffix(".npz"),
         object_ids=np.array([rows[i]["object_id"] for i in range(len(rows))]),
         amplitude_aspect_maps=maps,
+        **network.network_metadata(),
     )
     # Null: DeLPHI map of one asteroid against the amplitude-aspect map of another.
     generator = np.random.default_rng(20260923)

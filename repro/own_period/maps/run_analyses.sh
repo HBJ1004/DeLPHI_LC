@@ -5,6 +5,25 @@ WT="${DELPHI_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 : "${DELPHI_DATA:?set DELPHI_DATA to the data folder}"
 PY="${PYTHON:-python}"
 OP="$DELPHI_DATA"
+# The selected-network path never consults publication completion markers.
+if [[ -n ${DELPHI_NETWORK_ROOT:-}${DELPHI_MODEL_BINDING:-}${DELPHI_BUNDLE_ROOT:-} ]]; then
+  export PYTHONPATH="$WT"
+  "$PY" -B - <<'PY_SWITCH'
+import os
+from pathlib import Path
+import subprocess
+import sys
+from repro import network_root as network
+out = Path(network.NetworkPath("results", "headline", "maps"))
+network.guard_output(out)
+for choice in ("damit-period", "own-period"):
+    periods = "damit" if choice == "damit-period" else str(Path(os.environ["DELPHI_DATA"]) / "own-periods-170.json")
+    subprocess.run([sys.executable, "-B", "-m", "repro.own_period.maps.analyses",
+                    "--run", str(out / choice), "--periods", periods,
+                    "--out", str(out / choice / "analyses")], check=True)
+PY_SWITCH
+  exit 0
+fi
 OUT="$OP/maps"
 export PYTHONPATH="$WT" OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2
 cd "$WT"

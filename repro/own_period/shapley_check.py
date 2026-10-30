@@ -22,6 +22,7 @@ import numpy as np
 
 from .nettests_common import OUT, max_abs, write_json_once
 from .shapley_op import PUBLISHED, compute_summary
+from repro import network_root as network
 
 
 def compact(summary):
@@ -36,11 +37,23 @@ def compact(summary):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--reference", type=Path)
+    parser.add_argument("--rerun", type=Path)
+    parser.add_argument("--repeat", type=Path)
     args = parser.parse_args()
+    network.guard_output(args.output)
     name = "fold-0-seed-17.npz"
-    rerun, repeat = OUT / "shapley-damit", OUT / "shapley-damit-repeat"
+    reference = args.reference or network.NetworkPath(
+        "results", "shapley", "reference", legacy_path=PUBLISHED)
+    rerun = args.rerun or network.NetworkPath(
+        "results", "shapley", "damit", legacy_path=OUT / "shapley-damit")
+    repeat = args.repeat or network.NetworkPath(
+        "results", "shapley", "damit-repeat", legacy_path=OUT / "shapley-damit-repeat")
+    network.check_npz(reference / name)
+    network.check_npz(rerun / name)
+    network.check_npz(repeat / name)
     with tempfile.TemporaryDirectory() as tmp:
-        (Path(tmp) / name).symlink_to(PUBLISHED / name)
+        (Path(tmp) / name).symlink_to(reference / name)
         pub = compact(compute_summary(Path(tmp)))
     new = compact(compute_summary(rerun))
     share = max(abs(new["share_percent"][k] - pub["share_percent"][k]) for k in pub["share_percent"])
@@ -48,6 +61,7 @@ def main() -> int:
     a, b = np.load(rerun / name), np.load(repeat / name)
     repeat_diff = max(max_abs(a["percentile"], b["percentile"]), max_abs(a["grid_error"], b["grid_error"]))
     value = {
+        **network.json_metadata(),
         "published": pub,
         "rerun": new,
         "max_abs_share_diff_percentage_points": share,
@@ -60,9 +74,12 @@ def main() -> int:
         share <= 0.05 and effect <= 0.05 and value["full_percentile_diff"] <= 1e-3
         and value["full_grid_error_diff_deg"] <= 0.05 and repeat_diff == 0.0
     )
+    if network.switched():
+        value["reference"] = value.pop("published")
+        value["reference_role"] = "fresh selected-network DAMIT-period reference"
     write_json_once(args.output, value)
     print(json.dumps({k: v for k, v in value.items() if k not in ("published", "rerun")}))
-    return 0
+    return 0 if not network.switched() or value["passes"] else 1
 
 
 if __name__ == "__main__":

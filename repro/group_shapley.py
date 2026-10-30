@@ -45,12 +45,17 @@ from lc_pipeline.k3.model import CandidateConditionedScorer  # noqa: E402
 from lc_pipeline.k3.tokenizer import K3_EPOCH_FEATURE_NAMES, K3_PHASE_FEATURE_NAMES  # noqa: E402
 from lc_pipeline.k3.training import collate_examples  # noqa: E402
 
+from repro import network_root as network
+from repro.own_period import DataPath
+
 HERE = Path(__file__).resolve().parent
 FOLLOWUP = HERE.parents[1]
-ARTIFACTS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092"
+ARTIFACTS = network.NetworkPath("artifacts", legacy_followup=FOLLOWUP)
 CATALOG = HERE / "data/damit-20250610T000301Z/catalog.jsonl"
 SPLITS = HERE / "data/damit-20250610T000301Z/publication-splits-v2.3.json"
 DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
+if network.switched():
+    DUMP = DataPath("../../../damit-20250610T000301Z")
 SEEDS = (17, 42, 137, 777, 2027)
 INPUT_KEYS = ("phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask")
 
@@ -301,10 +306,12 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--pilot", action="store_true", help="one fold and one seed only")
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seeds", type=int, nargs="+", choices=SEEDS, default=list(SEEDS))
     parser.add_argument(
         "--nside", type=int, default=16, help="HEALPix resolution of the scored grid"
     )
     args = parser.parse_args()
+    network.guard_output(args.output_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     split = json.loads(SPLITS.read_text())
     grid = axial_healpix_grid(args.nside)
@@ -313,7 +320,7 @@ def main():
         np.array(grid.vectors, copy=True), dtype=torch.float32, device=args.device
     )
     folds = split["folds"][:1] if args.pilot else split["folds"]
-    seeds = SEEDS[:1] if args.pilot else SEEDS
+    seeds = args.seeds[:1] if args.pilot else args.seeds
     cache = {}
     # Seeds on the outside, so that one full pass over all 170 asteroids
     # (one network per fold) is complete before the next seed starts.
@@ -322,6 +329,7 @@ def main():
             fold = int(fold_row["fold"])
             output = args.output_dir / f"fold-{fold}-seed-{seed}.npz"
             if output.exists():
+                network.check_npz(output)
                 continue
             if fold not in cache:
                 examples = run.load_real_examples(CATALOG, DUMP, tuple(fold_row["test_ids"]))
@@ -335,8 +343,10 @@ def main():
                 ]
                 cache[fold] = (examples, shared_channel_means(batches, args.device))
             examples, shared_means = cache[fold]
+            checkpoint_path = ARTIFACTS / f"models/real-fold-{fold}-seed-{seed}.pt"
+            network.check_checkpoint(checkpoint_path)
             checkpoint = torch.load(
-                ARTIFACTS / f"models/real-fold-{fold}-seed-{seed}.pt",
+                checkpoint_path,
                 map_location="cpu",
                 weights_only=False,
             )
@@ -357,6 +367,7 @@ def main():
                 shapley_percentile=shapley(percentile),
                 shapley_grid_error=shapley(grid_error),
                 shared_means=np.array([shared_means[c] for c in (3, 4, 5, 6)]),
+                **network.network_metadata(),
             )
             print(
                 json.dumps(

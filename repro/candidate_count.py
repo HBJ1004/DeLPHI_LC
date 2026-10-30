@@ -28,9 +28,13 @@ import compute_reference_baselines as base  # noqa: E402
 
 from lc_pipeline.k3.grid import axial_healpix_grid, local_maximum_indices  # noqa: E402
 
+from repro import network_root as network  # noqa: E402
+from repro.own_period import DataPath  # noqa: E402
+
 FOLLOWUP = HERE.parents[1]
-ENSEMBLE = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
-OUTPUT = FOLLOWUP / "data/interpretation-20260926/candidate-count.json"
+ENSEMBLE = network.NetworkPath("evaluations", "real-oof-ensemble.npz", legacy_followup=FOLLOWUP)
+OUTPUT = network.NetworkPath("results", "candidate-count", "candidate-count.json",
+                             legacy_path=FOLLOWUP / "data/interpretation-20260926/candidate-count.json")
 SEPARATION_DEG = 15.0
 KS = (1, 2, 3, 4, 5, 6)
 
@@ -73,6 +77,10 @@ def covered_fraction(axes, radius_deg, sky):
 
 
 def main():
+    network.guard_output(OUTPUT)
+    network.check_npz(ENSEMBLE)
+    if network.switched():
+        base.CATALOG = DataPath("../../inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl")
     ensemble = np.load(ENSEMBLE)
     names = [str(value) for value in ensemble["object_ids"]]
     grid = axial_healpix_grid(32)
@@ -128,6 +136,7 @@ def main():
         "search_area_p90_radius": covered_fraction(standard, float(np.percentile(standard_errors, 90)), sky),
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    summary.update(network.json_metadata())
     OUTPUT.write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary, indent=1))
 

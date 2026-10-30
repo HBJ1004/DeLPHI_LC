@@ -27,6 +27,7 @@ from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.grid import axial_healpix_grid
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.k3.training import collate_examples
+from repro import network_root as network
 from repro import group_shapley as gs
 from repro import group_shapley_summary as su
 
@@ -36,15 +37,17 @@ PUBLISHED = FOLLOWUP / "data/interpretation-20260926/shapley"
 
 
 def run(args) -> int:
+    network.guard_output(args.out_dir)
     periods, provenance, label = period_override(args.periods)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     stamp = args.out_dir / "period-source.json"
     if stamp.exists():
+        network.check_json(stamp)
         if json.loads(stamp.read_text())["period_source"] != label:
             raise SystemExit("output directory belongs to another period source")
     else:
         with stamp.open("x") as stream:
-            json.dump({"period_source": label, "provenance": provenance, "spec": args.periods}, stream)
+            json.dump({"period_source": label, "provenance": provenance, "spec": args.periods, **network.json_metadata()}, stream)
     grid = axial_healpix_grid(args.nside)
     fast_modes = gs.FastModes(grid)
     grid_tensor = torch.as_tensor(np.array(grid.vectors, copy=True), dtype=torch.float32, device=args.device)
@@ -54,6 +57,7 @@ def run(args) -> int:
         for fold in args.folds:
             output = args.out_dir / f"fold-{fold}-seed-{seed}.npz"
             if output.exists():
+                network.check_npz(output)
                 continue
             if fold not in cache:
                 examples = load_examples(tuple(rows[fold]["test_ids"]), periods, provenance)
@@ -63,7 +67,9 @@ def run(args) -> int:
                 ]
                 cache[fold] = (examples, gs.shared_channel_means(batches, args.device))
             examples, shared_means = cache[fold]
-            checkpoint = torch.load(MODELS / f"real-fold-{fold}-seed-{seed}.pt", map_location="cpu", weights_only=False)
+            checkpoint_path = MODELS / f"real-fold-{fold}-seed-{seed}.pt"
+            network.check_checkpoint(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
             model = CandidateConditionedScorer(K3ScoreModelConfig(**checkpoint["model_config"]))
             model.load_state_dict(checkpoint["model_state_dict"])
             model.to(args.device).eval()
@@ -81,6 +87,7 @@ def run(args) -> int:
                     shapley_grid_error=gs.shapley(grid_error),
                     shared_means=np.array([shared_means[c] for c in (3, 4, 5, 6)]),
                     period_hours=np.array([e.tokenized.period_hours for e in examples]),
+                    **network.network_metadata(),
                 )
             print(json.dumps({"fold": fold, "seed": seed, "seconds": round(time.time() - started, 1),
                               "full_percentile": float(percentile[:, 255].mean()),
@@ -92,6 +99,7 @@ def corrected(files, catalog):
     """Per-file corrected combination values, exactly as group_shapley_summary."""
     masks = su.flat_map_masks()
     for name in files:
+        network.check_npz(name)
         data = np.load(name)
         grid = axial_healpix_grid(int(data["nside"]))
         flat_axes = gs.FastModes(grid).vectors[gs.FastModes(grid)(np.zeros(len(grid.vectors)))]
@@ -116,6 +124,8 @@ def summary(args) -> int:
 
 
 def compute_summary(runs: Path, compare_published: bool = False) -> dict:
+    if compare_published and network.switched():
+        raise ValueError("published comparison is only for the original networks; use Check 3")
     files = sorted(glob.glob(str(runs / "fold-*-seed-*.npz")))
     if not files:
         raise SystemExit("no Shapley runs found")
@@ -167,10 +177,11 @@ def compute_summary(runs: Path, compare_published: bool = False) -> dict:
             "fraction_raising_error": float(np.mean(shap_e[:, g] > 0.0)),
         })
     value = {
+        **network.json_metadata(),
         "runs": str(runs),
         "period_source": json.loads((runs / "period-source.json").read_text())
         if (runs / "period-source.json").exists()
-        else "published run directory",
+        else "selected-network reference directory" if network.switched() else "published run directory",
         "networks": len(files),
         "asteroids": len(names),
         "networks_per_asteroid": sorted({len(v) for v in per_object.values()}),

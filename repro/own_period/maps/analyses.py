@@ -43,6 +43,7 @@ from repro.network_root import (  # noqa: E402
     check_npz,
     guard_output,
     network_metadata,
+    json_metadata,
     switched,
 )
 from repro.own_period import DataPath  # noqa: E402
@@ -59,6 +60,10 @@ ZTF_SCORES = NetworkPath(
 
 def write_once(path: Path, value) -> None:
     guard_output(path)
+    if switched() and isinstance(value, dict):
+        value = {**value, **json_metadata()}
+    elif switched() and isinstance(value, list):
+        value = [{**row, **json_metadata()} for row in value]
     with path.open("x", encoding="utf-8") as handle:
         handle.write(json.dumps(value, indent=1) + "\n")
 
@@ -129,6 +134,7 @@ def run_amplitude_aspect(ensemble_path: Path, out: Path) -> tuple[list, dict]:
             handle,
             object_ids=np.array([rows[i]["object_id"] for i in range(len(rows))]),
             amplitude_aspect_maps=maps,
+            **network_metadata(),
         )
     generator = np.random.default_rng(20260923)
     null = []

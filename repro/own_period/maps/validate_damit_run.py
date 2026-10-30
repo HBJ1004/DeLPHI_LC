@@ -10,9 +10,9 @@ from pathlib import Path
 
 import numpy as np
 
-from repro.own_period import DataPath
+from repro.network_root import NetworkPath, check_npz, guard_output, json_metadata, switched
 
-PUBLISHED = DataPath("../../inputs/frozen-artifacts/k3-definitive-7874092/evaluations")
+PUBLISHED = NetworkPath("evaluations")
 SEEDS = (17, 42, 137, 777, 2027)
 
 
@@ -25,9 +25,15 @@ def axis_angle_deg(a, b):
 
 def main():
     run, output = Path(sys.argv[1]) / "evaluations", Path(sys.argv[2])
+    guard_output(output)
+    check_npz(PUBLISHED / "real-oof-ensemble.npz")
+    check_npz(run / "real-oof-ensemble.npz")
     p = np.load(PUBLISHED / "real-oof-ensemble.npz")
     r = np.load(run / "real-oof-ensemble.npz")
-    out = {"keys_identical": sorted(p.files) == sorted(r.files),
+    def scientific(files):
+        return [k for k in files if k != "network_binding_sha256"] if switched() else files
+
+    out = {"keys_identical": sorted(scientific(p.files)) == sorted(scientific(r.files)),
            "dtypes_identical": all(p[k].dtype == r[k].dtype for k in p.files),
            "shapes_identical": all(p[k].shape == r[k].shape for k in p.files),
            "ids_identical": bool((p["object_ids"] == r["object_ids"]).all()),
@@ -49,9 +55,11 @@ def main():
     for s in SEEDS:
         grid_diff, err_diff, pub, new = 0.0, 0.0, [], []
         for f in range(5):
+            check_npz(PUBLISHED / f"real-fold-{f}-seed-{s}.npz")
+            check_npz(run / f"real-fold-{f}-seed-{s}.npz")
             a = np.load(PUBLISHED / f"real-fold-{f}-seed-{s}.npz")
             b = np.load(run / f"real-fold-{f}-seed-{s}.npz")
-            assert a.files == b.files and (a["object_ids"] == b["object_ids"]).all()
+            assert scientific(a.files) == scientific(b.files) and (a["object_ids"] == b["object_ids"]).all()
             grid_diff = max(grid_diff, float(np.abs(a["score_grids"].astype(float) - b["score_grids"]).max()))
             err_diff = max(err_diff, float(np.abs(a["oracle_errors_deg"] - b["oracle_errors_deg"]).max()))
             pub.append(a["oracle_errors_deg"])
@@ -65,6 +73,7 @@ def main():
         and out["checkpoint_sha256_identical"] and out["refined_axes_max_angle_deg"] < 1e-3
         and out["oracle_error_max_abs_diff_deg"] < 1e-4
         and all(abs(v["published_mean_deg"] - v["rerun_mean_deg"]) < 1e-3 for v in seeds.values()))
+    out.update(json_metadata())
     with output.open("x") as handle:
         handle.write(json.dumps(out, indent=1) + "\n")
     print(json.dumps(out, indent=1))

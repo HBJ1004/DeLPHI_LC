@@ -34,6 +34,7 @@ import numpy as np
 from lc_pipeline.k3 import publication_run as run
 from lc_pipeline.k3.training import K3TrainingExample, deterministic_derangement_indices
 from repro import interpretation_ablations as finer
+from repro import network_root as network
 
 from .nettests_common import MODELS, SEEDS, fold_rows, load_examples, period_override
 
@@ -48,10 +49,13 @@ def output_name(fold: int, seed: int, control: str) -> str:
 
 
 def evaluate(control, fold, seed, examples, test_ids, destination, device):
+    network.guard_output(destination)
     checkpoint = MODELS / f"real-fold-{fold}-seed-{seed}.pt"
+    network.check_checkpoint(checkpoint)
     kwargs = {"device": device, "batch_size": 4}
+    metadata = network.evaluation_metadata(len(examples))
     if control == "raw":
-        return run._evaluate_examples(checkpoint, examples, destination, **kwargs)
+        return run._evaluate_examples(checkpoint, examples, destination, artifact_arrays=metadata, **kwargs)
     if control == "input-swap":
         control_seed = run.K3_INPUT_SWAP_SEED + fold
         donors = deterministic_derangement_indices(len(examples), seed=control_seed)
@@ -68,6 +72,7 @@ def evaluate(control, fold, seed, examples, test_ids, destination, device):
             swapped,
             destination,
             artifact_arrays={
+                **metadata,
                 "input_donor_ids": np.asarray([test_ids[int(i)] for i in donors]),
                 "derangement_seeds": np.full(len(swapped), control_seed, dtype=np.int64),
             },
@@ -78,7 +83,7 @@ def evaluate(control, fold, seed, examples, test_ids, destination, device):
             checkpoint,
             examples,
             destination,
-            artifact_arrays={"diagnostic_control": np.full(len(examples), control)},
+            artifact_arrays={"diagnostic_control": np.full(len(examples), control), **metadata},
             input_transform=lambda inputs: run.ablate_k3_inputs(inputs, control),
             **kwargs,
         )
@@ -86,7 +91,7 @@ def evaluate(control, fold, seed, examples, test_ids, destination, device):
     finer.set_geometric(control if control in finer.GEOMETRIC else None)
     try:
         return run._evaluate_examples(
-            checkpoint, examples, destination, input_transform=transform, **kwargs
+            checkpoint, examples, destination, input_transform=transform, artifact_arrays=metadata, **kwargs
         )
     finally:
         finer.set_geometric(None)
@@ -104,15 +109,17 @@ def main() -> int:
     unknown = set(args.controls) - set(CONTROLS)
     if unknown:
         raise SystemExit(f"unknown controls {sorted(unknown)}")
+    network.guard_output(args.out_dir)
     periods, provenance, label = period_override(args.periods)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     stamp = args.out_dir / "period-source.json"
     if stamp.exists():
+        network.check_json(stamp)
         if json.loads(stamp.read_text())["period_source"] != label:
             raise SystemExit("output directory belongs to another period source")
     else:
         with stamp.open("x") as stream:
-            json.dump({"period_source": label, "provenance": provenance, "spec": args.periods}, stream)
+            json.dump({"period_source": label, "provenance": provenance, "spec": args.periods, **network.json_metadata()}, stream)
     for row in fold_rows():
         fold = int(row["fold"])
         if fold not in args.folds:
@@ -123,6 +130,7 @@ def main() -> int:
             for control in args.controls:
                 destination = args.out_dir / output_name(fold, seed, control)
                 if destination.exists():
+                    network.check_npz(destination)
                     continue
                 started = time.time()
                 summary = evaluate(control, fold, seed, examples, test_ids, destination, args.device)

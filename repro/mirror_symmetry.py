@@ -30,13 +30,18 @@ import compute_reference_baselines as base  # noqa: E402
 
 from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
 
+from repro import network_root as network  # noqa: E402
+from repro.own_period import DataPath  # noqa: E402
+
 FOLLOWUP = HERE.parents[1]
-ENSEMBLE = (
-    FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
-)
+ENSEMBLE = network.NetworkPath("evaluations", "real-oof-ensemble.npz", legacy_followup=FOLLOWUP)
 DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
-LOWQ = FOLLOWUP / "data/publication-revision-20260917-r2/lowq-analysis.json"
-OUTPUT = FOLLOWUP / "data/interpretation-20260926/mirror-symmetry.json"
+LOWQ = network.NetworkPath("results", "mirror", "lowq-analysis.json",
+                           legacy_path=FOLLOWUP / "data/publication-revision-20260917-r2/lowq-analysis.json")
+OUTPUT = network.NetworkPath("results", "mirror", "mirror-symmetry.json",
+                             legacy_path=FOLLOWUP / "data/interpretation-20260926/mirror-symmetry.json")
+if network.switched():
+    DUMP = DataPath("../../../damit-20250610T000301Z")
 SEED = 20260923
 
 
@@ -94,6 +99,11 @@ def binned(values, errors, edges):
 
 
 def main():
+    network.guard_output(OUTPUT)
+    network.check_npz(ENSEMBLE)
+    network.check_json(LOWQ)
+    if network.switched():
+        base.CATALOG = DataPath("../../inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl")
     ensemble = np.load(ENSEMBLE)
     names = [str(value) for value in ensemble["object_ids"]]
     maps = ensemble["score_grids"].astype(float)
@@ -300,9 +310,37 @@ def main():
         "lower_quality_direction": lower_quality,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps({"summary": summary, "objects": per_object}, indent=1))
+    OUTPUT.write_text(json.dumps({"summary": summary, "objects": per_object, **network.json_metadata()}, indent=1))
     print(json.dumps(summary, indent=1))
 
 
+def prepare_lowq_input():
+    """Publish the fresh RT3b reference-period census in the mirror input layout."""
+    if not network.switched():
+        raise ValueError("preparing the rerun mirror input requires the network switch")
+    source = network.NetworkPath("results", "lower-quality-census", "scores-reference",
+                                 "census-analysis-excluded.json")
+    network.guard_output(LOWQ)
+    network.check_json(source)
+    value = json.loads(source.read_text())
+    rows = value["objects"]
+    identifiers = [r["object_id"] for r in rows]
+    if (not rows or len(identifiers) != len(set(identifiers))
+            or any(not oid.startswith("damit:") for oid in identifiers)
+            or any(not np.isfinite(r["oracle_at_3_error_deg"]) for r in rows)):
+        raise ValueError("invalid fresh lower-quality mirror cohort")
+    value.update(source_sha256=network.sha256(source), source_path=str(source),
+                 **network.json_metadata())
+    LOWQ.parent.mkdir(parents=True, exist_ok=True)
+    with LOWQ.open("x") as stream:
+        stream.write(json.dumps(value, indent=1) + "\n")
+    return value
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--prepare-lowq-input", action="store_true")
+    args = parser.parse_args()
+    prepare_lowq_input() if args.prepare_lowq_input else main()

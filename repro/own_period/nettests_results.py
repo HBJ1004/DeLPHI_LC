@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from repro import network_root as network
 
 from .network_controls import DIAGNOSTIC, FINER, output_name
 from .nettests_common import EVALUATIONS, FOLLOWUP, OP, OUT, SEEDS, sha256
@@ -61,6 +62,8 @@ def ci(d) -> str:
 
 
 def published_gaps() -> dict:
+    if network.switched():
+        raise ValueError("published gaps are historical evidence; use selected-network summaries")
     out = {}
     for control in ("input-swap",) + DIAGNOSTIC + FINER:
         folder = PUB_FINER if control in FINER else EVALUATIONS
@@ -73,10 +76,40 @@ def published_gaps() -> dict:
     return out
 
 
+def selected_results(output):
+    """RT3c results only; deferred families cannot silently supply old evidence."""
+    network.guard_output(output)
+    lines = ["# Selected-network controls and Shapley results", "",
+             "network_binding_sha256: " + network.json_metadata()["network_binding_sha256"], ""]
+    for family in ("controls-input-swap", "input-removals", "shapley"):
+        for period in ("damit", "own"):
+            path = network.NetworkPath("results", family, period + "-summary.json")
+            network.check_json(path)
+            value = json.loads(path.read_text())
+            lines.extend([f"## {family}, {period} period", "", f"Source: {path}", ""])
+            if family == "shapley":
+                for row in value["groups"]:
+                    lines.append(f"- {row['group']}: share {100 * row['percentile_share']:.3f}%; "
+                                 f"grid effect {row['grid_error_mean_deg']:.3f} deg")
+            else:
+                for control, row in value["summary"]["controls"].items():
+                    lines.append(f"- {control}: gap {row['gap_mean_deg']:.3f} deg "
+                                 f"({row['gap_min_deg']:.3f} to {row['gap_max_deg']:.3f})")
+            lines.append("")
+    lines.append("Deferred families: training versus test, external variants and uncertainty sensitivity.")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("x") as stream:
+        stream.write("\n".join(lines) + "\n")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=OUT / "RESULTS.md")
+    parser.add_argument("--output", type=Path, default=network.NetworkPath(
+        "results", "controls-input-swap", "RESULTS.md", legacy_path=OUT / "RESULTS.md"))
     args = parser.parse_args()
+    if network.switched():
+        return selected_results(Path(args.output))
     L = []
     w = L.append
     w("# Own-period network tests of Paper I (package nettests)")
