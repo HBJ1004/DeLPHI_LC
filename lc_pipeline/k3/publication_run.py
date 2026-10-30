@@ -219,7 +219,7 @@ def load_real_examples(
 
 
 def load_synthetic_examples(directory: str | Path) -> tuple[K3TrainingExample, ...]:
-    """Verify, load, and tokenize a complete synthetic split in shard order."""
+    """Verify and tokenize current-version shards; training cannot opt into v1."""
     root = Path(directory)
     shards = sorted(root.glob("*.npz"))
     if not shards:
@@ -243,7 +243,7 @@ def load_synthetic_examples(directory: str | Path) -> tuple[K3TrainingExample, .
 def load_synthetic_subset(
     directory: str | Path, *, count: int, seed: int
 ) -> tuple[K3TrainingExample, ...]:
-    """Load the hash-ranked synthetic subset used for real-data regularization."""
+    """Load current-version shards for hash-ranked real-data regularization."""
     shards = sorted(Path(directory).glob("*.npz"))
     identifiers: list[str] = []
     for shard in shards:

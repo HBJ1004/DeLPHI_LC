@@ -22,8 +22,9 @@ from .renderer import (
     render_brightness,
 )
 
-SYNTHETIC_RECIPE_SCHEMA = "delphi.k3-synthetic-recipe.v1"
-SYNTHETIC_SHARD_SCHEMA = "delphi.k3-synthetic-shard.v1"
+SYNTHETIC_RECIPE_SCHEMA = "delphi.k3-synthetic-recipe.v2"
+SYNTHETIC_SHARD_SCHEMA = "delphi.k3-synthetic-shard.v2"
+LEGACY_SYNTHETIC_SHARD_SCHEMA = "delphi.k3-synthetic-shard.v1"
 
 
 class SyntheticDataError(ValueError):
@@ -105,8 +106,15 @@ class ResidualNoiseBank:
             raise SyntheticDataError(f"cannot load residual noise bank {source}: {exc}") from exc
         return cls(residuals, sigmas, provenance, sha256_file(source))
 
-    def sample_like(self, generator: np.random.Generator, count: int) -> tuple[np.ndarray, float]:
-        sigma = float(self.mad_sigmas[int(generator.integers(0, len(self.mad_sigmas)))])
+    def sample_like(
+        self,
+        generator: np.random.Generator,
+        count: int,
+        *,
+        sigma_generator: np.random.Generator,
+        offset_generator: np.random.Generator,
+    ) -> tuple[np.ndarray, float]:
+        sigma = float(self.mad_sigmas[int(sigma_generator.integers(0, len(self.mad_sigmas)))])
         pieces: list[np.ndarray] = []
         total = 0
         while total < count:
@@ -114,7 +122,7 @@ class ResidualNoiseBank:
             pieces.append(value)
             total += value.size
         pool = np.concatenate(pieces)
-        start = int(generator.integers(0, max(1, pool.size - count + 1)))
+        start = int(offset_generator.integers(0, max(1, pool.size - count + 1)))
         sampled = np.array(pool[start : start + count], copy=True)
         sampled -= sampled.mean()
         scale = float(sampled.std())
@@ -198,21 +206,52 @@ def canonicalize_axes(axes: np.ndarray) -> np.ndarray:
     return result
 
 
-def sample_uniform_axial_axes(count: int, *, seed: int) -> np.ndarray:
-    """Sample uniformly on the sphere and quotient by the antipodal relation."""
+def _sample_uniform_directed_axes(
+    count: int, *, seed: int | np.random.SeedSequence
+) -> np.ndarray:
+    """Keep signed z available before taking the antipodal quotient."""
     if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
         raise SyntheticDataError("axis count must be a positive integer")
-    generator = np.random.default_rng(seed)
-    z = generator.uniform(-1.0, 1.0, count)
-    longitude = generator.uniform(0.0, 2.0 * math.pi, count)
+    sequence = seed if isinstance(seed, np.random.SeedSequence) else np.random.SeedSequence(seed)
+    z_seed, longitude_seed = sequence.spawn(2)
+    z = np.random.default_rng(z_seed).uniform(-1.0, 1.0, count)
+    longitude = np.random.default_rng(longitude_seed).uniform(0.0, 2.0 * math.pi, count)
     radius = np.sqrt(np.maximum(0.0, 1.0 - z * z))
-    directed = np.stack((radius * np.cos(longitude), radius * np.sin(longitude), z), axis=1)
-    return canonicalize_axes(directed)
+    return np.stack((radius * np.cos(longitude), radius * np.sin(longitude), z), axis=1)
+
+
+def sample_uniform_axial_axes(count: int, *, seed: int) -> np.ndarray:
+    """Sample uniformly on the sphere and quotient by the antipodal relation."""
+    return canonicalize_axes(_sample_uniform_directed_axes(count, seed=seed))
 
 
 def _sample_period(recipe: SyntheticRecipe, generator: np.random.Generator) -> float:
     low, high = recipe.period_range_hours
     return float(np.exp(generator.uniform(math.log(low), math.log(high))))
+
+
+@dataclass(frozen=True)
+class SyntheticDraws:
+    """Unrendered parameters, retaining the directed pole for distribution checks."""
+
+    directed_axis: tuple[float, float, float]
+    period_hours: float
+    initial_phase: float
+
+
+def sample_synthetic_draws(recipe: SyntheticRecipe, *, seed: int) -> SyntheticDraws:
+    """Draw independent object parameters without rendering any observations.
+
+    Fixed spawn keys reserve streams 0/1/2/3 for axis/period/phase/noise.
+    Overrides therefore cannot shift any other quantity's random stream.
+    """
+    axis_seed, period_seed, phase_seed, _noise_seed = np.random.SeedSequence(seed).spawn(4)
+    axis = _sample_uniform_directed_axes(1, seed=axis_seed)[0]
+    return SyntheticDraws(
+        directed_axis=tuple(float(value) for value in axis),
+        period_hours=_sample_period(recipe, np.random.default_rng(period_seed)),
+        initial_phase=float(np.random.default_rng(phase_seed).uniform(0.0, 2.0 * math.pi)),
+    )
 
 
 def generate_synthetic_record(
@@ -233,13 +272,19 @@ def generate_synthetic_record(
         raise SyntheticDataError("geometry donor must contain at least one epoch")
     if any(len(epoch.observations) < 3 for epoch in epochs):
         raise SyntheticDataError("each geometry donor epoch requires at least three observations")
-    generator = np.random.default_rng(seed)
+    draws = sample_synthetic_draws(recipe, seed=seed)
+    # Noise has separate scale, selection and perturbation/window streams.
+    # The residual-bank and analytic smoke branches use these independently.
+    scale_seed, selection_seed, noise_seed = np.random.SeedSequence(seed, spawn_key=(3,)).spawn(3)
+    scale_generator = np.random.default_rng(scale_seed)
+    selection_generator = np.random.default_rng(selection_seed)
+    noise_generator = np.random.default_rng(noise_seed)
     axis = (
-        sample_uniform_axial_axes(1, seed=seed)[0]
+        canonicalize_axes(np.asarray(draws.directed_axis))[0]
         if target_axis is None
         else canonicalize_axes(np.asarray(target_axis, dtype=np.float64))[0]
     )
-    period = _sample_period(recipe, generator) if period_hours is None else float(period_hours)
+    period = draws.period_hours if period_hours is None else float(period_hours)
     if not math.isfinite(period) or period <= 0:
         raise SyntheticDataError("period_hours must be finite and positive")
     flattened = [observation for epoch in epochs for observation in epoch.observations]
@@ -253,7 +298,7 @@ def generate_synthetic_record(
     epoch_index = np.concatenate(
         [np.full(len(epoch.observations), index, dtype=np.int64) for index, epoch in enumerate(epochs)]
     )
-    initial_phase = generator.uniform(0.0, 2.0 * math.pi)
+    initial_phase = draws.initial_phase
     phases = initial_phase + 2.0 * math.pi * (times - times.min()) / (period / 24.0)
     dtype = torch.float64
     brightness = render_brightness(
@@ -276,7 +321,12 @@ def generate_synthetic_record(
         noisy = None
         sampled_sigma = 0.0
         for _attempt in range(32):
-            residual, sampled_sigma = residual_noise_bank.sample_like(generator, brightness.size)
+            residual, sampled_sigma = residual_noise_bank.sample_like(
+                selection_generator,
+                brightness.size,
+                sigma_generator=scale_generator,
+                offset_generator=noise_generator,
+            )
             proposal = brightness + residual
             if np.all(np.isfinite(proposal)) and np.all(proposal > 0):
                 noisy = proposal
@@ -286,11 +336,11 @@ def generate_synthetic_record(
         sigma = np.full(brightness.size, sampled_sigma, dtype=np.float64)
     else:
         sigma = recipe.noise.relative_sigma_median * np.exp(
-            recipe.noise.relative_sigma_log_scatter * generator.normal(size=brightness.size)
+            recipe.noise.relative_sigma_log_scatter * scale_generator.normal(size=brightness.size)
         )
-        outliers = generator.random(brightness.size) < recipe.noise.outlier_fraction
+        outliers = selection_generator.random(brightness.size) < recipe.noise.outlier_fraction
         sigma[outliers] *= recipe.noise.outlier_sigma_multiplier
-        noisy = brightness * np.exp(generator.normal(scale=sigma))
+        noisy = brightness * np.exp(noise_generator.normal(scale=sigma))
     if not np.all(np.isfinite(noisy)) or np.any(noisy <= 0):
         raise SyntheticDataError("noise recipe produced invalid synthetic brightness")
     output_epochs: list[ObservationEpoch] = []
@@ -396,6 +446,7 @@ def write_synthetic_shard(
             temporary.unlink()
     manifest = {
         "schema": SYNTHETIC_SHARD_SCHEMA,
+        "recipe_schema": recipe.schema,
         "split": recipe.split,
         "shard_index": int(shard_index),
         "object_count": len(values),
@@ -409,21 +460,41 @@ def write_synthetic_shard(
     return manifest
 
 
+def _read_synthetic_manifest(source: Path, *, allow_legacy: bool) -> dict[str, Any]:
+    try:
+        manifest = json.loads(source.with_suffix(source.suffix + ".manifest.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SyntheticDataError(f"cannot read synthetic shard manifest: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise SyntheticDataError("synthetic shard manifest must be an object")
+    schema = manifest.get("schema")
+    if schema == LEGACY_SYNTHETIC_SHARD_SCHEMA:
+        if not allow_legacy:
+            raise SyntheticDataError(
+                f"legacy synthetic shard {source} uses {schema} with coupled random streams; "
+                f"training requires {SYNTHETIC_SHARD_SCHEMA}. Regenerate shards with independent "
+                "streams; allow_legacy=True is available only for analysis reads."
+            )
+    elif schema != SYNTHETIC_SHARD_SCHEMA:
+        raise SyntheticDataError(f"synthetic shard schema mismatch: {schema!r}")
+    elif manifest.get("recipe_schema") != SYNTHETIC_RECIPE_SCHEMA:
+        raise SyntheticDataError(f"synthetic shard requires recipe schema {SYNTHETIC_RECIPE_SCHEMA}")
+    if manifest.get("data_sha256") != sha256_file(source):
+        raise SyntheticDataError("synthetic shard manifest/hash mismatch")
+    return manifest
+
+
 def load_synthetic_shard(
     path: str | Path,
     *,
     verify_manifest: bool = True,
     selected_object_ids: set[str] | None = None,
+    allow_legacy: bool = False,
 ) -> tuple[SyntheticRecord, ...]:
-    """Load a safe NPZ shard and reconstruct exact source epoch boundaries."""
+    """Load exact source epochs; opt into v1 only for analysis, never training."""
     source = Path(path)
     if verify_manifest:
-        try:
-            manifest = json.loads(source.with_suffix(source.suffix + ".manifest.json").read_text("utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise SyntheticDataError(f"cannot read synthetic shard manifest: {exc}") from exc
-        if manifest.get("schema") != SYNTHETIC_SHARD_SCHEMA or manifest.get("data_sha256") != sha256_file(source):
-            raise SyntheticDataError("synthetic shard manifest/hash mismatch")
+        _read_synthetic_manifest(source, allow_legacy=allow_legacy)
     try:
         archive = np.load(source, allow_pickle=False)
     except (OSError, ValueError) as exc:
@@ -478,16 +549,10 @@ def load_synthetic_shard(
     return tuple(records)
 
 
-def verify_synthetic_shard(path: str | Path) -> dict[str, object]:
-    """Verify a shard/hash/offset contract without constructing Python records."""
+def verify_synthetic_shard(path: str | Path, *, allow_legacy: bool = False) -> dict[str, object]:
+    """Verify current shards; legacy verification is an explicit analysis opt-in."""
     source = Path(path)
-    manifest_path = source.with_suffix(source.suffix + ".manifest.json")
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SyntheticDataError(f"cannot read synthetic shard manifest: {exc}") from exc
-    if manifest.get("schema") != SYNTHETIC_SHARD_SCHEMA or manifest.get("data_sha256") != sha256_file(source):
-        raise SyntheticDataError("synthetic shard manifest/hash mismatch")
+    manifest = _read_synthetic_manifest(source, allow_legacy=allow_legacy)
     try:
         with np.load(source, allow_pickle=False) as archive:
             required = {
