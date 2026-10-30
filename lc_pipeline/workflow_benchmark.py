@@ -238,7 +238,9 @@ def _parallel_starts(
 ) -> tuple[list[dict], float]:
     directory.mkdir()
     started = time.perf_counter()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=SETTINGS["workers"]) as pool:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=lock.get("rerun", {}).get("solver_workers", SETTINGS["workers"])
+    ) as pool:
         futures = [
             pool.submit(
                 grid._native_start,

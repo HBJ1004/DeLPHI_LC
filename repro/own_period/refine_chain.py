@@ -247,6 +247,9 @@ def _check_existing_json(path: Path, expected: dict) -> None:
 
 
 def command_refine(args) -> int:
+    from repro import network_root as network
+    if network.switched():
+        raise ValueError("reuse the fixed narrow period scans in a network rerun")
     cost._check_solver(args.solver_source)
     cost._check_cpus(args.cpus, args.workers)
     plan = build_refine_plan(args)

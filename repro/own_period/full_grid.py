@@ -30,6 +30,9 @@ ARMS = ("standard6", "classical20")
 
 
 def main() -> int:
+    from repro import network_root as network
+    if network.switched():
+        raise ValueError("reuse the fixed classical full-grid fits in a network rerun")
     lock = json.loads((BENCH / "evaluation-lock.json").read_text())
     if prior._runtime_sources(Path(lock["code_root"])) != lock["runtime_sources"]:
         raise RuntimeError("runtime source changed")

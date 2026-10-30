@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import subprocess
 import sys
 import time
@@ -41,6 +40,7 @@ from lc_pipeline import grid_benchmark as grid
 from lc_pipeline.k3 import grid_benchmark_scoring as gs
 
 from repro.own_period import DataPath
+from repro import network_root as network
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
@@ -54,6 +54,8 @@ MODE = "cold"
 
 
 def lock(args: argparse.Namespace) -> int:
+    if network.switched():
+        return rerun_lock(args)
     published = grid.read_json(PUBLISHED_LOCK)
     objects = published["objects"]
     meta: dict = {"published_lock": {"path": str(PUBLISHED_LOCK), "sha256": grid.digest(PUBLISHED_LOCK)}}
@@ -118,9 +120,12 @@ def case_name(job: dict) -> str:
 
 
 def execute(args: argparse.Namespace) -> int:
+    network.guard_output(args.output)
     lock_path = args.lock.resolve()
     output = args.output.resolve()  # absolute: the solver runs with cwd in each start directory
     doc = grid.read_json(lock_path)
+    if network.switched():
+        validate_rerun_lock(lock_path)
     for row in doc["objects"]:
         grid._verify_binding(row["lightcurve"])
     if grid.digest(Path(doc["solver"]["executable"]["path"])) != doc["solver"]["executable"]["sha256"]:
@@ -145,6 +150,8 @@ def execute(args: argparse.Namespace) -> int:
         name = case_name(job)
         directory = output / "cases" / name
         if (directory / "timed-result.json").exists():
+            if network.switched():
+                audit_case(directory)
             continue
         if args.max_seconds and time.perf_counter() - chunk_started > args.max_seconds:
             print(f"chunk limit reached at case {position + 1}/{len(jobs)}", flush=True)
@@ -152,6 +159,17 @@ def execute(args: argparse.Namespace) -> int:
             return 3
         if directory.exists() or (output / "jobs" / f"{name}.json").exists():
             raise RuntimeError(f"incomplete case left by an earlier run, needs manual audit: {name}")
+        if network.switched() and job["arm"] == "classical20" and doc["rerun"]["classical_timing"] == "reuse":
+            source = Path(doc["rerun"]["classical_source"]) / "cases" / name
+            directory.mkdir(parents=True)
+            for path in sorted(source.glob("start-*")):
+                (directory / path.name).symlink_to(path, target_is_directory=True)
+            row = grid.read_json(source / "timed-result.json")
+            from repro.direct_workflow_benchmark.rerun import bound
+            grid.write_once(directory / "timed-result.json", {**row, **network.json_metadata(),
+                             "classical_source": bound(source / "timed-result.json")})
+            audit_case(directory)
+            continue
         job = {**job, "directory": str(directory)}
         job_path = output / "jobs" / f"{name}.json"
         grid.write_once(job_path, job)
@@ -172,6 +190,18 @@ def execute(args: argparse.Namespace) -> int:
         if child.returncode != 0:
             raise RuntimeError(f"cold worker failed for {name}; see log")
         record = json.loads(stdout)
+        if network.switched():
+            record.update(network.json_metadata())
+            if job["arm"] == "classical20":
+                from repro.direct_workflow_benchmark.rerun import audit_start, bound, equal_start
+                source = Path(doc["rerun"]["classical_source"]) / "cases" / name
+                old = sorted(source.glob("start-*/record.json"))
+                new = sorted(directory.glob("start-*/record.json"))
+                if len(old) != len(new):
+                    raise ValueError("retimed grid start count changed")
+                for a, b in zip(new, old, strict=True):
+                    equal_start(audit_start(a), audit_start(b))
+                record["classical_source"] = bound(source / "timed-result.json")
         record["wall_seconds"] = elapsed
         record["case_path"] = str(directory.relative_to(output))
         grid.write_once(directory / "timed-result.json", record)
@@ -297,7 +327,10 @@ def _period_search_seconds() -> dict[str, float]:
 
 
 def score(args: argparse.Namespace) -> int:
+    network.guard_output(args.output)
     doc = grid.read_json(args.lock)
+    if network.switched():
+        validate_rerun_lock(args.lock)
     execution = args.execution.resolve()
     published_layout = execution == PUBLISHED_FULL.resolve()
     if not published_layout:
@@ -305,9 +338,17 @@ def score(args: argparse.Namespace) -> int:
         if state.get("execution_complete") is not True or state["lock_sha256"] != grid.digest(args.lock):
             raise RuntimeError("execution incomplete or bound to another lock; scoring refused")
     jobs = jobs_for(doc, None, None)
+    if network.switched():
+        expected = [{"path": str(Path("cases") / case_name(j) / "timed-result.json"),
+                     "sha256": grid.digest(execution / "cases" / case_name(j) / "timed-result.json")}
+                    for j in jobs]
+        if state["rows"] != expected:
+            raise ValueError("grid completion rows changed or are incomplete")
     records = {}
     for job in jobs:
         case = execution / "cases" / case_name(job)
+        if network.switched():
+            audit_case(case)
         row = grid.read_json(case / "timed-result.json")
         # integrity: the written selection is the minimum-RMS valid start
         fits = [grid.read_json(c)["selected_fit"] for c in sorted(case.glob("start-*/record.json"))]
@@ -404,6 +445,7 @@ def score(args: argparse.Namespace) -> int:
     with_search_ids = np.asarray([o in search for o in ids])
     timed_search, *_ = analysis(add={o: search.get(o, 0.0) for o in ids}, keep=with_search_ids)
     result = {
+        **network.json_metadata(),
         "schema": "delphi.v67.grid-score.v1",
         "lock_sha256": grid.digest(args.lock), "execution": str(execution),
         "convention": "published: classical20 vs guided20, cold, three repeats; runtime = sum classical / sum guided wall seconds; RMS = geometric mean of object-level selected-fit RMS ratios over jointly completed repeats; agreement = per-object mean selected axial error over repeats with a fit",
@@ -417,8 +459,65 @@ def score(args: argparse.Namespace) -> int:
             "objects_with_time": int(with_search_ids.sum()),
             "mean_seconds": float(np.mean([search[o] for o in ids if o in search]))}},
     }
+    if network.switched():
+        result["classical_timing"] = doc["rerun"]["classical_timing"]
+        result["classical_retiming_cpu_seconds"] = (sum(
+            r["solver_cpu_seconds"] for key, r in records.items() if key[1] == "classical20")
+            if doc["rerun"]["classical_timing"] == "retime" else 0)
     grid.write_once(args.output, result)
     print(json.dumps({k: result[k] for k in ("cold_step20_primary", "angular_comparison_step20")}, indent=1, default=str))
+    return 0
+
+
+def audit_case(directory):
+    from repro.direct_workflow_benchmark.rerun import audit_start, verify
+    path = directory / "timed-result.json"
+    network.check_json(path)
+    row = grid.read_json(path)
+    if "classical_source" in row:
+        verify(row["classical_source"])
+    for relative, digest in row["cell_files"].items():
+        record_path = directory / relative
+        if grid.digest(record_path) != digest:
+            raise ValueError("grid start receipt changed")
+        audit_start(record_path)
+    if ("classical_source" not in row and row.get("prediction_sha256") is not None
+            and grid.digest(directory / "prediction.json") != row["prediction_sha256"]):
+        raise ValueError("grid prediction changed")
+
+
+def validate_rerun_lock(path):
+    from repro.direct_workflow_benchmark.rerun import verify
+    network.check_json(path)
+    value = grid.read_json(path)
+    old = grid.read_json(verify(value["rerun"]["source_lock"]))
+    if value["objects"] != old["objects"] or value["settings"] != {**old["settings"], "workers": 4}:
+        raise ValueError("fixed V7 objects or settings changed")
+    if value["solver"] != old["solver"] or value["inputs"] != old["inputs"]:
+        raise ValueError("fixed V7 solver or inputs changed")
+    if value["bundles"] != [network.bundle_record(f, old["bundles"]) for f in range(5)]:
+        raise ValueError("chosen V7 bundles changed")
+    return value
+
+
+def rerun_lock(args):
+    from repro.direct_workflow_benchmark.rerun import bound, save
+    source = PUBLISHED_LOCK if args.periods == "published" else DataPath("v67/v7-own-period-lock.json")
+    original = grid.read_json(source)
+    if args.periods != "published":
+        periods = grid.read_json(args.periods)["periods_hours"]
+        if any(float(periods[r["object_id"]]) != r["period_hours"] for r in original["objects"]):
+            raise ValueError("saved V7 periods changed")
+    settings = {**original["settings"], "workers": 4}
+    payload = {**original, **network.json_metadata(), "settings": settings,
+        "code_root": str(CODE_ROOT), "runtime_sources": grid._runtime_sources(CODE_ROOT),
+        "bundles": [network.bundle_record(fold, original["bundles"]) for fold in range(5)],
+        "device": args.device or original["device"],
+        "environment": grid._environment(args.device or original["device"]),
+        "rerun": {"source_lock": bound(source), "classical_timing": args.classical_timing,
+                  "classical_source": str(PUBLISHED_FULL if args.periods == "published" else DataPath("v67/v7-own-period")),
+                  "order": "original grid order_seed=20260911, all other arms filtered out"}}
+    save(args.output, payload)
     return 0
 
 
@@ -430,6 +529,7 @@ def main() -> int:
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--workers", type=int, default=0)
     p.add_argument("--device", choices=("cpu", "cuda"))
+    p.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
     e = sub.add_parser("execute")
     e.add_argument("--lock", type=Path, required=True)
     e.add_argument("--output", type=Path, required=True)

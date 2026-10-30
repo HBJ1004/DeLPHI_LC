@@ -1,0 +1,246 @@
+"""CPU-only protocol and provenance checks for RT3d1 adapters."""
+from copy import deepcopy
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from repro import network_root as network
+from repro.direct_workflow_benchmark import rerun
+from repro.own_period import temporal, refine_chain_post as post, v6_fixed_period as v6, v7_grid as v7
+from lc_pipeline import grid_benchmark as grid
+from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
+
+
+def dump(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value))
+
+
+@pytest.fixture
+def selected(tmp_path, monkeypatch):
+    for key in network.VARIABLES:
+        monkeypatch.delenv(key, raising=False)
+    root = tmp_path / 'artifact-root'
+    records = []
+    for fold in range(5):
+        for seed in network.SEEDS:
+            path = root / 'models' / f'real-fold-{fold}-seed-{seed}.pt'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(path.name.encode())
+            records.append(dict(filename=path.name, sha256=network.sha256(path), size_bytes=path.stat().st_size))
+    dump(root / 'model-binding.json', dict(schema=network.LOCAL_SCHEMA,
+         protocol_sha256=K3_PROTOCOL_SHA256, models=records))
+    monkeypatch.setenv('DELPHI_NETWORK_ROOT', str(root))
+    monkeypatch.setenv('DELPHI_DATA', str(tmp_path / 'fixed'))
+    return root
+
+
+@pytest.mark.parametrize('value,relative', [(temporal.OUTPUT, 'temporal'),
+    (post.OUTPUT, 'refine-chain'), (post.BENCHMARK, 'delphi-inversions/own'),
+    (post.PUBLISHED, 'delphi-inversions/damit')])
+def test_family_paths_use_central_switch(selected, value, relative):
+    assert Path(value) == selected.parent / 'results' / relative
+
+
+@pytest.mark.parametrize('folder', ['benchmark', 'direct-workflow-benchmark', 'pole-grid-benchmark'])
+def test_old_outputs_refused(selected, folder):
+    path = selected.parent / ('own-period-20261021' if folder == 'benchmark' else folder) / 'score.json'
+    with pytest.raises(ValueError, match='published output'):
+        rerun.save(path, {})
+
+
+def test_temporal_legacy_manifest_preserves_nonstandard_data_layout(selected, monkeypatch):
+    monkeypatch.delenv('DELPHI_NETWORK_ROOT')
+    assert Path(temporal.MODEL_MANIFEST) == selected.parent / 'external-models-final.json'
+    assert repr(post.BENCHMARK).startswith('DataPath(')
+
+
+@pytest.mark.parametrize('call', [lambda: temporal.command_search(SimpleNamespace()),
+    lambda: __import__('repro.own_period.refine_chain', fromlist=['command_refine']).command_refine(SimpleNamespace()),
+    lambda: __import__('repro.own_period.full_grid', fromlist=['main']).main()])
+def test_independent_searches_and_full_grid_reused(selected, call):
+    with pytest.raises(ValueError, match='reuse'):
+        call()
+
+
+def make_source(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    lc = source / 'lc.txt'
+    lc.parent.mkdir()
+    lc.write_text('photometry')
+    exe = source / 'convexinv'
+    exe.write_bytes(b'solver')
+    catalog = source / 'catalog.jsonl'
+    catalog.write_text('reference')
+    code = source / 'native.py'
+    code.write_text('faithful')
+    monkeypatch.setattr(rerun, 'SOURCES', source)
+    monkeypatch.setattr(rerun, 'HASHES', {'native.py': network.sha256(code)})
+    monkeypatch.setattr(network, 'bundle_record', lambda fold, old: {'fold': fold, 'directory': f'chosen-{fold}'})
+    monkeypatch.setattr(grid, '_environment', lambda device: {'device': device})
+    lock = dict(objects=[dict(object_id='a', fold=0, period_hours=10.123456, lightcurve=rerun.bound(lc))],
+        settings=dict(workers=6, repeats=3, seed=20260923, bootstrap_resamples=10000),
+        solver_settings={'timeout_seconds_per_start': 300, 'iteration_cap': 1000},
+        solver={'executable': rerun.bound(exe)}, bundles=[], selected_classical_starts=12,
+        classical_starts=[[1, 0, 0]] * 12)
+    dump(source / 'evaluation-lock.json', lock)
+    dump(source / 'scoring-lock.json', dict(evaluation_lock=rerun.bound(source / 'evaluation-lock.json'),
+                                           reference_catalog=rerun.bound(catalog)))
+    return source, lock
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+def test_prepare_freezes_protocol_and_old_worker_count(selected, tmp_path, monkeypatch, timing):
+    source, old = make_source(tmp_path, monkeypatch)
+    output = tmp_path / 'new'
+    lock = rerun.prepare(source, output, 'cpu', timing)
+    for field in ('objects', 'settings', 'solver_settings', 'classical_starts'):
+        assert lock[field] == old[field]
+    assert lock['rerun']['solver_workers'] == 4
+    assert lock['rerun']['classical_timing'] == timing
+    assert rerun.validate(output / 'evaluation-lock.json') == lock
+    assert rerun.prepare(source, output, 'cpu', timing) == lock
+
+
+@pytest.mark.parametrize('field', ['objects', 'settings', 'solver_settings', 'classical_starts'])
+def test_lock_rejects_protocol_drift(selected, tmp_path, monkeypatch, field):
+    source, _ = make_source(tmp_path, monkeypatch)
+    output = tmp_path / 'new'
+    lock = rerun.prepare(source, output, 'cpu')
+    lock[field] = []
+    dump(output / 'evaluation-lock.json', lock)
+    with pytest.raises(ValueError, match='fixed benchmark'):
+        rerun.validate(output / 'evaluation-lock.json')
+
+
+def test_retained_original_order_filters_without_reranking():
+    lock = dict(objects=[dict(object_id=str(i), fold=i % 5) for i in range(10)])
+    for mode, expected in [('cold', 60), ('loaded', 60), ('exploratory', 30)]:
+        jobs = rerun.jobs(lock, mode)
+        assert len(jobs) == expected
+        assert jobs == rerun.jobs(lock, mode)
+        if mode != 'cold':
+            assert [j['fold'] for j in jobs] == sorted(j['fold'] for j in jobs)
+
+
+@pytest.mark.parametrize('field', ['initial_axis', 'selected_fit', 'files', 'iterations', 'failure_reason'])
+def test_retiming_rejects_any_fit_or_product_change(field):
+    old = dict(start_index=0, initial_axis=[1, 0, 0], selected_fit={'rms': .1},
+               files={'stdout': 'digest'}, iterations=20, failure_reason=None)
+    rerun.equal_start({**old, 'solver_wall_seconds': 100}, {**old, 'solver_wall_seconds': 1})
+    new = deepcopy(old)
+    new[field] = 'changed'
+    with pytest.raises(ValueError, match='retimed classical'):
+        rerun.equal_start(new, old)
+
+
+def test_saved_product_hash_is_checked(tmp_path):
+    product = tmp_path / 'stdout'
+    product.write_text('old')
+    dump(tmp_path / 'record.json', dict(files={'stdout': network.sha256(product)}))
+    rerun.audit_start(tmp_path / 'record.json')
+    product.write_text('changed')
+    with pytest.raises(ValueError, match='product changed'):
+        rerun.audit_start(tmp_path / 'record.json')
+
+
+def test_v6_uses_explicit_old_arm_order(selected):
+    for oid, arms in [('a', ['candidate', 'baseline']), ('b', ['baseline', 'candidate'])]:
+        dump(selected.parent / 'fixed/v67/v6-own-period/runs' / oid / 'object-done.json', {'arm_order': arms})
+    assert v6.arm_order(['b', 'a']) == {'a': ('candidate', 'baseline'), 'b': ('baseline', 'candidate')}
+
+
+def test_v6_rejects_mixed_network_axes(selected, tmp_path):
+    path = tmp_path / 'axes.npz'
+    np.savez(path, object_ids=np.array(['a']), refined_axes=np.ones((1, 3, 3)), network_binding_sha256='old')
+    with pytest.raises(ValueError, match='binding hash mismatch'):
+        v6.load_axes(path, ['a'])
+
+
+def test_v7_reuses_exact_old_periods_and_caps_workers(selected, tmp_path, monkeypatch):
+    path = selected.parent / 'fixed/v67/v7-own-period-lock.json'
+    original = dict(objects=[dict(object_id='a', period_hours=10.123456)], settings={'workers': 6},
+                    bundles=[], device='cpu')
+    dump(path, original)
+    period = tmp_path / 'periods.json'
+    dump(period, {'periods_hours': {'a': 10.123456}})
+    monkeypatch.setattr(network, 'bundle_record', lambda f, old: {'fold': f})
+    monkeypatch.setattr(grid, '_environment', lambda device: {})
+    args = SimpleNamespace(periods=str(period), output=tmp_path / 'lock.json', device='cpu', classical_timing='reuse')
+    assert v7.rerun_lock(args) == 0
+    actual = rerun.read(args.output)
+    assert actual['objects'] == original['objects']
+    assert actual['settings']['workers'] == 4
+    dump(period, {'periods_hours': {'a': 11}})
+    with pytest.raises(ValueError, match='periods changed'):
+        v7.rerun_lock(args)
+
+
+def test_refine_classical_tasks_reference_only_saved_starts(selected, tmp_path, monkeypatch):
+    directory = tmp_path / 'refine'
+    dump(directory / 'evaluation-lock-refined.json', {})
+    dump(directory / 'predictions-refined/predictions.json', {})
+    for arm in ('standard6', 'classical20'):
+        for i in range(6 if arm == 'standard6' else 146):
+            dump(selected.parent / 'fixed/refine-chain/fits' / arm / 'a' / f'start-{i:03d}/timing.json', {})
+    lock = {'objects': [{'object_id': 'a', 'period_hours': 10, 'fold': 0}]}
+    predictions = {'a': {'refined_axes': np.eye(3).tolist()}}
+    args = SimpleNamespace(output_dir=directory, classical_timing='reuse')
+    tasks = post.fit_tasks(args, lock, predictions)
+    assert len(tasks) == 158
+    classical = [t for t in tasks if t['arm'] != 'delphi']
+    assert all('classical_source' in t for t in classical)
+    assert all(Path(t['directory']).is_relative_to(selected.parent / 'fixed') for t in classical)
+    args.classical_timing = 'retime'
+    tasks = post.fit_tasks(args, lock, predictions)
+    assert all(Path(t['directory']).is_relative_to(directory) for t in tasks)
+
+
+def test_central_bundle_is_checked_before_predictor_load(selected, monkeypatch):
+    called = []
+    def fail(fold, bundles):
+        called.append(fold)
+        raise ValueError('selected bundle mismatch')
+    monkeypatch.setattr(network, 'bundle_record', fail)
+    with pytest.raises(ValueError, match='selected bundle'):
+        grid._predictor({'device': 'cpu', 'bundles': []}, 2)
+    assert called == [2]
+
+
+def test_execution_duplicate_or_missing_cases_refused(selected, tmp_path, monkeypatch):
+    source, _ = make_source(tmp_path, monkeypatch)
+    output = tmp_path / 'new'
+    rerun.prepare(source, output, 'cpu')
+    execution = output / 'evaluation/execution.json'
+    dump(execution, dict(lock_sha256=network.sha256(output / 'evaluation-lock.json'), rows=[], mode='cold',
+                         **network.json_metadata()))
+    with pytest.raises(ValueError, match='incomplete'):
+        rerun.verify_execution(output / 'evaluation-lock.json', execution)
+
+
+def test_comparator_membership_reports_failed_cells_before_aggregation():
+    from repro.own_period.derived_comparators import membership_changes
+    old = [dict(object_id='a', condition='full', repeat=0, status='ok'),
+           dict(object_id='a', condition='full', repeat=1, status='ok')]
+    new = [old[0], {**old[1], 'status': 'failed'}]
+    ztf = [dict(object_id='z', own_error_deg=10.)]
+    assert not membership_changes(old, old, ztf, ztf)['membership_changed']
+    report = membership_changes(old, new, ztf, [{**ztf[0], 'own_error_deg': None}])
+    assert report['membership_changed']
+    assert report['reliability_changes']['full']['lost'] == [('a', 1)]
+    assert report['ztf_changes']['lost'] == ['z']
+
+
+@pytest.mark.parametrize('key', ['final_lambda_deg', 'output_lightcurve_sha256', 'iterations'])
+def test_v6_retiming_ignores_only_time_and_provenance(key):
+    old = {'identity': {'object_id': 'a'}, 'result': {'final_lambda_deg': 1.,
+        'output_lightcurve_sha256': 'same', 'iterations': 50, 'wall_time_seconds': 1}}
+    new = deepcopy(old)
+    new['result']['wall_time_seconds'] = 2
+    rerun.equal_downstream(new, old)
+    new['result'][key] = 'different'
+    with pytest.raises(ValueError, match='downstream fit differs'):
+        rerun.equal_downstream(new, old)

@@ -511,8 +511,11 @@ def _predictor(lock: dict, fold: int):
     import torch
 
     from .k3.bundle import K3EnsemblePredictor
+    from repro import network_root as network
+
     torch.set_num_threads(6)
-    return K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=lock["device"])
+    record = network.bundle_record(fold, lock["bundles"]) if network.switched() else lock["bundles"][fold]
+    return K3EnsemblePredictor(record["directory"], device=lock["device"])
 
 
 def _warmup(predictor) -> None:

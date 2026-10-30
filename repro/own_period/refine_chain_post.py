@@ -31,11 +31,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
 from repro.own_period import DataPath
+from repro import network_root as network
 
 DATA = DataPath()
-OUTPUT = DATA / "refine-chain"
-BENCHMARK = DATA / "benchmark"
-PUBLISHED = DataPath("../direct-workflow-benchmark")
+OUTPUT = network.NetworkPath("results", "refine-chain", legacy_path=DATA / "refine-chain")
+BENCHMARK = network.NetworkPath("results", "delphi-inversions", "own", legacy_path=DATA / "benchmark")
+PUBLISHED = network.NetworkPath("results", "delphi-inversions", "damit", legacy_path=DataPath("../direct-workflow-benchmark"))
 PROVENANCE = "own-fourier-gpu-top1+narrow-refine"
 ARMS = ("delphi6", "classical12", "classical146")
 SAVED_ARMS = ("delphi", "standard6", "classical20")
@@ -63,6 +64,7 @@ def verify(value: dict) -> Path:
 def save_outputs(outputs: dict[Path, object]) -> None:
     """Preflight every existing sibling before creating any missing output."""
     for path, value in outputs.items():
+        network.guard_output(path)
         if path.exists():
             actual = path.read_text() if isinstance(value, str) else read(path)
             if actual != value:
@@ -96,12 +98,14 @@ def _validate_runtime(lock: dict) -> None:
 
 
 def refined_inputs(args) -> tuple[dict, dict, list[dict]]:
+    network.check_json(args.benchmark_dir / "evaluation-lock.json")
     parent = read(args.benchmark_dir / "evaluation-lock.json")
     # Import only after choosing the frozen runtime in commands that use it.
     from repro.own_period.refine_chain import protocol_objects
 
     selected = protocol_objects(parent)
-    refined = read(args.output_dir / "refined-periods.json")
+    refined = read(DataPath("refine-chain/refined-periods.json") if network.switched()
+                   else args.output_dir / "refined-periods.json")
     rows = refined["objects"]
     if (len(rows) != len(selected)
             or {r["object_id"] for r in rows} != {r["object_id"] for r in selected}):
@@ -134,7 +138,8 @@ def lock_outputs(args) -> dict[Path, dict]:
     failed = [row["object_id"] for row in selected if row["object_id"] not in periods]
     provenance = {"provenance": PROVENANCE,
                   "source_lock": binding(args.benchmark_dir / "evaluation-lock.json"),
-                  "refined_periods": binding(args.output_dir / "refined-periods.json"),
+                  "refined_periods": binding(DataPath("refine-chain/refined-periods.json") if network.switched()
+                                            else args.output_dir / "refined-periods.json"),
                   "protocol": binding(args.protocol), "failed_object_ids": failed}
     lock = {**deepcopy(parent), "objects": objects, "refinement": provenance,
             "period_provenance": PROVENANCE}
@@ -182,11 +187,12 @@ def require_gpu_lock() -> None:
 
 
 def prediction_request(args, lock) -> dict:
-    return {"lock": binding(args.output_dir / "evaluation-lock-refined.json"),
+    return {**network.json_metadata(), "lock": binding(args.output_dir / "evaluation-lock-refined.json"),
             "periods": binding(args.output_dir / "periods-refined.json"),
             "script": binding(Path(__file__)),
             "predict_oof": binding(REPO / "repro/own_period/predict_oof.py"),
-            "model_manifest": binding(DATA.parent / "external-models-final.json"),
+            "model_manifest": binding(network.NetworkPath("binding") if network.switched()
+                                      else DATA.parent / "external-models-final.json"),
             "device": args.device, "objects": lock["objects"]}
 
 
@@ -281,6 +287,8 @@ def load_predictions(args, lock) -> dict[str, dict]:
     directory = args.output_dir / "predictions-refined"
     manifest = read(directory / "predictions.json")
     request = read(directory / "prediction-plan.json")
+    if network.switched() and any(request.get(k) != v for k, v in network.json_metadata().items()):
+        raise ValueError("refined predictions belong to different networks")
     if (manifest["request"] != request
             or request["lock"] != binding(args.output_dir / "evaluation-lock-refined.json")
             or request["periods"] != binding(args.output_dir / "periods-refined.json")
@@ -336,6 +344,11 @@ def fit_tasks(args, lock, predictions) -> list[dict]:
                 tasks.append({**common, "job": row, "arm": arm, "start_index": index,
                               "initial_axis": vector.tolist(),
                               "directory": str((args.output_dir / "fits" / arm / row["object_id"]).resolve())})
+                if network.switched() and arm != "delphi":
+                    source = Path(DataPath("refine-chain/fits")) / arm / row["object_id"]
+                    tasks[-1]["classical_source"] = binding(source / f"start-{index:03d}" / "timing.json")
+                    if getattr(args, "classical_timing", "reuse") == "reuse":
+                        tasks[-1]["directory"] = str(source.resolve())
     return tasks
 
 
@@ -348,6 +361,19 @@ def validate_start(task: dict) -> dict:
     if not (directory / "record.json").is_file() or not (directory / "timing.json").is_file():
         raise FileExistsError(f"incomplete start; inspect manually: {directory}")
     timing = read(directory / "timing.json")
+    if network.switched() and "classical_source" in task:
+        from repro.direct_workflow_benchmark.rerun import audit_start, equal_start
+        source_path = verify(task["classical_source"])
+        old = read(source_path)
+        verify(old["record"])
+        verify(old["task"]["lock"])
+        if (old["task"]["job"] != task["job"] or old["task"]["initial_axis"] != task["initial_axis"]
+                or old["task"]["start_index"] != task["start_index"]):
+            raise ValueError("reused classical refined inputs differ")
+        saved = audit_start(source_path.parent / "record.json")
+        if directory.resolve() == source_path.parent.resolve():
+            return {**saved, "solver_cpu_seconds": old["solver_cpu_seconds"]}
+        equal_start(audit_start(directory / "record.json"), saved)
     if timing.get("task") != task or timing["record"] != binding(directory / "record.json"):
         raise ValueError("saved start belongs to different inputs or its record changed")
     record = read(directory / "record.json")
@@ -404,6 +430,8 @@ def command_fits(args) -> int:
             or not set(args.cpus) <= os.sched_getaffinity(0)):
         raise ValueError("CPUs must be unique and available in the current affinity")
     workers = len(args.cpus) if args.workers is None else args.workers
+    if network.switched():
+        workers = min(workers, 4)
     if not 1 <= workers <= len(args.cpus):
         raise ValueError("workers must be between one and the number of CPUs")
     tasks = fit_tasks(args, lock, predictions)
@@ -411,6 +439,8 @@ def command_fits(args) -> int:
     plan_path = directory / "fit-plan.json"
     plan = {"tasks": tasks, "cpus": list(args.cpus), "workers": workers, "nice": 19,
             "ladder_indexes": ladder_indexes(args.benchmark_dir)}
+    if network.switched():
+        plan.update(classical_timing=args.classical_timing, **network.json_metadata())
     if not plan_path.exists() and directory.exists():
         raise FileExistsError("fits directory exists without its plan")
     pending = []
@@ -670,6 +700,9 @@ def command_score(args) -> int:
     _validate_runtime(read(args.benchmark_dir / "evaluation-lock.json"))
     lock = checked_lock(args)
     predictions = load_predictions(args, lock)
+    if network.switched():
+        # The fit plan records the choice, including for subsequent score calls.
+        args.classical_timing = read(args.output_dir / "fits/fit-plan.json").get("classical_timing", "reuse")
     records = records_by_arm(args, lock, predictions)
     # No reference catalog, period, pole or baseline result is opened above.
     parent, refined, selected = refined_inputs(args)
@@ -709,6 +742,13 @@ def command_score(args) -> int:
         sources.append(binding(args.cost_summary))
     scores = make_scores(selected, refined, own, references, records, predictions, baselines,
                          ladder_indexes(args.benchmark_dir), estimates)
+    scores.update(network.json_metadata())
+    if network.switched():
+        scores["classical_timing"] = args.classical_timing
+        scores["classical_retiming_cpu_seconds"] = (sum(
+            r["solver_cpu_seconds"] for arms in records.values()
+            for arm in ("standard6", "classical20") for r in arms[arm])
+            if args.classical_timing == "retime" else 0)
     scores["inputs"] = {"lock": binding(args.output_dir / "evaluation-lock-refined.json"),
                        "fits": binding(args.output_dir / "fits/complete.json"), "sources": sources}
     save_outputs({args.output_dir / "scores.json": scores,
@@ -744,12 +784,13 @@ def main(argv=None) -> int:
         command.set_defaults(function=function)
         command.add_argument("--output-dir", type=Path, default=OUTPUT)
         command.add_argument("--benchmark-dir", type=Path, default=BENCHMARK)
-        command.add_argument("--protocol", type=Path, default=OUTPUT / "PROTOCOL.md")
+        command.add_argument("--protocol", type=Path, default=DATA / "refine-chain/PROTOCOL.md" if network.switched() else OUTPUT / "PROTOCOL.md")
         if name == "predict":
             command.add_argument("--device", default="cuda")
         if name == "fits":
             command.add_argument("--cpus", type=parse_cpus, default=tuple(range(12, 24)))
             command.add_argument("--workers", type=int)
+            command.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
         if name == "score":
             command.add_argument("--published-dir", type=Path, default=PUBLISHED)
             command.add_argument("--cost-summary", type=Path, default=DATA / "period-cost/period-cost-summary.json")

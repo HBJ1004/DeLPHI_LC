@@ -37,15 +37,16 @@ from lc_pipeline.physics.axial import axial_angular_error_deg
 
 REPO = Path(__file__).resolve().parents[2]
 from repro.own_period import DataPath
+from repro import network_root as network
 
 DATA = DataPath("..")
-OUTPUT = DataPath('temporal')
+OUTPUT = network.NetworkPath("results", "temporal", legacy_path=DataPath('temporal'))
 PREPARED = DATA / "temporal-prepared-final"
 PUBLISHED = DATA / "temporal-predictions-final"
 PUBLISHED_SCORES = DATA / "temporal-scores-final"
 REFERENCES = DATA / "temporal-references-final.json"
-MODELS = DataPath('../../inputs/frozen-artifacts/k3-definitive-7874092/models')
-MODEL_MANIFEST = DATA / "external-models-final.json"
+MODELS = network.NetworkPath("models")
+MODEL_MANIFEST = network.NetworkPath("binding", legacy_path=DATA / "external-models-final.json")
 SPLITS = DataPath('../../inputs/training-run/repro/data/damit-20250610T000301Z/publication-splits-v2.3.json')
 OBJECT_IDS = ("asteroid_49", "asteroid_279", "asteroid_366")
 PROVENANCE = "own-fourier-gpu-top1"
@@ -65,6 +66,9 @@ def sha256(path: Path) -> str:
 
 
 def preflight(paths) -> None:
+    paths = list(paths)
+    for path in paths:
+        network.guard_output(path)
     for path in paths:
         if os.path.lexists(path):
             raise FileExistsError(f"refusing to overwrite {path}")
@@ -142,6 +146,8 @@ def load_own_periods(path: Path, prepared_dir: Path) -> dict:
 
 
 def command_search(args) -> int:
+    if network.switched():
+        raise ValueError("reuse the fixed temporal period search when switching networks")
     destination = args.output_dir / "own-periods-temporal.json"
     preflight([destination])
     require_gpu_lock()
@@ -283,6 +289,8 @@ def check_predictions(args, predictions: dict, expected_context: dict) -> dict:
 
 
 def command_predict(args) -> int:
+    if network.switched():
+        return predict_rerun(args)
     require_gpu_lock()
     names = ("period-manifest.json", "prepared", "predictions", "prediction-run.json",
              "damit-check.json", "scores.json", "RESULTS.md")
@@ -391,6 +399,8 @@ def results_markdown(scores: dict) -> str:
 
 
 def command_score(args) -> int:
+    if network.switched():
+        return score_rerun(args)
     preflight([args.output_dir / "scores.json", args.output_dir / "RESULTS.md"])
     run = read(args.output_dir / "prediction-run.json")
     if (run.get("schema") != "delphi.own-period-temporal-prediction-run.v1"
@@ -421,6 +431,107 @@ def command_score(args) -> int:
                         "references_sha256": sha256(args.references), "damit_check": receipt}
     save_new({args.output_dir / "scores.json": scores,
               args.output_dir / "RESULTS.md": results_markdown(scores)})
+    return 0
+
+
+def rerun_context(args):
+    return {**network.json_metadata(), "policy": POLICY, "model_count": 25,
+            "device": args.device,
+            "sources": {str(Path(p).resolve()): sha256(p) for p in (
+                args.prepared_dir / "manifest.json", args.model_manifest, args.splits,
+                DataPath("temporal/own-periods-temporal.json"), Path(__file__))}}
+
+
+def predict_rerun(args):
+    """Use the published numerical path with the chosen 25 checkpoints.
+
+    The old DAMIT reproduction gate applies to old networks only. Its source
+    preparation and saved period searches remain fixed, and are hash-bound here.
+    """
+    from lc_pipeline.k3.ztf_prediction import _load_prepared
+    from repro.own_period.predict_external import predict
+
+    if args.device.startswith("cuda"):
+        require_gpu_lock()
+    network.guard_output(args.output_dir)
+    request = rerun_context(args)
+    _, paths = source_objects(args.prepared_dir)
+    period_path = DataPath("temporal/own-periods-temporal.json")
+    own = load_own_periods(period_path, args.prepared_dir)
+    periods = ({oid: read(paths[oid])["known_period_hours"] for oid in OBJECT_IDS}
+               if args.damit_periods else own["periods_hours"])
+    run_path = args.output_dir / "prediction-run.json"
+    if run_path.exists():
+        check_rerun(args)
+        return 0
+    models = None
+    for oid in OBJECT_IDS:
+        path = args.output_dir / "predictions" / f"{oid}.json"
+        if path.exists():
+            network.check_json(path)
+            if read(path).get("request") != request or read(path).get("period_hours") != periods[oid]:
+                raise ValueError("temporal resume inputs changed")
+            continue
+        row = {"schema": PREDICTION_SCHEMA, "object_id": oid,
+               "period_hours": periods[oid], "request": request, **network.json_metadata()}
+        if periods[oid] is None:
+            row["status"] = "no_period"
+        else:
+            if models is None:
+                models = network.load_models(args.models, args.model_manifest, tuple(range(5)), args.device)[0]
+            _, period, epochs = _load_prepared(paths[oid])
+            from lc_pipeline.v2.preprocessing import KnownPeriod
+            axes, scores = predict(models, epochs, KnownPeriod(float(periods[oid]),
+                                    "published" if args.damit_periods else PROVENANCE), args.device, "ztf")
+            row.update(status="ok", policy=POLICY, model_count=25, folds=list(range(5)),
+                       axes=[{"axis_xyz": axis.tolist(), "score": float(score)}
+                             for axis, score in zip(axes, scores, strict=True)])
+        save_new({path: row})
+    save_new({run_path: {"request": request, "damit_periods": args.damit_periods,
+                        **network.json_metadata(), "periods_hours": periods,
+                        "prediction_sha256": {oid: sha256(args.output_dir / "predictions" / f"{oid}.json")
+                                              for oid in OBJECT_IDS},
+                        "publication_gate_skipped": "old-network DAMIT numerical equality; inputs remain fixed"}})
+    return 0
+
+
+def check_rerun(args):
+    path = args.output_dir / "prediction-run.json"
+    network.check_json(path)
+    run = read(path)
+    if run["request"] != rerun_context(args):
+        raise ValueError("temporal prediction inputs changed")
+    _, paths = source_objects(args.prepared_dir)
+    expected_periods = ({oid: read(paths[oid])["known_period_hours"] for oid in OBJECT_IDS}
+                        if run["damit_periods"] else load_own_periods(
+                            DataPath("temporal/own-periods-temporal.json"), args.prepared_dir)["periods_hours"])
+    if run["periods_hours"] != expected_periods or set(run["prediction_sha256"]) != set(OBJECT_IDS):
+        raise ValueError("temporal period policy or prediction membership changed")
+    for oid, digest in run["prediction_sha256"].items():
+        path = args.output_dir / "predictions" / f"{oid}.json"
+        network.check_json(path)
+        if sha256(path) != digest:
+            raise ValueError("temporal prediction changed")
+    return run
+
+
+def score_rerun(args):
+    network.guard_output(args.output_dir)
+    run = check_rerun(args)
+    _, paths = source_objects(args.prepared_dir)
+    scores = make_scores(run["periods_hours"],
+        {oid: read(args.output_dir / "predictions" / f"{oid}.json") for oid in OBJECT_IDS},
+        read(args.references), {oid: read(paths[oid])["known_period_hours"] for oid in OBJECT_IDS})
+    scores.update(network.json_metadata())
+    scores["inputs"] = {"prediction_run_sha256": sha256(args.output_dir / "prediction-run.json"),
+                        "references_sha256": sha256(args.references)}
+    for path, value in ((args.output_dir / "scores.json", scores),
+                        (args.output_dir / "RESULTS.md", results_markdown(scores))):
+        if path.exists():
+            if (path.read_text() if isinstance(value, str) else read(path)) != value:
+                raise ValueError("temporal scores changed")
+        else:
+            save_new({path: value})
     return 0
 
 

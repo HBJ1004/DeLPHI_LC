@@ -41,7 +41,7 @@ class NetworkPath(os.PathLike[str]):
         if followup is None:
             followup = DataPath("../..")
         selected = os.environ.get("DELPHI_NETWORK_ROOT")
-        if self.role == "results" and not selected and self.legacy_path is not None:
+        if not selected and self.legacy_path is not None:
             return Path(self.legacy_path).absolute()
         if selected:
             root = Path(selected).expanduser()
@@ -74,6 +74,11 @@ class NetworkPath(os.PathLike[str]):
     def __str__(self):
         return str(self.path())
 
+    def __repr__(self):
+        if not switched() and self.legacy_path is not None:
+            return repr(self.legacy_path)
+        return f"NetworkPath({self.role!r}, {self.parts!r})"
+
     def __truediv__(self, part):
         return NetworkPath(self.role, *self.parts, os.fspath(part),
                            legacy_followup=self.legacy_followup,
@@ -100,7 +105,9 @@ def guard_output(path) -> None:
             or any(p in parts for p in ("interpretation-20260923", "interpretation-20260926",
                                        "interpretation-20260930", "publication-revision-20260917-r2",
                                        "reliability-20260915", "internal-validation-20260916",
-                                       "period-refinement-20260921", "generalization-20260910"))):
+                                       "period-refinement-20260921", "generalization-20260910",
+                                       "direct-workflow-benchmark", "pole-grid-benchmark",
+                                       "temporal-predictions-final", "temporal-scores-final"))):
         raise ValueError(f"network switch refuses published output folder: {destination}")
 
 

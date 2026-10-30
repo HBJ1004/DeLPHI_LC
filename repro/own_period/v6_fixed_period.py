@@ -47,6 +47,7 @@ from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from lc_pipeline.physics.axial import axial_angular_error_deg
 
 from repro.own_period import DataPath
+from repro import network_root as network
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
@@ -55,7 +56,7 @@ CATALOG = DATA / "catalog.jsonl"
 SPLITS = DATA / "publication-splits-v2.3.json"
 DUMP = ROOT / "damit-20250610T000301Z"
 FROZEN = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092"
-PUBLISHED_ENSEMBLE = FROZEN / "evaluations/real-oof-ensemble.npz"
+PUBLISHED_ENSEMBLE = network.NetworkPath("evaluations", "real-oof-ensemble.npz")
 PUBLISHED_RUN = FROZEN / "downstream/fixed-period"
 SOLVER_ROOT = FOLLOWUP / "inputs/solver/version_0.2.1/convexinv"
 EXECUTABLE = SOLVER_ROOT / "convexinv"
@@ -72,6 +73,7 @@ def digest(path: Path) -> str:
 
 
 def write_once(path: Path, payload: dict) -> None:
+    network.guard_output(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as stream:
         json.dump(payload, stream, indent=1, sort_keys=True, allow_nan=True)
@@ -86,6 +88,11 @@ def object_order() -> list[str]:
 
 
 def arm_order(object_ids: list[str]) -> dict[str, tuple[str, str]]:
+    if network.switched():
+        # The v1 protocol hash set this schedule before the simulation fix.
+        # Read its explicit saved order, never rank with the new protocol hash.
+        return {oid: tuple(json.loads((DataPath("v67/v6-own-period/runs") / oid /
+                        "object-done.json").read_text())["arm_order"]) for oid in object_ids}
     rank = {
         oid: r
         for r, oid in enumerate(
@@ -122,6 +129,7 @@ def damit_periods() -> dict[str, float]:
 
 
 def load_axes(path: Path, object_ids: list[str]) -> dict[str, np.ndarray]:
+    network.check_npz(path)
     with np.load(path, allow_pickle=False) as z:
         ids = [str(v) for v in z["object_ids"]]
         axes = np.asarray(z["refined_axes"], dtype=np.float64)
@@ -131,6 +139,7 @@ def load_axes(path: Path, object_ids: list[str]) -> dict[str, np.ndarray]:
 
 
 def run(args: argparse.Namespace) -> int:
+    network.guard_output(args.output)
     out = args.output.resolve()  # absolute: the solver runs with cwd in each start directory
     if not out.is_absolute():
         raise RuntimeError("output must be absolute")
@@ -155,6 +164,16 @@ def run(args: argparse.Namespace) -> int:
         "timeout_seconds": TIMEOUT,
         "object_ids": ids,
     }
+    if network.switched():
+        network.check_npz(PUBLISHED_ENSEMBLE)
+        source = getattr(args, "classical_source", None)
+        if source is None:
+            source = PUBLISHED_RUN if args.periods == "damit" else DataPath("v67/v6-own-period")
+        header.update(**network.json_metadata(), classical_source=str(Path(source).resolve()),
+                      classical_timing=getattr(args, "classical_timing", "reuse"),
+                      arm_order={oid: list(arms[oid]) for oid in order},
+                      period_values={oid: float(periods[oid]) for oid in ids},
+                      inference={"path": str(PUBLISHED_ENSEMBLE), "sha256": digest(PUBLISHED_ENSEMBLE)})
     header_path = out / "run-header.json"
     if header_path.exists():
         if json.loads(header_path.read_text()) != header:
@@ -164,6 +183,8 @@ def run(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     for number, oid in enumerate(ids, start=1):
         if (out / "runs" / oid / "object-done.json").exists():
+            if network.switched():
+                verify_object(out, oid)
             continue
         if args.max_seconds and time.perf_counter() - started > args.max_seconds:
             print(f"chunk time limit reached before {oid}", flush=True)
@@ -181,6 +202,15 @@ def run(args: argparse.Namespace) -> int:
         }
         valid = {}
         for arm in arms[oid]:
+            if network.switched() and arm == "baseline" and header["classical_timing"] == "reuse":
+                records = [_record(Path(header["classical_source"]), oid, arm, i) for i in range(6)]
+                for i, record in enumerate(records):
+                    if record["identity"] != {"object_id": oid, "arm": arm, "start_index": i,
+                            "lambda_deg": starts[arm][i].lambda_deg, "beta_deg": starts[arm][i].beta_deg,
+                            "period_hours": period}:
+                        raise ValueError("classical source start or period changed")
+                valid[arm] = sum(_valid_result(r) for r in records)
+                continue
             records = [
                 _run_record(
                     executable=EXECUTABLE,
@@ -196,6 +226,10 @@ def run(args: argparse.Namespace) -> int:
                 )
                 for i, start in enumerate(starts[arm])
             ]
+            if network.switched() and arm == "baseline":
+                from repro.direct_workflow_benchmark.rerun import equal_downstream
+                for i, record in enumerate(records):
+                    equal_downstream(record, _record(Path(header["classical_source"]), oid, arm, i))
             valid[arm] = sum(_valid_result(r) for r in records)
             for r in records:
                 prov = r["result"]["provenance"]
@@ -204,7 +238,10 @@ def run(args: argparse.Namespace) -> int:
                 # (ec71a8c9; build products), so only the binary is required.
                 if prov["executable_sha256"] != EXECUTABLE_SHA256:
                     raise RuntimeError("solver binary differs from the published run")
-        write_once(out / "runs" / oid / "object-done.json", {"object_id": oid, "period_hours": period, "arm_order": list(arms[oid]), "valid_starts": valid})
+        done = {"object_id": oid, "period_hours": period, "arm_order": list(arms[oid]), "valid_starts": valid}
+        if network.switched():
+            done.update(records=object_records(out, oid), **network.json_metadata())
+        write_once(out / "runs" / oid / "object-done.json", done)
         print(number, oid, f"{period:.6f}", arms[oid][0], valid, flush=True)
         # Guard against the silent-failure trap: the first objects must give valid fits.
         if number == 3 and not any(
@@ -220,7 +257,40 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _record(base: Path, oid: str, arm: str, i: int) -> dict:
+    if network.switched() and (base / "run-header.json").exists():
+        header = json.loads((base / "run-header.json").read_text())
+        if "network_binding_sha256" in header:
+            network.check_json(base / "run-header.json")
+            if arm == "baseline" and header["classical_timing"] == "reuse":
+                base = Path(header["classical_source"])
     return json.loads((base / "runs" / oid / arm / f"start-{i}" / "result.json").read_text())
+
+
+def object_records(base, oid):
+    header = json.loads((base / "run-header.json").read_text())
+    paths = []
+    for arm in ("baseline", "candidate"):
+        root = Path(header["classical_source"]) if arm == "baseline" and header["classical_timing"] == "reuse" else base
+        for i in range(6):
+            path = root / "runs" / oid / arm / f"start-{i}" / "result.json"
+            record = json.loads(path.read_text())
+            if record["identity"]["period_hours"] != json.loads((base / "run-header.json").read_text())["period_values"][oid]:
+                raise ValueError("fixed classical period differs from selected period")
+            for name, key in (("modelled-lightcurve.txt", "output_lightcurve_sha256"),
+                              ("solution-parameters.txt", "output_parameter_sha256"),
+                              ("solution-areas.txt", "output_area_sha256")):
+                expected = record["result"].get(key)
+                if expected is not None and digest(path.parent / name) != expected:
+                    raise ValueError("downstream solver product changed")
+            paths.append({"path": str(path), "sha256": digest(path)})
+    return paths
+
+
+def verify_object(base, oid):
+    network.check_json(base / "run-header.json")
+    network.check_json(base / "runs" / oid / "object-done.json")
+    if json.loads((base / "runs" / oid / "object-done.json").read_text())["records"] != object_records(base, oid):
+        raise ValueError("downstream object records changed")
 
 
 def angle_deg(a: np.ndarray, b: np.ndarray) -> float:
@@ -287,6 +357,7 @@ def period_search_seconds() -> dict[str, float]:
 
 
 def score(args: argparse.Namespace) -> int:
+    network.guard_output(args.result)
     out = args.output.resolve()
     published = out == PUBLISHED_RUN.resolve()  # scorer check on the published records
     if published:
@@ -296,10 +367,17 @@ def score(args: argparse.Namespace) -> int:
             raise RuntimeError("run is not complete; scoring refused")
         header = json.loads((out / "run-header.json").read_text())
     ids = header["object_ids"]
+    if network.switched():
+        for oid in ids:
+            verify_object(out, oid)
     orders = arm_order(object_order())
     # Reference poles are opened only now, after every fit is written.
     catalog = {json.loads(l)["object_id"]: json.loads(l) for l in CATALOG.read_text().splitlines() if l.strip()}
-    with np.load(PUBLISHED_ENSEMBLE, allow_pickle=False) as z:
+    inference_path = PUBLISHED_ENSEMBLE
+    network.check_npz(inference_path)
+    if network.switched() and header["inference"] != {"path": str(inference_path), "sha256": digest(inference_path)}:
+        raise ValueError("chosen ensemble inference timing artifact changed")
+    with np.load(inference_path, allow_pickle=False) as z:
         published_inference = dict(zip([str(v) for v in z["object_ids"]], np.asarray(z["inference_wall_seconds"], dtype=float)))
     search = period_search_seconds()
     rows = []
@@ -363,6 +441,7 @@ def score(args: argparse.Namespace) -> int:
     have_search = [r for r in rows if r["period_search_seconds"] is not None]
     both_valid = [r for r in rows if r["baseline"]["valid_starts"] and r["candidate"]["valid_starts"]]
     result = {
+        **network.json_metadata(),
         "schema": "delphi.v67.fixed-period-score.v1",
         "run_header": header,
         "run_header_sha256": None if published else digest(out / "run-header.json"),
@@ -376,6 +455,12 @@ def score(args: argparse.Namespace) -> int:
         "arms": arm_summary(rows),
         "rows": rows,
     }
+    if network.switched():
+        result["classical_timing"] = header["classical_timing"]
+        result["classical_retiming_cpu_seconds"] = (sum(
+            _record(out, oid, "baseline", i)["result"]["process_cpu_time_seconds"]
+            for oid in ids for i in range(6)) if header["classical_timing"] == "retime" else 0)
+        result["convention"] = result["convention"].replace("published ensemble artifact", "chosen ensemble artifact (DAMIT-period inference for both period cases, as published)")
     write_once(args.result, result)
     print(json.dumps({k: result[k] for k in ("verdict_published_convention", "verdict_objects_with_valid_fits_in_both_arms", "verdict_with_period_search_time_added_to_both_arms")}, indent=1))
     return 0
@@ -390,6 +475,8 @@ def main() -> int:
     r.add_argument("--output", type=Path, required=True)
     r.add_argument("--ids", nargs="*")
     r.add_argument("--max-seconds", type=float, default=0.0)
+    r.add_argument("--classical-source", type=Path)
+    r.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
     v = sub.add_parser("validate")
     v.add_argument("--output", type=Path, required=True)
     s = sub.add_parser("score")
