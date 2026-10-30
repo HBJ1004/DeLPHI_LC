@@ -167,7 +167,7 @@ def cmd_export(args) -> dict:
 def load_export(out: Path, addendum: int = 3) -> dict:
     manifest = c.read(out / "export/manifest.json")
     if (manifest["schema"] != "delphi.spacecraft-classical-freep-export.v1"
-            or (c.checked(manifest["script"]) != Path(__file__).resolve() and not c.switched())
+            or (not c.switched() and c.checked(manifest["script"]) != Path(__file__).resolve())
             or [r["run_id"] for r in manifest["inputs"]] != list(ADDENDUM4_RUNS if addendum == 4 else RUNS)):
         raise ValueError(f"export must use this script and exactly the Addendum {addendum} inputs")
     c.network_run.checked_append_only(manifest["protocol"])
@@ -535,7 +535,8 @@ def cmd_score(args) -> dict:
     manifest = load_export(out, args.addendum)
     if plan["export"] != c.binding(out / "export/manifest.json") or (not c.switched() and plan["script"] != c.binding(Path(__file__))):
         raise ValueError("execution inputs/script changed")
-    c.checked(plan["script"])
+    if not c.switched():  # a rerun scores with this code; the Addendum 3 fit script was edited later
+        c.checked(plan["script"])
     for entry in plan["implementations"].values():
         c.checked(entry)
     c.checked(plan["validation"])
