@@ -92,6 +92,20 @@ def test_chunked_grid_scoring_and_refinement_are_finite_and_bounded() -> None:
     assert np.all(displacement <= 5.0 + 1e-5)
 
 
+def test_score_chunk_cap_changes_scores_only_by_rounding(monkeypatch) -> None:
+    torch.manual_seed(21)
+    config = K3ScoreModelConfig(
+        hidden_dim=32, attention_heads=4, convolution_blocks=1, set_encoder_layers=1,
+        dropout=0.0, score_chunk_size=1024,
+    )
+    model = CandidateConditionedScorer(config).eval()
+    inputs = _model_inputs()
+    full = score_axial_grid(model, inputs, chunk_size=1024)
+    monkeypatch.setenv("DELPHI_SCORE_CHUNK_MAX", "256")
+    # Only float32 rounding of the batched matrix product may differ.
+    np.testing.assert_allclose(score_axial_grid(model, inputs, chunk_size=1024), full, rtol=0, atol=1e-5)
+
+
 def test_ensemble_refinement_uses_the_mean_scorer_without_averaging_axes() -> None:
     torch.manual_seed(23)
     config = K3ScoreModelConfig(
