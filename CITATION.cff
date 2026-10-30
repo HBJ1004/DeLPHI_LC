@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use DeLPHI, please cite the paper below and this software release."
-title: "DeLPHI: pole-axis candidates for asteroid lightcurve inversion"
+title: "DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion"
 type: software
 version: "1.0.0"
 date-released: 2026-10-29
@@ -32,7 +32,7 @@ authors:
     affiliation: "Korea Astronomy and Space Science Institute"
 preferred-citation:
   type: article
-  title: "DeLPHI: Pole-Axis Candidates for Asteroid Lightcurve Inversion"
+  title: "DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion"
   journal: "The Planetary Science Journal"
   status: submitted
   year: 2026

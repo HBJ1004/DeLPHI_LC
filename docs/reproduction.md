@@ -1,9 +1,9 @@
 # Checking the results of the paper
 
 This guide is for readers who want to check the numbers, tables and figures of
-Jo, Ishiguro and Lee, "DeLPHI: Pole-Axis Candidates for Asteroid Lightcurve
-Inversion" (submitted to PSJ). It explains what to download, how to recompute
-the main results from the released predictions without rerunning any analysis,
+Jo, Ishiguro and Lee, "DeLPHI: Neural-Network Pole Candidates for Asteroid
+Lightcurve Inversion" (submitted to PSJ). It explains what to download, how to
+recompute the main results from the released predictions without rerunning any analysis,
 which file and script lie behind each result, and how to arrange the files to
 rerun the analyses.
 
@@ -116,7 +116,7 @@ Median commands require explicit scratch destinations, for example:
 "$PYTHON" -m repro.own_period.median_stats \
   --input-list /path/to/mean-macros.txt --report /path/to/median-report.md
 "$PYTHON" -m repro.own_period.median_figures \
-  --figures candidate-count inversion-benchmark --out-dir /path/to/median-figures
+  --figures candidate-count inversion-benchmark inversion-timing --out-dir /path/to/median-figures
 ```
 
 ## 1. What to download

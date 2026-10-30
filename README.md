@@ -1,9 +1,10 @@
 # DeLPHI
 
-DeLPHI (Deep Learning Photometry-based Hypothesis Inference) proposes three
-candidate spin axes of an asteroid from its lightcurves, the observing
-geometry, and a rotation period that you supply. The candidates are meant as
-starting points for classical convex lightcurve inversion, not as final poles.
+DeLPHI (Deep Learning Photometry-based Hypothesis Inference) estimates an
+asteroid's rotation period with a Fourier search. It then proposes three
+candidate spin axes from the lightcurves, observing geometry and that period.
+The candidates are meant as starting points for classical convex lightcurve
+inversion, not as final poles.
 
 It scores 6,144 trial axes with five trained networks, averages their score
 maps, and returns the three highest well-separated peaks. Each candidate is an
@@ -12,7 +13,7 @@ retrograde rotation, so an inversion should start from all six ends. The three
 candidates are **unranked**.
 
 The method and its tests are described in Jo, Ishiguro and Lee,
-"DeLPHI: Pole-Axis Candidates for Asteroid Lightcurve Inversion", submitted to
+"DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion", submitted to
 The Planetary Science Journal. "K3", which appears in the code and file names,
 means "three candidates".
 
@@ -80,8 +81,9 @@ package versions of our test environment, add `-c constraints/ci.txt` to the ins
 
 Follow the [prediction guide](docs/usage.md). In a few minutes it downloads one
 set of trained networks (12 MB, from the
-[Zenodo data record](https://doi.org/10.5281/zenodo.23757942)), runs a
-worked example, the asteroid (5) Astraea, against its expected output, explains
+[Zenodo data record](https://doi.org/10.5281/zenodo.23757942)), estimates the
+rotation period, and predicts three candidate axes for (5) Astraea. It also
+checks a supplied-period example against its expected output, explains
 every field of the result, and turns the candidate axes into the six starting
 poles for an inversion. It also explains which network set to use, which
 matters for the 170 asteroids of the paper.
@@ -153,9 +155,13 @@ DeLPHI's median is 12.09°; those predictions remain available as comparison
 evidence in `artifact-root/`.
 
 In complete pole searches with `convexinv` on 140 evaluation asteroids,
-six inversions started from the candidates have a median disagreement of
-27.44° with DAMIT poles, against 45.58° for 12 classical starts. With the
-networks kept loaded for a batch, the classical-to-DeLPHI time ratio is 1.29;
+six inversions started from the candidates at our rough period have a median
+disagreement of 27.44° with DAMIT poles, against 45.58° for 12 classical starts.
+Even 146 classical starts did not reach DeLPHI's accuracy at this period.
+With a refined period, both reached about 8° in an exploratory test of 20
+asteroids: 7.87° for DeLPHI and 8.37° for the classical search. A precise pole
+still needs a refined period from a classical scan before inversion. With the
+networks kept loaded for a batch, the classical-to-DeLPHI pole-fit time ratio is 1.29;
 with networks loaded anew for each asteroid it is 0.40. The classical search
 reaches lower residuals, so these timings do not establish a saving at equal
 solution quality. The result files and saved fits are mapped in the

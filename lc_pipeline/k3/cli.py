@@ -55,6 +55,10 @@ def _smoke_geometry() -> tuple:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="delphi-k3")
     commands = parser.add_subparsers(dest="command", required=True)
+    period = commands.add_parser("estimate-period", help="estimate the rotation period from photometry")
+    period.add_argument("input", type=Path, help="delphi.k3-observations.v1 JSON file")
+    period.add_argument("--output", type=Path, help="write JSON to a new file (default: stdout)")
+    period.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     commands.add_parser("validate-protocol")
     renderer = commands.add_parser("renderer-smoke")
     renderer.add_argument("--cases", type=int, default=8)
@@ -343,8 +347,68 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _estimate_period(arguments: argparse.Namespace) -> dict:
+    """Run the paper's search on the same lightcurves used for prediction."""
+    import numpy as np
+
+    from repro.period_search.search import Curve, estimate
+
+    from .predict import read_observations
+
+    if arguments.output is not None and arguments.output.exists():
+        raise ValueError("output already exists; choose a new filename")
+    device = arguments.device
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cuda" and not torch.cuda.is_available():
+        raise ValueError("CUDA is unavailable; use --device cpu or --device auto")
+    object_id, _, epochs = read_observations(arguments.input, require_period=False)
+    curves = []
+    for epoch in epochs:
+        # Observation already validates finite times and positive finite fluxes.
+        # Match read_curves: keep source boundaries, sort times, convert flux
+        # to magnitude, and do not correct the supplied DAMIT times again.
+        a = np.asarray([[o.time_jd, o.relative_brightness] for o in epoch.observations], float)
+        a = a[np.argsort(a[:, 0])]
+        if len(a) >= 2:
+            curves.append(Curve(a[:, 0], -2.5 * np.log10(a[:, 1])))
+    method = "fourier_gpu" if device == "cuda" else "fourier_cpu"
+    settings = {"resolution": 1, "timeout": 180, "sparse_fallback": True}
+    result = estimate(curves, method, **settings)
+    if result.get("status") != "ok" or not result.get("ranked_periods"):
+        raise ValueError(f"period search failed: {result.get('reason', 'no period found')}")
+    result.update(
+        schema="delphi.k3-period.v1",
+        object_id=object_id,
+        period_hours=result["ranked_periods"][0],
+        provenance="DeLPHI Fourier search, rank 1",
+        method=method,
+        device=device,
+        settings=settings,
+        backend_note=(
+            "CPU and CUDA use the same float64 Fourier computation. Floating-point "
+            "roundoff can change candidate selection or ranking near tied minima; "
+            "identical periods are not guaranteed for every input."
+        ),
+    )
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
-    arguments = _parser().parse_args(argv)
+    parser = _parser()
+    arguments = parser.parse_args(argv)
+    if arguments.command == "estimate-period":
+        try:
+            result = _estimate_period(arguments)
+            payload = json.dumps(result, indent=2, allow_nan=False) + "\n"
+            if arguments.output is not None:
+                with arguments.output.open("x", encoding="utf-8") as handle:
+                    handle.write(payload)
+            else:
+                print(payload, end="")
+        except (OSError, ValueError, TimeoutError, RuntimeError) as exc:
+            parser.error(str(exc))
+        return 0
     if arguments.command == "validate-protocol":
         protocol = load_protocol()
         print(json.dumps({"schema": protocol["schema"], "sha256": K3_PROTOCOL_SHA256}, sort_keys=True))

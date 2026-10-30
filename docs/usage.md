@@ -6,8 +6,9 @@ runs a worked example, (5) Astraea, whose expected result is in the
 repository, so you can check every step before you use your own data.
 
 DeLPHI needs the photometry of one asteroid, the directions from the asteroid
-to the Sun and to the observer at every observation, and a rotation period
-that you supply. It does not compute ephemerides or determine the period. It
+to the Sun and to the observer at every observation, and a rotation period.
+It estimates the period with a Fourier search, or accepts a reliable period
+that you already have. It does not compute ephemerides. It
 returns three **unranked candidate axes**; each axis has two ends, so an
 inversion should start from all six.
 
@@ -70,7 +71,81 @@ result is not a test result.
 and record which one you used. (How the paper scored asteroids outside its
 sample is described in the [reproduction guide](reproduction.md).)
 
-## 4. Run the Astraea example
+## 4. Estimate the period
+
+Run the paper's Fourier search on the observations:
+
+```bash
+delphi-k3 estimate-period examples/astraea/observations.json --output period.json
+```
+
+The default `--device auto` uses CUDA when available and otherwise uses the
+CPU. You can choose `--device cpu` or `--device cuda` explicitly. Without
+`--output`, the command prints the JSON to the terminal. An existing output
+file is never overwritten. A failed or timed-out search exits with an error
+and writes no period file.
+
+For Astraea, the result includes these fields (numbers shortened):
+
+```json
+{
+  "schema": "delphi.k3-period.v1",
+  "status": "ok",
+  "object_id": "asteroid_103",
+  "period_hours": 16.79973752943218,
+  "ranked_periods": [16.79973752943218, 33.642835943202954, 42.047203061964524,
+                     8.400876432622336, 25.228764774553298, 52.3936664837061,
+                     50.47280230396282],
+  "method": "fourier_cpu",
+  "device": "cpu",
+  "provenance": "DeLPHI Fourier search, rank 1"
+}
+```
+
+The CPU command took 3.74 s on our Intel Core i5-13600KF, with one BLAS
+thread. The saved Astraea run on our RTX 4070 took 2.71 s for the warm GPU
+search alone, excluding process startup. Times depend on your computer and
+its load. On CUDA, `method` is
+`fourier_gpu` and `device` is `cuda`. Both backends use the same float64
+Fourier computation; roundoff can change candidate selection or ranking near
+tied minima, so identical periods are not guaranteed for every input. The
+JSON records this limit in `backend_note`.
+
+Each input epoch stays one lightcurve. The search sorts its observations by
+time and converts linear brightness to magnitude with `-2.5 log10(flux)`.
+Times are used as supplied; DAMIT times already include the light-time
+correction. The paper's settings are fixed: resolution 1, a 180 s search
+budget, and the 30-day-window fallback when no short observing interval is
+usable. The search ignores `known_period`, which may be omitted from the
+input when estimating a period or predicting with `--period-json`.
+
+The paper's main results use this rank-1 period without choosing P/2 or 2P
+after scoring. It is a rough period: the median difference from the DAMIT
+period was 0.0162% over the 140 evaluation asteroids. Even this small
+difference can shift rotational phase over observations spanning many years. A precise pole
+needs a refined period from a classical period scan before inversion.
+
+Pass the saved estimate to the existing prediction command:
+
+```bash
+delphi-k3-predict \
+  --bundle networks/k3-oof-fold-0 \
+  --input examples/astraea/observations.json \
+  --period-json period.json \
+  --output prediction-estimated-period.json
+python examples/prediction_to_poles.py prediction-estimated-period.json
+```
+
+`--period-json` uses the saved `period_hours` and `provenance` in place of
+`known_period`. The file must contain a successful search for the same
+`object_id`. Record the period file alongside your prediction. Add
+`--device cuda` to the prediction command to run the networks on a GPU.
+
+## 5. If you already have a reliable period
+
+Keep it in `known_period` and omit `--period-json`. The supplied-period
+Astraea example uses the DAMIT period of 16.80059 hours and has an archived
+expected prediction. Use this alternative to check the networks:
 
 ```bash
 delphi-k3-predict \
@@ -110,11 +185,12 @@ and measured timings.
 
 To run your own asteroid, make `observations.json` as described in the
 [data-format guide](data-format.md) (from your photometry with JPL Horizons
-geometry, or from a DAMIT `lc.txt`) and use the same two commands.
+geometry, or from a DAMIT `lc.txt`). Estimate its period and predict as above,
+or use this alternative if you already have a reliable period.
 
-## 5. Read the output
+## 6. Read the output
 
-`prediction.json` from the Astraea example (numbers shortened):
+`prediction.json` from the supplied-period Astraea example (numbers shortened):
 
 ```json
 {
@@ -150,7 +226,7 @@ geometry, or from a DAMIT `lc.txt`) and use the same two commands.
 | `calibration.source_sha256` | Checksum of the file the radii came from. |
 | `risk_deg` | Always `null`; DeLPHI gives no individual error estimate. |
 
-## 6. From axes to six starting poles
+## 7. From axes to six starting poles
 
 For an axis `(x, y, z)`, the ecliptic longitude and latitude of its first end
 are
@@ -235,5 +311,5 @@ much faster than starting the command for each: with the networks loaded, the
 Astraea prediction takes about 4 s on our CPU and 0.7 s on our GPU.
 
 For the scientific method and its interpretation, cite Jo, Ishiguro and Lee,
-"DeLPHI: Pole-Axis Candidates for Asteroid Lightcurve Inversion", submitted to
+"DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion", submitted to
 The Planetary Science Journal.
