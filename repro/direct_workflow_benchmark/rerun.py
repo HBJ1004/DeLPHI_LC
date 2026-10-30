@@ -87,10 +87,22 @@ def modules():
     return direct, loaded
 
 
-def prepare(source, output, device="cuda", timing="reuse"):
+def timed_workers(original, timing):
+    """Reuse historical timing concurrency; retain RT3d1's retiming cap."""
+    if type(original) is not int or original < 1:
+        raise ValueError("original solver workers must be a positive integer")
+    if timing not in ("reuse", "retime"):
+        raise ValueError("unknown classical timing mode")
+    return original if timing == "reuse" else 4
+
+
+def prepare(source, output, device="cuda", timing="reuse", workers=None):
     network.guard_output(output)
     source, output = Path(source), Path(output)
     old = read(source / "evaluation-lock.json")
+    selected_workers = timed_workers(old["settings"]["workers"], timing)
+    if workers is not None and workers != selected_workers:
+        raise ValueError("solver workers differ from the timing protocol")
     output.mkdir(parents=True, exist_ok=True)
     for name, digest in HASHES.items():
         path = SOURCES / name
@@ -109,7 +121,7 @@ def prepare(source, output, device="cuda", timing="reuse"):
     lock["bundles"] = [network.bundle_record(fold, old["bundles"]) for fold in range(5)]
     lock["rerun"] = {"source_lock": bound(source / "evaluation-lock.json"),
         "source_scoring": bound(source / "scoring-lock.json"), "source_directory": str(source.resolve()),
-        "solver_workers": 4, "classical_timing": timing,
+        "solver_workers": selected_workers, "classical_timing": timing,
         "script": bound(Path(__file__)), "historical_producers": HASHES,
         "fixed_budgets": [12, 18, 96], "old_solver_workers": old["settings"]["workers"],
         "order": "original seed 20260923; loaded seed+fold; exploratory seed 20260924+fold"}
@@ -118,6 +130,7 @@ def prepare(source, output, device="cuda", timing="reuse"):
     save(output / "evaluation-lock.json", lock)
     scoring = read(source / "scoring-lock.json")
     save(output / "scoring-lock.json", {**scoring, **network.json_metadata(),
+        "solver_workers": selected_workers,
         "evaluation_lock": bound(output / "evaluation-lock.json")})
     return lock
 
@@ -130,6 +143,9 @@ def validate(path, *, environment=True):
     old = read(verify(lock["rerun"]["source_lock"]))
     verify(lock["rerun"]["source_scoring"])
     verify(lock["rerun"]["script"])
+    if (lock["rerun"]["solver_workers"] != timed_workers(old["settings"]["workers"], lock["rerun"]["classical_timing"])
+            or lock["rerun"]["old_solver_workers"] != old["settings"]["workers"]):
+        raise ValueError("fixed benchmark solver workers changed")
     for key in ("objects", "classical_starts", "selected_classical_starts", "settings", "solver", "solver_settings"):
         if lock[key] != old[key]:
             raise ValueError(f"fixed benchmark input changed: {key}")
@@ -318,7 +334,7 @@ def analyses(output):
         if not (output / filename).exists():
             direct.score(lock_path, output / "scoring-lock.json", output / folder / "execution.json", output / filename)
             value = read(output / filename)
-            value.update(network.json_metadata())
+            value.update(network.json_metadata(), solver_workers=lock["rerun"]["solver_workers"])
             (output / filename).write_text(json.dumps(value, sort_keys=True) + "\n")
         network.check_json(output / filename)
     source = Path(lock["rerun"]["source_directory"])
@@ -355,9 +371,10 @@ def analyses(output):
         if hasattr(module, "main"):
             module.main()
         value = read(path)
-        value.update(network.json_metadata())
+        value.update(network.json_metadata(), solver_workers=lock["rerun"]["solver_workers"])
         path.write_text(json.dumps(value, sort_keys=True) + "\n")
     value = {**network.json_metadata(), "timing_option": lock["rerun"]["classical_timing"],
+        "solver_workers": lock["rerun"]["solver_workers"],
         "classical_retiming_cpu_seconds": sum(read(output / folder / row["path"]).get("retiming_cpu_seconds", 0)
             for folder in ("evaluation", "evaluation-loaded", "exploratory-loaded-ladder")
             for row in read(output / folder / "execution.json")["rows"]
@@ -375,9 +392,10 @@ def main():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--mode", choices=("cold", "loaded", "exploratory"), default="cold")
     parser.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
+    parser.add_argument("--workers", type=int)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.source, args.output, args.device, args.classical_timing)
+        prepare(args.source, args.output, args.device, args.classical_timing, args.workers)
     elif args.command == "execute":
         execute(args.lock.resolve(), args.output.resolve(), args.mode)
     elif args.command == "score":

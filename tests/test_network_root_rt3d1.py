@@ -1,6 +1,7 @@
 """CPU-only protocol and provenance checks for RT3d1 adapters."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -93,13 +94,18 @@ def make_source(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('timing', ['reuse', 'retime'])
-def test_prepare_freezes_protocol_and_old_worker_count(selected, tmp_path, monkeypatch, timing):
+@pytest.mark.parametrize('original_workers', [2, 6, 9])
+def test_prepare_freezes_protocol_and_old_worker_count(selected, tmp_path, monkeypatch, timing, original_workers):
     source, old = make_source(tmp_path, monkeypatch)
+    old['settings']['workers'] = original_workers
+    dump(source / 'evaluation-lock.json', old)
     output = tmp_path / 'new'
     lock = rerun.prepare(source, output, 'cpu', timing)
     for field in ('objects', 'settings', 'solver_settings', 'classical_starts'):
         assert lock[field] == old[field]
-    assert lock['rerun']['solver_workers'] == 4
+    workers = original_workers if timing == 'reuse' else 4
+    assert lock['rerun']['solver_workers'] == workers
+    assert rerun.read(output / 'scoring-lock.json')['solver_workers'] == workers
     assert lock['rerun']['classical_timing'] == timing
     assert rerun.validate(output / 'evaluation-lock.json') == lock
     assert rerun.prepare(source, output, 'cpu', timing) == lock
@@ -160,23 +166,120 @@ def test_v6_rejects_mixed_network_axes(selected, tmp_path):
         v6.load_axes(path, ['a'])
 
 
-def test_v7_reuses_exact_old_periods_and_caps_workers(selected, tmp_path, monkeypatch):
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+@pytest.mark.parametrize('original_workers', [6, 9])
+def test_v7_reuses_exact_old_periods_and_worker_choice(selected, tmp_path, monkeypatch, timing, original_workers):
     path = selected.parent / 'fixed/v67/v7-own-period-lock.json'
-    original = dict(objects=[dict(object_id='a', period_hours=10.123456)], settings={'workers': 6},
-                    bundles=[], device='cpu')
+    original = dict(objects=[dict(object_id='a', period_hours=10.123456)], settings={'workers': original_workers},
+                    bundles=[], device='cpu', solver={}, inputs={})
     dump(path, original)
     period = tmp_path / 'periods.json'
     dump(period, {'periods_hours': {'a': 10.123456}})
     monkeypatch.setattr(network, 'bundle_record', lambda f, old: {'fold': f})
     monkeypatch.setattr(grid, '_environment', lambda device: {})
-    args = SimpleNamespace(periods=str(period), output=tmp_path / 'lock.json', device='cpu', classical_timing='reuse')
+    args = SimpleNamespace(periods=str(period), output=tmp_path / 'lock.json', device='cpu', classical_timing=timing)
     assert v7.rerun_lock(args) == 0
     actual = rerun.read(args.output)
     assert actual['objects'] == original['objects']
-    assert actual['settings']['workers'] == 4
+    assert actual['settings']['workers'] == (original_workers if timing == 'reuse' else 4)
+    assert v7.validate_rerun_lock(args.output) == actual
+    actual['settings']['workers'] += 1
+    dump(args.output, actual)
+    with pytest.raises(ValueError, match='settings changed'):
+        v7.validate_rerun_lock(args.output)
     dump(period, {'periods_hours': {'a': 11}})
     with pytest.raises(ValueError, match='periods changed'):
         v7.rerun_lock(args)
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+def test_direct_worker_drift_and_explicit_mismatch_rejected(selected, tmp_path, monkeypatch, timing):
+    source, _ = make_source(tmp_path, monkeypatch)
+    expected = 6 if timing == 'reuse' else 4
+    with pytest.raises(ValueError, match='workers differ'):
+        rerun.prepare(source, tmp_path / 'bad', 'cpu', timing, workers=expected + 1)
+    output = tmp_path / 'new'
+    value = rerun.prepare(source, output, 'cpu', timing, workers=expected)
+    value['rerun']['solver_workers'] += 1
+    dump(output / 'evaluation-lock.json', value)
+    with pytest.raises(ValueError, match='solver workers changed'):
+        rerun.validate(output / 'evaluation-lock.json')
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+def test_v7_explicit_cpu_validation_keeps_four_workers(selected, tmp_path, monkeypatch, timing):
+    source = tmp_path / 'original.json'
+    dump(source, dict(objects=[], settings={'workers': 6}, bundles=[], device='cuda', solver={}, inputs={}))
+    monkeypatch.setattr(v7, 'PUBLISHED_LOCK', source)
+    monkeypatch.setattr(network, 'bundle_record', lambda f, old: {'fold': f})
+    monkeypatch.setattr(grid, '_environment', lambda device: {})
+    args = SimpleNamespace(periods='published', output=tmp_path / 'cpu.json', device='cpu', workers=4,
+                           classical_timing=timing)
+    v7.rerun_lock(args)
+    actual = v7.validate_rerun_lock(args.output)
+    assert actual['settings']['workers'] == 4
+    assert actual['rerun']['untimed_validation'] == (timing == 'reuse')
+    args.device, args.workers = 'cuda', 3
+    with pytest.raises(ValueError, match='timing protocol'):
+        v7.rerun_lock(args)
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+@pytest.mark.parametrize('original_workers', [6, 12])
+def test_refine_lock_and_fit_plan_use_original_plan_workers(selected, tmp_path, monkeypatch, timing, original_workers):
+    original_plan = selected.parent / 'fixed/refine-chain/fits/fit-plan.json'
+    dump(original_plan, {'workers': original_workers})
+    refined_path = selected.parent / 'fixed/refine-chain/refined-periods.json'
+    dump(refined_path, {})
+    benchmark = tmp_path / 'benchmark'
+    dump(benchmark / 'evaluation-lock.json', {})
+    protocol = tmp_path / 'PROTOCOL.md'
+    protocol.write_text('fixed protocol')
+    parent = dict(rerun={'classical_timing': timing, 'solver_workers': 6})
+    refined = {'periods_hours': {'a': 10}}
+    objects = [{'object_id': 'a'}]
+    monkeypatch.setattr(post, 'refined_inputs', lambda args: (parent, refined, objects))
+    cpus = tuple(sorted(os.sched_getaffinity(0)))
+    args = SimpleNamespace(output_dir=tmp_path / 'output', benchmark_dir=benchmark, protocol=protocol,
+                           cpus=cpus, workers=None, classical_timing=timing)
+    lock = post.lock_outputs(args)[args.output_dir / 'evaluation-lock-refined.json']
+    expected = original_workers if timing == 'reuse' else 4
+    assert lock['rerun']['solver_workers'] == expected
+    assert post.verify(lock['rerun']['source_worker_plan']) == original_plan
+    assert parent['rerun']['solver_workers'] == 6
+    monkeypatch.setattr(post, '_validate_runtime', lambda value: None)
+    monkeypatch.setattr(post, 'checked_lock', lambda args: lock)
+    monkeypatch.setattr(post, 'load_predictions', lambda *args: {})
+    monkeypatch.setattr(post, 'fit_tasks', lambda *args: [])
+    monkeypatch.setattr(post, 'ladder_indexes', lambda *args: [])
+    monkeypatch.setattr(post, '_fit_completion', lambda *args: {})
+    assert post.command_fits(args) == 0
+    plan = post.read(args.output_dir / 'fits/fit-plan.json')
+    assert plan['workers'] == expected
+    if timing == 'reuse':
+        args.workers = 4
+        with pytest.raises(ValueError, match='original refine plan'):
+            post.command_fits(args)
+        args.workers, args.cpus = None, cpus[:4]
+        with pytest.raises(ValueError, match='number of CPUs'):
+            post.command_fits(args)
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+def test_v6_records_original_serial_worker_setting(selected, tmp_path, monkeypatch, timing):
+    monkeypatch.setattr(v6, 'digest', lambda path: v6.EXECUTABLE_SHA256)
+    monkeypatch.setattr(v6, 'object_order', lambda: [])
+    monkeypatch.setattr(v6, 'damit_periods', lambda: {})
+    monkeypatch.setattr(v6, 'load_axes', lambda *args: {})
+    monkeypatch.setattr(v6, 'lightcurve_paths', lambda: {})
+    monkeypatch.setattr(network, 'check_npz', lambda *args: None)
+    args = SimpleNamespace(output=tmp_path / 'v6', periods='damit', axes=tmp_path / 'axes.npz',
+                           ids=None, max_seconds=0, workers=1, classical_timing=timing)
+    assert v6.run(args) == 0
+    assert rerun.read(args.output / 'run-header.json')['solver_workers'] == 1
+    args.workers = 6
+    with pytest.raises(ValueError, match='serial solver setting'):
+        v6.run(args)
 
 
 def test_refine_classical_tasks_reference_only_saved_starts(selected, tmp_path, monkeypatch):

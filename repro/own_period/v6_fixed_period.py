@@ -66,6 +66,7 @@ CATALOG_SHA256 = "ac1abdab62453fca6e3d7473af0ad3b7de1bcb04cee9b947fb7079d3406136
 SPLITS_SHA256 = "1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df4"
 PERIOD_SEARCH = FOLLOWUP / "experiments/period-refinement-20260921/warm170-first.jsonl"
 TIMEOUT = 3600.0
+SOLVER_WORKERS = 1  # Original downstream setting: starts run serially.
 
 
 def digest(path: Path) -> str:
@@ -165,11 +166,14 @@ def run(args: argparse.Namespace) -> int:
         "object_ids": ids,
     }
     if network.switched():
+        if getattr(args, "workers", SOLVER_WORKERS) != SOLVER_WORKERS:
+            raise ValueError("V6 uses the original serial solver setting")
         network.check_npz(PUBLISHED_ENSEMBLE)
         source = getattr(args, "classical_source", None)
         if source is None:
             source = PUBLISHED_RUN if args.periods == "damit" else DataPath("v67/v6-own-period")
         header.update(**network.json_metadata(), classical_source=str(Path(source).resolve()),
+                      solver_workers=SOLVER_WORKERS,
                       classical_timing=getattr(args, "classical_timing", "reuse"),
                       arm_order={oid: list(arms[oid]) for oid in order},
                       period_values={oid: float(periods[oid]) for oid in ids},
@@ -457,6 +461,7 @@ def score(args: argparse.Namespace) -> int:
     }
     if network.switched():
         result["classical_timing"] = header["classical_timing"]
+        result["solver_workers"] = header["solver_workers"]
         result["classical_retiming_cpu_seconds"] = (sum(
             _record(out, oid, "baseline", i)["result"]["process_cpu_time_seconds"]
             for oid in ids for i in range(6)) if header["classical_timing"] == "retime" else 0)
@@ -477,6 +482,7 @@ def main() -> int:
     r.add_argument("--max-seconds", type=float, default=0.0)
     r.add_argument("--classical-source", type=Path)
     r.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
+    r.add_argument("--workers", type=int, choices=(SOLVER_WORKERS,), default=SOLVER_WORKERS)
     v = sub.add_parser("validate")
     v.add_argument("--output", type=Path, required=True)
     s = sub.add_parser("score")

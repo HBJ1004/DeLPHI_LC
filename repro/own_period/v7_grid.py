@@ -461,6 +461,7 @@ def score(args: argparse.Namespace) -> int:
     }
     if network.switched():
         result["classical_timing"] = doc["rerun"]["classical_timing"]
+        result["solver_workers"] = doc["settings"]["workers"]
         result["classical_retiming_cpu_seconds"] = (sum(
             r["solver_cpu_seconds"] for key, r in records.items() if key[1] == "classical20")
             if doc["rerun"]["classical_timing"] == "retime" else 0)
@@ -487,11 +488,16 @@ def audit_case(directory):
 
 
 def validate_rerun_lock(path):
-    from repro.direct_workflow_benchmark.rerun import verify
+    from repro.direct_workflow_benchmark.rerun import timed_workers, verify
     network.check_json(path)
     value = grid.read_json(path)
     old = grid.read_json(verify(value["rerun"]["source_lock"]))
-    if value["objects"] != old["objects"] or value["settings"] != {**old["settings"], "workers": 4}:
+    workers = timed_workers(old["settings"]["workers"], value["rerun"]["classical_timing"])
+    if value["rerun"].get("untimed_validation"):
+        workers = value["settings"]["workers"]
+        if value["device"] != "cpu" or not 1 <= workers <= 4:
+            raise ValueError("untimed CPU validation requires at most four workers")
+    if value["objects"] != old["objects"] or value["settings"] != {**old["settings"], "workers": workers}:
         raise ValueError("fixed V7 objects or settings changed")
     if value["solver"] != old["solver"] or value["inputs"] != old["inputs"]:
         raise ValueError("fixed V7 solver or inputs changed")
@@ -501,20 +507,31 @@ def validate_rerun_lock(path):
 
 
 def rerun_lock(args):
-    from repro.direct_workflow_benchmark.rerun import bound, save
+    from repro.direct_workflow_benchmark.rerun import bound, save, timed_workers
     source = PUBLISHED_LOCK if args.periods == "published" else DataPath("v67/v7-own-period-lock.json")
     original = grid.read_json(source)
     if args.periods != "published":
         periods = grid.read_json(args.periods)["periods_hours"]
         if any(float(periods[r["object_id"]]) != r["period_hours"] for r in original["objects"]):
             raise ValueError("saved V7 periods changed")
-    settings = {**original["settings"], "workers": 4}
+    workers = timed_workers(original["settings"]["workers"], args.classical_timing)
+    requested = getattr(args, "workers", 0)
+    # The existing --device cpu --workers N interface is for untimed validation.
+    validation = bool(args.device == "cpu" and requested and requested != workers)
+    if validation:
+        if not 1 <= requested <= 4:
+            raise ValueError("untimed CPU validation requires at most four workers")
+        workers = requested
+    elif requested and requested != workers:
+        raise ValueError("solver workers differ from the timing protocol")
+    settings = {**original["settings"], "workers": workers}
     payload = {**original, **network.json_metadata(), "settings": settings,
         "code_root": str(CODE_ROOT), "runtime_sources": grid._runtime_sources(CODE_ROOT),
         "bundles": [network.bundle_record(fold, original["bundles"]) for fold in range(5)],
         "device": args.device or original["device"],
         "environment": grid._environment(args.device or original["device"]),
         "rerun": {"source_lock": bound(source), "classical_timing": args.classical_timing,
+                  "untimed_validation": validation,
                   "classical_source": str(PUBLISHED_FULL if args.periods == "published" else DataPath("v67/v7-own-period")),
                   "order": "original grid order_seed=20260911, all other arms filtered out"}}
     save(args.output, payload)

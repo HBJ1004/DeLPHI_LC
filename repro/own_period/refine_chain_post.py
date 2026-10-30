@@ -143,6 +143,13 @@ def lock_outputs(args) -> dict[Path, dict]:
                   "protocol": binding(args.protocol), "failed_object_ids": failed}
     lock = {**deepcopy(parent), "objects": objects, "refinement": provenance,
             "period_provenance": PROVENANCE}
+    if network.switched():
+        from repro.direct_workflow_benchmark.rerun import timed_workers
+        worker_plan = DataPath("refine-chain/fits/fit-plan.json")
+        original_workers = read(worker_plan)["workers"]
+        lock["rerun"].update(
+            solver_workers=timed_workers(original_workers, parent["rerun"]["classical_timing"]),
+            old_solver_workers=original_workers, source_worker_plan=binding(worker_plan))
     period_file = {"periods_hours": {r["object_id"]: periods.get(r["object_id"])
                                      for r in selected}, **provenance}
     return {args.output_dir / "evaluation-lock-refined.json": lock,
@@ -431,7 +438,14 @@ def command_fits(args) -> int:
         raise ValueError("CPUs must be unique and available in the current affinity")
     workers = len(args.cpus) if args.workers is None else args.workers
     if network.switched():
-        workers = min(workers, 4)
+        if args.classical_timing != lock["rerun"]["classical_timing"]:
+            raise ValueError("classical timing differs from the refined lock")
+        if args.classical_timing == "reuse":
+            workers = lock["rerun"]["solver_workers"]
+            if args.workers is not None and args.workers != workers:
+                raise ValueError("solver workers differ from the original refine plan")
+        else:
+            workers = min(workers, 4)
     if not 1 <= workers <= len(args.cpus):
         raise ValueError("workers must be between one and the number of CPUs")
     tasks = fit_tasks(args, lock, predictions)
@@ -486,6 +500,11 @@ def records_by_arm(args, lock, predictions) -> dict:
     plan = read(plan_path)
     if plan["tasks"] != tasks or plan["ladder_indexes"] != ladder_indexes(args.benchmark_dir):
         raise ValueError("fit plan changed")
+    if network.switched():
+        if (plan["classical_timing"] != lock["rerun"]["classical_timing"]
+                or (plan["classical_timing"] == "reuse" and plan["workers"] != lock["rerun"]["solver_workers"])
+                or (plan["classical_timing"] == "retime" and not 1 <= plan["workers"] <= 4)):
+            raise ValueError("fit plan solver workers changed")
     expected = _fit_completion(tasks, plan_path, lock["refinement"]["failed_object_ids"])
     if read(args.output_dir / "fits/complete.json") != expected:
         raise ValueError("fits are incomplete or changed; references remain closed")
@@ -745,6 +764,7 @@ def command_score(args) -> int:
     scores.update(network.json_metadata())
     if network.switched():
         scores["classical_timing"] = args.classical_timing
+        scores["solver_workers"] = read(args.output_dir / "fits/fit-plan.json")["workers"]
         scores["classical_retiming_cpu_seconds"] = (sum(
             r["solver_cpu_seconds"] for arms in records.values()
             for arm in ("standard6", "classical20") for r in arms[arm])
