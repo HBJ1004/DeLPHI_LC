@@ -136,6 +136,21 @@ delphi-k3-predict \
 python examples/prediction_to_poles.py prediction-estimated-period.json
 ```
 
+```text
+object asteroid_103  bundle k3-oof-fold-0
+cand end  lambda(deg)  beta(deg)
+   1  +       121.2      +51.0
+   1  -       301.2      -51.0
+   2  +       322.1      +63.7
+   2  -       142.1      -63.7
+   3  +        98.1      +57.9
+   3  -       278.1      -57.9
+```
+
+These are the candidate axes of the paper's own-period result for Astraea
+(`own-period-oof.npz` in the data record), and they differ slightly from the
+supplied-period example below because the period differs.
+
 `--period-json` uses the saved `period_hours` and `provenance` in place of
 `known_period`. The file must contain a successful search for the same
 `object_id`. Record the period file alongside your prediction. Add
