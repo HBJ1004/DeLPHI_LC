@@ -20,6 +20,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -88,8 +89,8 @@ class Context:
             self.source(path)
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
-    def figure(self, name):
-        self.source(PAPER / "figures" / f"{name}.pdf")
+    def figure(self, name, *, reference=None):
+        self.source(PAPER / "figures" / f"{reference or name}.pdf")
         self.results[name] = {"points": [], "checks": [], "source_files": [],
                               "means_retained": [], "visual_message": "Unchanged."}
         return self.results[name]
@@ -146,12 +147,12 @@ class Context:
         self.results[name]["page_size_pt"] = size
         return fig, axes
 
-    def save(self, fig, name):
+    def save(self, fig, name, *, dpi=200):
         import matplotlib.pyplot as plt
 
         # No automatic cropping: the first five PDFs retain the paper media box.
         fig.savefig(self.out / f"{name}.pdf", bbox_inches=None, facecolor="white")
-        fig.savefig(self.out / f"{name}.png", bbox_inches=None, dpi=200, facecolor="white")
+        fig.savefig(self.out / f"{name}.png", bbox_inches=None, dpi=dpi, facecolor="white")
         self.results[name]["axes"] = [dict(xlim=list(ax.get_xlim()), ylim=list(ax.get_ylim()),
                                            xlabel=ax.get_xlabel(), ylabel=ax.get_ylabel())
                                       for ax in fig.axes]
@@ -512,57 +513,313 @@ def candidate_count(ctx):
                                 f"(b) uses median-error cone radii, with the smallest covered area at K={best_k}. The p90 series are unchanged.")
 
 
+def inversion_time_label(seconds, *, significant=3):
+    """Format a finite, nonnegative duration in readable time units."""
+    if not np.isfinite(seconds) or seconds < 0:
+        raise ValueError("Time must be finite and nonnegative")
+    for scale, unit in ((365.25 * 86400, "yr"), (86400, "d"), (3600, "h"), (60, "min"), (1, "s")):
+        if seconds >= scale or scale == 1:
+            return f"{seconds / scale:.{significant}g} {unit}"
+
+
+def full_scan_costs(summary):
+    """Set A P-core costs, retaining censored observations at their bounds.
+
+    Set B's two complete-scan validation objects also have sampled estimates;
+    exclude them using full_scan_checks, as required by PeriodCostMedianDays.
+    """
+    rows = []
+    for oid, estimate in summary["estimates"].items():
+        if oid in summary["full_scan_checks"]:
+            continue
+        cpu = estimate["P_core"]["cpu_seconds"]
+        bounded = "estimated_full" not in cpu
+        seconds = cpu["estimated_full_at_least"] if bounded else cpu["estimated_full"]
+        rows.append(dict(object_id=oid, seconds=seconds, lower_bound=bounded))
+    return dict(n=len(rows), object_ids=[r["object_id"] for r in rows], per_object=rows,
+                seconds=float(np.median([r["seconds"] for r in rows])),
+                range_seconds=[min(r["seconds"] for r in rows if not r["lower_bound"]),
+                               max(r["seconds"] for r in rows if r["lower_bound"])],
+                range_upper_is_lower_bound=True,
+                statistic="median of Set A estimated_full or estimated_full_at_least, retaining bounds")
+
+
+def inversion_style():
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9,
+                         "axes.labelsize": 8, "axes.titlesize": 8,
+                         "xtick.labelsize": 7, "ytick.labelsize": 7, "pdf.fonttype": 42})
+
+
 def inversion_benchmark(ctx):
-    """The amendment's three panels: two timing histograms and median pole errors."""
+    """Period accuracy, the saved start ladder, and the cost of period search."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import NullFormatter, NullLocator
+
+    result = ctx.figure("inversion-benchmark")
+    inversion_style()
+    blue, grey = "#0072B2", "#666666"
+    seed = 20261026
+    ctx.check(result, "Median bootstrap replicates", ctx.resamples, 10000)
+    folder = DATA / "benchmark"
+    own_path = folder / "score.json"
+    damit_path = DATA / "../direct-workflow-benchmark/score.json"
+    loaded_path = folder / "score-loaded.json"
+    refine_path = DATA / "refine-chain/refine-medians.json"
+    cost_path = DATA / "period-cost/period-cost-summary.json"
+    own, damit, loaded, refine, cost = [ctx.read(p) for p in
+                                      (own_path, damit_path, loaded_path, refine_path, cost_path)]
+    paper_numbers = dict(re.findall(r"\\newcommand\{\\(\w+)\}\{([0-9.]+)\}",
+                                    (PAPER / "sample701.tex").read_text()))
+
+    def printed(point, macro, value):
+        expected = paper_numbers[macro]
+        decimals = len(expected.partition(".")[2])
+        ctx.check(result, macro + ": printed rounding", float(f"{value:.{decimals}f}"), float(expected))
+        point.setdefault("printed_macros", []).append(macro)
+
+    period_points = []
+    for x, period, score, path, prefix in [(0, "our", own, own_path, "Workflow"),
+                                           (1, "DAMIT", damit, damit_path, "WorkflowDamit")]:
+        for arm, suffix, starts in [("delphi", "Delphi", 6), ("classical", "Classical", 12)]:
+            rows = score["object_rows"]
+            values = [r["arms"][arm]["reference_error_degrees"] for r in rows]
+            point = ctx.stat(values, seed=seed)
+            point.update(panel="a", x=x, cohort="140 asteroids", period=period, series=arm,
+                         starts=starts, label=f"140 asteroids, {period} period, {arm}",
+                         object_ids=[r["object_id"] for r in rows], errors_deg=values,
+                         source_files=[str(path)])
+            macro = prefix + suffix + "Error"
+            ctx.match(result, point, macro)
+            printed(point, macro + "Median", point["median"])
+            period_points.append(point)
+    for x, period in [(3, "own"), (4, "refined"), (5, "published")]:
+        for arm, starts in [("delphi6", 6), ("classical12", 12)]:
+            rows = refine["per_object"]
+            values = [r["errors_deg"][period][arm] for r in rows]
+            point = ctx.stat(values, seed=seed)
+            label = f"20 asteroids, {period} period, {arm}"
+            point.update(panel="a", x=x, cohort="20 asteroids, refined test", period=period,
+                         series="delphi" if arm == "delphi6" else "classical", starts=starts,
+                         label=label, object_ids=[r["object_id"] for r in rows], errors_deg=values,
+                         source_files=[str(refine_path)],
+                         median_stats_check="PASS: per-object median and n match refine-medians.json summary.")
+            summary = refine["summary"][period][arm]
+            ctx.check(result, label + ": median", point["median"], summary["median_error_deg"])
+            ctx.check(result, label + ": n", point["n"], summary["n"])
+            if period != "own":
+                macro = "Refine" + ("Damit" if period == "published" else "")
+                printed(point, macro + ("Delphi" if arm == "delphi6" else "Classical") + "Median",
+                        point["median"])
+            period_points.append(point)
+    ctx.check(result, "Refined test asteroid count", len(refine["per_object"]), 20)
+    ctx.check(result, "Refined test object order", [r["object_id"] for r in refine["per_object"]] ==
+              refine["object_order"], True)
+    ctx.check(result, "140-asteroid period comparison identities",
+              [r["object_id"] for r in own["object_rows"]] ==
+              [r["object_id"] for r in damit["object_rows"]], True)
+    result["points"].extend(period_points)
+
+    # The previous panel (c), unchanged in values, selection, markers and limits.
+    budget_path = folder / "budget-equivalence.json"
+    ladder_path = folder / "classical-ladder-exploratory.json"
+    budget = ctx.read(budget_path)
+    ladder = ctx.read(ladder_path)["object_rows"]
+    ids = [r["object_id"] for r in ladder]
+    classical = []
+    for index, row in enumerate(budget["budgets"]):
+        starts = row["starts"]
+        values = [r["classical"][str(starts)]["reference_error_degrees"] for r in ladder]
+        point = ctx.stat(values)
+        point.update(panel="b", starts=starts, series="classical", object_ids=ids,
+                     errors_deg=values, source_files=[str(budget_path), str(ladder_path)])
+        matching = [r for r in ctx.frozen["entries"]
+                    if str(budget_path) in r.get("source_files", [])
+                    and f"budgets/{index}/mean_error_deg" in r.get("input_source_comment", "")]
+        if matching:
+            ctx.match(result, point, matching[0]["mean_macro"])
+        else:
+            point["median_stats_check"] = "PASS: recomputed from saved ladder; no median-stats macro for this budget."
+        classical.append(point)
+    loaded_by_id = {r["object_id"]: r for r in loaded["object_rows"]}
+    de = ctx.stat([loaded_by_id[i]["arms"]["delphi"]["reference_error_degrees"] for i in ids])
+    de.update(panel="b", starts=6, series="delphi", object_ids=ids, source_files=[str(loaded_path)])
+    ctx.match(result, de, "BudgetDelphiError")
+    result["points"].extend([*classical, de])
+
+    costs = []
+    for label, seconds, series, source, key, macro in [
+        ("DeLPHI period search (Fourier, GPU)", cost["fourier_seconds"], "delphi", cost_path,
+         "fourier_seconds", "PeriodCostFourierSeconds"),
+        ("DeLPHI pole fit, 6 starts (6 CPU workers + GPU)", loaded["point_estimates"]["delphi_mean_seconds"],
+         "delphi", loaded_path, "point_estimates/delphi_mean_seconds", "WorkflowDelphiLoadedSeconds"),
+        ("Classical pole fit, 12 starts (6 CPU workers)", loaded["point_estimates"]["classical_mean_seconds"],
+         "classical", loaded_path, "point_estimates/classical_mean_seconds", "WorkflowClassicalLoadedSeconds")]:
+        point = dict(panel="c", label=label, seconds=seconds, series=series,
+                     statistic="mean wall time", source_files=[str(source)], source_key=key)
+        printed(point, macro, seconds)
+        costs.append(point)
+    refinement = refine["costs"]["refinement_P_core_CPU_hours"]
+    values = [r["refinement_P_core_CPU_hours"] for r in refine["per_object"]]
+    for key, actual in [("median", np.median(values)), ("minimum", min(values)), ("maximum", max(values))]:
+        ctx.check(result, "Refinement CPU hours: " + key, float(actual), refinement[key])
+    point = dict(panel="c", label="Period refinement, narrow scan (1 CPU core)",
+                 seconds=refinement["median"] * 3600, series="classical", n=refinement["n"],
+                 range_seconds=[refinement["minimum"] * 3600, refinement["maximum"] * 3600],
+                 statistic="median P-core CPU time", object_ids=refine["object_order"],
+                 per_object_hours=values, source_files=[str(refine_path)],
+                 source_key="costs/refinement_P_core_CPU_hours")
+    printed(point, "RefineScanMedianHours", point["seconds"] / 3600)
+    costs.append(point)
+    point = full_scan_costs(cost)
+    point.update(panel="c", label="Full classical period scan, estimated (1 CPU core)",
+                 series="classical", source_files=[str(cost_path)],
+                 source_key="estimates/<Set A id>/P_core/cpu_seconds")
+    ctx.check(result, "Full classical period scan: Set A count", point["n"], 20)
+    printed(point, "PeriodCostMedianDays", point["seconds"] / 86400)
+    printed(point, "PeriodCostMinDays", point["range_seconds"][0] / 86400)
+    printed(point, "PeriodCostMaxDays", point["range_seconds"][1] / 86400)
+    costs.append(point)
+    result["points"].extend(costs)
+    result["bootstrap_note"] = (
+        f"Panel (a): percentile 95% intervals of the median from 10,000 IID asteroid resamples, "
+        f"numpy.random.default_rng({seed}); reset for each series, preserving paired identities. "
+        "Intervals are newly computed; the four individual median-stats entries have no frozen intervals."
+    )
+    result["time_note"] = (
+        "Pole-fit bars retain measured loaded wall times (six single-threaded solver workers, plus GPU "
+        "inference for DeLPHI); scan bars are single P-core CPU-time estimates. "
+        "The full-scan median retains lower bounds at their bounds; its range ends at the largest lower bound."
+    )
+
+    # Independent axes keep the long timing row labels from squeezing panel (a).
+    fig = plt.figure(figsize=(505 / 72, 5.6), dpi=150)
+    ax = fig.add_axes([0.075, 0.54, 0.53, 0.40])
+    for arm, colour, marker, offset, label in [
+        ("delphi", blue, "D", -0.11, "DeLPHI, 6 starts"),
+        ("classical", grey, "o", 0.11, "Classical, 12 starts")]:
+        points = [p for p in period_points if p["series"] == arm]
+        medians = np.array([p["median"] for p in points])
+        intervals = np.array([p["interval"] for p in points])
+        ax.errorbar([p["x"] + offset for p in points], medians,
+                    yerr=[medians - intervals[:, 0], intervals[:, 1] - medians],
+                    fmt=marker, color=colour, ms=4, lw=1, capsize=2, label=label)
+    ax.set(title="(a) Pole error and period", ylabel="Median pole error (deg)",
+           xlim=(-0.6, 5.6), ylim=(0, 90))
+    ax.set_xticks([0, 1, 3, 4, 5], ["Our\nperiod", "DAMIT\nperiod", "Our\nperiod",
+                                          "Refined\nperiod", "DAMIT\nperiod"])
+    ax.text(0.5, 0.97, "140 asteroids", transform=ax.get_xaxis_transform(),
+            ha="center", va="top", fontsize=7)
+    ax.text(4, 0.97, "20 asteroids, refined test", transform=ax.get_xaxis_transform(),
+            ha="center", va="top", fontsize=7)
+    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(0, 0.84), fontsize=7)
+    ax.grid(axis="y", alpha=0.2)
+
+    ax = fig.add_axes([0.705, 0.54, 0.28, 0.40])
+    ax.plot([p["starts"] for p in classical], [p["median"] for p in classical], "-o",
+            color=grey, ms=4, lw=1.2, label="Classical search")
+    ax.axhline(de["median"], color=blue, ls=":", lw=1)
+    ax.plot([de["starts"]], [de["median"]], "D", color=blue, ms=7, label="DeLPHI, six starts")
+    ax.set(xscale="log", xlabel="Number of starting poles",
+           ylabel="Median pole error (deg)",
+           title="(b) Classical starts at our period", ylim=(12, 55))
+    ax.set_xticks([6, 12, 24, 48, 96], ["6", "12", "24", "48", "96"])
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.legend(frameon=False, loc="lower right", fontsize=7)
+
+    ax = fig.add_axes([0.44, 0.085, 0.54, 0.32])
+    time_annotations = []
+    for y, point in enumerate(costs):
+        seconds = point["seconds"]
+        colour = blue if point["series"] == "delphi" else grey
+        ax.barh(y, seconds - 1, left=1, height=0.48, color=colour, alpha=0.85)
+        label = inversion_time_label(seconds, significant=3 if y < 3 else 2)
+        annotation_seconds = seconds
+        if "range_seconds" in point:
+            low, high = point["range_seconds"]
+            if point.get("range_upper_is_lower_bound"):
+                ax.annotate("", (high, y), xytext=(low, y),
+                            arrowprops=dict(arrowstyle="-|>", color=colour, lw=1.2,
+                                            mutation_scale=8, shrinkA=0, shrinkB=0))
+                ax.plot(low, y, color=colour, marker="|", ms=6)
+            else:
+                ax.plot([low, high], [y, y], color=colour, lw=1.2, marker="|", ms=6)
+            annotation_seconds = max(seconds, high)
+            prefix = "≥" if point.get("range_upper_is_lower_bound") else ""
+            label += f" ({inversion_time_label(low)}–{prefix}{inversion_time_label(high)})"
+        point["annotation"] = label
+        time_annotations.append(ax.annotate(label, (annotation_seconds, y), xytext=(4, 0),
+                                           textcoords="offset points", va="center", fontsize=7,
+                                           color=colour))
+    ax.set(xscale="log", xlim=(1, 3 * 365.25 * 86400), ylim=(4.65, -0.6),
+           title="(c) Time per asteroid", xlabel="Time (log scale)")
+    ax.set_yticks(range(len(costs)), [p["label"] for p in costs], fontsize=7)
+    ticks = [1, 60, 3600, 86400, 365.25 * 86400]
+    ax.set_xticks(ticks, [inversion_time_label(v) for v in ticks])
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.grid(axis="x", alpha=0.2)
+    for ax in fig.axes:
+        ax.tick_params(direction="out", length=3.5, width=0.8)
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.8)
+    # Reserve enough log-axis space for each full annotation on its own row.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    time_ax = fig.axes[-1]
+    right = time_ax.get_xlim()[1]
+    for annotation in time_annotations:
+        width = annotation.get_window_extent(renderer).width + 10 * fig.dpi / 72
+        fraction = 1 - width / time_ax.bbox.width
+        right = max(right, np.exp(np.log(annotation.xy[0]) / fraction))
+    time_ax.set_xlim(1, right)
+    result["page_size_pt"] = [505, 403.2]
+    ctx.save(fig, "inversion-benchmark", dpi=150)
+    ctx.sources_for(result, [own_path, damit_path, loaded_path, refine_path, cost_path,
+                             budget_path, ladder_path, DATA / "period-cost/PROTOCOL.md"])
+    result["means_retained"] = ["The first three time bars retain measured mean wall times, rather than pole errors."]
+    result["caption_change"] = (
+        "Describe median pole errors with 95% bootstrap intervals in (a), the unchanged start ladder in (b), "
+        "and GPU/CPU timing sources, min–max ranges and the full-scan lower-bound endpoint in (c). "
+        "Move the two timing histograms to the appendix inversion-timing figure."
+    )
+    result["visual_message"] = (
+        "At our rough period DeLPHI starts agree better with DAMIT poles; refined or DAMIT periods "
+        "bring both searches to similar errors. More classical starts do not close the rough-period gap. "
+        "The main time saving is in the period search."
+    )
+
+
+def inversion_timing(ctx):
+    """Move the two existing timing histograms to their own appendix figure."""
     import matplotlib.pyplot as plt
     from matplotlib.ticker import MaxNLocator, NullFormatter
     from matplotlib.transforms import blended_transform_factory
 
-    result = ctx.figure("inversion-benchmark")
+    result = ctx.figure("inversion-timing", reference="inversion-benchmark")
     folder = DATA / "benchmark"
     scores = [ctx.read(folder / name) for name in ("score.json", "score-loaded.json")]
-    budget = ctx.read(folder / "budget-equivalence.json")
-    ladder = ctx.read(folder / "classical-ladder-exploratory.json")["object_rows"]
-    ids = [r["object_id"] for r in ladder]
-    classical = []
-    for row in budget["budgets"]:
-        starts = row["starts"]
-        stat = ctx.stat([r["classical"][str(starts)]["reference_error_degrees"] for r in ladder])
-        stat.update(panel="c", starts=starts, series="classical", object_ids=ids)
-        matching = [r for r in ctx.frozen["entries"]
-                    if str(folder / "budget-equivalence.json") in r.get("source_files", [])
-                    and f"budgets/{budget['budgets'].index(row)}/mean_error_deg" in r.get("input_source_comment", "")]
-        if matching:
-            ctx.match(result, stat, matching[0]["mean_macro"])
-        else:
-            stat["median_stats_check"] = "PASS: recomputed from saved ladder; no median-stats macro for this budget."
-        classical.append(stat)
-    loaded = {r["object_id"]: r for r in scores[1]["object_rows"]}
-    de = ctx.stat([loaded[i]["arms"]["delphi"]["reference_error_degrees"] for i in ids])
-    de.update(panel="c", starts=6, series="delphi", object_ids=ids)
-    ctx.match(result, de, "BudgetDelphiError")
+    ctx.check(result, "Cold and loaded object identities",
+              [r["object_id"] for r in scores[0]["object_rows"]] ==
+              [r["object_id"] for r in scores[1]["object_rows"]], True)
     ratios = [np.array([r["arms"]["classical"]["mean_wall_seconds"] /
                        r["arms"]["delphi"]["mean_wall_seconds"] for r in s["object_rows"]]) for s in scores]
-    # Keep the renderer's log-bin spacing and extend its lower edge to include
-    # two cold-run asteroids below 0.1; no observation is silently dropped.
     lower_exponent = min(-1.0, 0.05 * np.floor(np.log10(min(r.min() for r in ratios)) / 0.05))
     histogram_edges = 10.0 ** np.arange(lower_exponent, 1.00001, 0.05)
-    for panel, report in zip(("a", "b"), scores, strict=True):
-        rows = report["object_rows"]
-        ratio = np.array([r["arms"]["classical"]["mean_wall_seconds"] /
-                          r["arms"]["delphi"]["mean_wall_seconds"] for r in rows])
+    for panel, report, ratio in zip(("a", "b"), scores, ratios, strict=True):
         counts, edges = np.histogram(ratio, bins=histogram_edges)
-        result["points"].append(dict(panel=panel, object_ids=[r["object_id"] for r in rows],
+        result["points"].append(dict(panel=panel, object_ids=[r["object_id"] for r in report["object_rows"]],
                                      time_ratios=ratio.tolist(), histogram_counts=counts.tolist(),
                                      histogram_edges=edges.tolist(), n_delphi_faster=int((ratio > 1).sum()),
-                                     n=len(rows), ratio_of_means=report["point_estimates"]["speed_ratio_classical_over_delphi"],
-                                     interval=report["bootstrap_95_intervals"]["speed_ratio_classical_over_delphi"]))
-        ctx.check(result, panel + ": histogram includes all asteroids", int(counts.sum()), len(rows))
-    result["points"].extend([*classical, de])
+                                     n=len(ratio), ratio_of_means=report["point_estimates"]["speed_ratio_classical_over_delphi"],
+                                     interval=report["bootstrap_95_intervals"]["speed_ratio_classical_over_delphi"],
+                                     source_files=[str(folder / ("score.json" if panel == "a" else "score-loaded.json"))]))
+        ctx.check(result, panel + ": histogram includes all asteroids", int(counts.sum()), len(ratio))
     source = function_source(INVERSION_RENDERER, "main")
-    source = replace_once(source, 'edges = np.geomspace(0.1, 10.0, 41)',
-                          'edges = histogram_edges')
-    source = replace_once(source, 'figsize=(10.4, 3.3)', 'figsize=(505 / 72, 3.0)')
+    source = source[:source.index("    # (c)")]
+    source = replace_once(source, 'edges = np.geomspace(0.1, 10.0, 41)', 'edges = histogram_edges')
+    source = replace_once(source, 'plt.subplots(1, 3, figsize=(10.4, 3.3)',
+                          'plt.subplots(1, 2, figsize=(345 / 72, 3.0)')
     source = replace_once(source, '"font.size": 10', '"font.size": 9')
     source = replace_once(source, '"axes.labelsize": 10', '"axes.labelsize": 8')
     source = replace_once(source, '"axes.titlesize": 11', '"axes.titlesize": 8')
@@ -571,46 +828,33 @@ def inversion_benchmark(ctx):
     source = replace_once(source, '"(a) Fresh process for each asteroid", "(b) Models kept loaded"',
                           '"(a) Fresh process\\nfor each asteroid", "(b) Models kept loaded"')
     source = source.replace('fontsize=9', 'fontsize=7')
-    start = source.index('        ax.text(0.03, 0.97,')
-    end = source.index('\n\n    # (c)', start)
-    source = source[:start] + '''        ax.text(0.03, 0.97,
+    source = source[:source.index('        ax.text(0.03, 0.97,')] + '''        ax.text(0.03, 0.97,
                 f"DeLPHI faster: {int(np.sum(ratio > 1))}/{len(ratio)}\\n"
                 f"Ratio of means {point['speed_ratio_classical_over_delphi']:.2f}\\n"
                 f"95% interval {speed[0]:.2f}--{speed[1]:.2f}",
                 transform=ax.transAxes, va="top", fontsize=7,
-                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2})''' + source[end:]
-    source = replace_once(source, 'error = np.array([row["mean_error_deg"] for row in budgets["budgets"]])',
-                          'error = np.array(median_errors)')
-    source = source.replace('delphi["mean_error_deg"]', 'delphi_median')
-    source = replace_once(source, 'Mean disagreement with DAMIT (deg)', 'Median disagreement\\nwith DAMIT (deg)')
-    source = replace_once(source, 'title="(c) Agreement and number of starts"', 'title="(c) Agreement and\\nnumber of starts"')
-    source = replace_once(source, 'ax.set_ylim(12, 25)', 'ax.set_ylim(12, 55)')
-    source = replace_once(source, 'loc="upper right", fontsize=8.5', 'loc="lower right", fontsize=7')
-    source = replace_once(source, 'fig.savefig(FIGURE, bbox_inches="tight")\n    plt.close(fig)\n    print(FIGURE)',
-                          'ctx.save(fig, "inversion-benchmark")')
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2})
+    for ax in axes:
+        ax.tick_params(direction="out", length=3.5, width=0.8)
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.8)
+    ctx.save(fig, "inversion-timing", dpi=150)
+'''
     namespace = dict(np=np, plt=plt, json=json, SCORES=[folder / "score.json", folder / "score-loaded.json"],
-                     BUDGETS=folder / "budget-equivalence.json", MaxNLocator=MaxNLocator,
-                     NullFormatter=NullFormatter, blended_transform_factory=blended_transform_factory,
-                     median_errors=[r["median"] for r in classical], delphi_median=de["median"],
-                     histogram_edges=histogram_edges, ctx=ctx)
-    with plt.rc_context():
-        exec(compile(source, str(INVERSION_RENDERER), "exec"), namespace)
-        namespace["main"]()
-    result["page_size_pt"] = [505, 216]
-    ctx.sources_for(result, [INVERSION_RENDERER, folder / "score.json", folder / "score-loaded.json",
-                             folder / "budget-equivalence.json", folder / "classical-ladder-exploratory.json"])
+                     MaxNLocator=MaxNLocator, NullFormatter=NullFormatter,
+                     blended_transform_factory=blended_transform_factory, histogram_edges=histogram_edges, ctx=ctx)
+    exec(compile(source, str(INVERSION_RENDERER), "exec"), namespace)
+    namespace["main"]()
+    result["page_size_pt"] = [345, 216]
+    ctx.sources_for(result, [INVERSION_RENDERER, folder / "score.json", folder / "score-loaded.json"])
     result["means_retained"] = [
-        "Panels (a,b): per-asteroid time is the mean of three runs; annotations retain the ratio of mean times and its source bootstrap interval. Timing statistics are outside the pole-error conversion.",
+        "Per-asteroid times remain means of three runs; annotations retain the ratio of mean times and its source bootstrap interval."
     ]
-    result["caption_change"] = 'In (c), replace "Mean disagreement" with "Median disagreement". Keep all timing wording, including "averaged over three runs".'
+    result["caption_change"] = "Appendix: retain the two timing histogram descriptions and all timing conventions."
     result["visual_message"] = (
-        "The amended PDF now matches the caption's three panels. Classical median disagreement is "
-        "41.76--52.09 deg across saved budgets, versus 27.44 deg for six DeLPHI starts; "
-        "more classical starts do not improve pole agreement at the fixed own period. "
-        "The pole-error axis extends from the renderer's 12--25 to 12--55 deg. "
-        "Timing histograms extend down to 0.0891 to include the two cold-run ratios below 0.1."
+        "The original cold and loaded pole-fit timing histograms are unchanged in content, including "
+        "the extended bins that include all 140 asteroids. These measure pole fitting, not period-search cost."
     )
-
 
 NETTESTS_RENDERER = DATA / "nettests/figures/render_main_figures.py"
 F2_NAMES = ("interpretation", "shapley", "training-test", "reference-reassignment",
@@ -1158,6 +1402,7 @@ FIGURES = {
     "latitude": latitude,
     "candidate-count": candidate_count,
     "inversion-benchmark": inversion_benchmark,
+    "inversion-timing": inversion_timing,
     "interpretation": interpretation,
     "shapley": shapley,
     "training-test": training_test,
@@ -1179,12 +1424,14 @@ def validate_artifacts(ctx, names):
         ctx.check(ctx.results[name], "Saved PDF media box (pt)", size,
                   ctx.results[name]["page_size_pt"])
         text = subprocess.check_output(["pdftotext", "-layout", str(path), "-"], text=True)
-        if "median" not in text.lower() or "Mean oracle error" in text:
+        required_labels = (("Classical time / DeLPHI time", "Ratio of means")
+                           if name == "inversion-timing" else ("median",))
+        if any(label.lower() not in text.lower() for label in required_labels) or "Mean oracle error" in text:
             raise ValueError(f"{path}: incorrect statistic label")
         with Image.open(ctx.out / f"{name}.png") as preview:
             if preview.width < 500 or preview.height < 300:
                 raise ValueError(f"{name}: undersized PNG preview {preview.size}")
-        ctx.results[name]["artifact_validation"] = "PASS: readable PDF, expected media box, median labels, PNG preview."
+        ctx.results[name]["artifact_validation"] = "PASS: readable PDF, expected media box, statistic labels, PNG preview."
     if any(name.endswith((".refine_chain", ".period_cost")) for name in sys.modules):
         raise ValueError("A forbidden live-run module was imported")
 
@@ -1353,7 +1600,9 @@ def main():
         values["figures"].update(ctx.results)
         values["source_sha256"] = dict(values.get("source_sha256", {}), **ctx.sources)
         values_path.write_text(json.dumps(values, indent=2, allow_nan=False) + "\n")
-        f1_names = [name for name in names if name not in F2_NAMES]
+        # The inversion redesign has its own report; do not overwrite the earlier F1 report.
+        f1_names = [name for name in names if name not in F2_NAMES
+                    and name not in ("inversion-benchmark", "inversion-timing")]
         f2_names = [name for name in names if name in F2_NAMES]
         if f1_names:
             write_report(ctx, f1_names)
