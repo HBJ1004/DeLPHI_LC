@@ -48,7 +48,8 @@ def bound(path):
 
 
 def verify(record):
-    if bound(record["path"]) != record:
+    # Archived locks may name a path through the lowercase compatibility links, so compare it resolved.
+    if bound(record["path"]) != {**record, "path": str(Path(record["path"]).resolve())}:
         raise ValueError(f"bound input changed: {record['path']}")
     return Path(record["path"])
 
