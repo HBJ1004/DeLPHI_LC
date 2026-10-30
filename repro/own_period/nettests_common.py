@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import NetworkPath, guard_output
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
@@ -21,10 +22,10 @@ REPO = Path(__file__).resolve().parents[2]
 CATALOG = REPO / "repro/data/damit-20250610T000301Z/catalog.jsonl"
 SPLITS = REPO / "repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
 DUMP = ROOT / "damit-20250610T000301Z"
-ARTIFACTS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092"
-MODELS = ARTIFACTS / "models"
-EVALUATIONS = ARTIFACTS / "evaluations"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
+ARTIFACTS = NetworkPath("artifacts")
+MODELS = NetworkPath("models")
+EVALUATIONS = NetworkPath("evaluations")
+MODEL_MANIFEST = NetworkPath("binding")
 OP = DataPath()
 OUT = OP / "nettests"
 OWN_PERIODS_170 = OP / "own-periods-170.json"
@@ -64,6 +65,7 @@ def load_examples(object_ids, periods, provenance):
 
 
 def write_json_once(path: Path, value) -> None:
+    guard_output(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, indent=1, sort_keys=True, allow_nan=False)

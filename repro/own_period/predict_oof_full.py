@@ -52,7 +52,14 @@ from lc_pipeline.k3.publication_run import (
 from lc_pipeline.k3.tokenizer import tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, collate_examples
 from lc_pipeline.v2.preprocessing import KnownPeriod
-
+from repro.network_root import (
+    NetworkPath,
+    check_checkpoint,
+    check_npz,
+    guard_output,
+    network_metadata,
+    switched,
+)
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
@@ -61,8 +68,8 @@ DATA = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
 CATALOG = DATA / "catalog.jsonl"
 SPLITS = DATA / "publication-splits-v2.3.json"
 DUMP = ROOT / "damit-20250610T000301Z"
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-PUBLISHED = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations"
+MODELS = NetworkPath("models")
+PUBLISHED = NetworkPath("evaluations")
 INPUT_KEYS = {"phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask"}
 PLACEHOLDER_AXIS = np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32)
 
@@ -72,12 +79,30 @@ def sha256(path: Path) -> str:
 
 
 def write_npz_once(path: Path, **arrays) -> None:
+    guard_output(path)
+    metadata = network_metadata()
+    if switched() and path.exists():
+        check_npz(path)
+        with np.load(path, allow_pickle=False) as existing:
+            expected = {**arrays, **metadata}
+            if set(existing.files) != set(expected) or any(
+                not np.array_equal(existing[key], value, equal_nan=True)
+                if np.asarray(value).dtype.kind in "fc" else not np.array_equal(existing[key], value)
+                for key, value in expected.items()
+            ):
+                raise ValueError(f"existing output differs from this run: {path}")
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("xb") as handle:
-        np.savez_compressed(handle, **arrays)
+        np.savez_compressed(handle, **arrays, **metadata)
 
 
 def write_json_once(path: Path, value) -> None:
+    guard_output(path)
+    if switched() and path.exists():
+        if json.loads(path.read_text()) != value:
+            raise ValueError(f"existing output differs from this run: {path}")
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as handle:
         handle.write(json.dumps(value, indent=1, sort_keys=True) + "\n")
@@ -131,6 +156,7 @@ def build_examples(ids, periods, provenance) -> tuple[K3TrainingExample, ...]:
 
 def load_model(fold: int, seed: int, device: str):
     path = MODELS / f"real-fold-{fold}-seed-{seed}.pt"
+    check_checkpoint(path)
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     if checkpoint.get("stage") != "real-oof" or int(checkpoint.get("config", {}).get("seed", -1)) != seed:
         raise SystemExit(f"unexpected checkpoint {path.name}")
@@ -145,6 +171,7 @@ def predict_seed(fold, seed, examples, out: Path, device: str, batch_size: int =
     """Statement-for-statement copy of ``_evaluate_examples`` without scoring."""
     destination = out / f"pred-fold-{fold}-seed-{seed}.npz"
     if destination.exists():
+        check_npz(destination)
         print("exists", destination.name, flush=True)
         return
     model, _, path = load_model(fold, seed, device)
@@ -188,10 +215,12 @@ def predict_ensemble(fold, examples, out: Path, device: str) -> None:
     published per-seed maps)."""
     destination = out / f"pred-ensemble-fold-{fold}.npz"
     if destination.exists():
+        check_npz(destination)
         print("exists", destination.name, flush=True)
         return
     seed_grids = []
     for seed in K3_OOF_SEEDS:
+        check_npz(out / f"pred-fold-{fold}-seed-{seed}.npz")
         with np.load(out / f"pred-fold-{fold}-seed-{seed}.npz", allow_pickle=False) as artifact:
             if tuple(artifact["object_ids"].astype(str)) != tuple(e.object_id for e in examples):
                 raise SystemExit(f"fold {fold} seed {seed} predictions do not match the split")
@@ -267,6 +296,7 @@ def predict_ensemble(fold, examples, out: Path, device: str) -> None:
 
 
 def cmd_predict(args) -> int:
+    guard_output(args.output_dir)
     out = args.output_dir / "predictions"
     periods, provenance, source = load_periods(args.periods)
     record = {
@@ -279,10 +309,14 @@ def cmd_predict(args) -> int:
         "cuda_device": torch.cuda.get_device_name(0) if args.device.startswith("cuda") else None,
         "code_sha256": sha256(Path(__file__)),
     }
+    if switched():
+        record["network_binding_sha256"] = str(network_metadata()["network_binding_sha256"])
     manifest = out / "prediction-run.json"
     if manifest.exists():
         if json.loads(manifest.read_text())["period_source"] != source:
             raise SystemExit("this output directory was started with other periods")
+        if switched() and json.loads(manifest.read_text()).get("network_binding_sha256") != record["network_binding_sha256"]:
+            raise ValueError("this output directory was started with other networks")
     else:
         write_json_once(manifest, record)
     for row in fold_rows():
@@ -305,6 +339,7 @@ def cmd_predict(args) -> int:
 
 def cmd_score(args) -> int:
     """Score the saved predictions and write the published file layouts."""
+    guard_output(args.output_dir)
     pred = args.output_dir / "predictions"
     out = args.output_dir / "evaluations"
     catalog = catalog_rows()
@@ -334,6 +369,7 @@ def cmd_score(args) -> int:
             source = pred / f"pred-fold-{fold}-seed-{seed}.npz"
             if not source.exists():
                 continue
+            check_npz(source)
             with np.load(source, allow_pickle=False) as a:
                 ids = a["object_ids"].astype(str)
                 grids = np.asarray(a["score_grids"], dtype=np.float32)
@@ -359,6 +395,10 @@ def cmd_score(args) -> int:
             input_artifact_sha256=np.asarray(hashes),
         )
         aggregate_hashes.append(sha256(aggregate))
+    for row in rows:
+        source = pred / f"pred-ensemble-fold-{int(row['fold'])}.npz"
+        if source.exists():
+            check_npz(source)
     parts = [np.load(pred / f"pred-ensemble-fold-{int(r['fold'])}.npz", allow_pickle=False)
              for r in rows if (pred / f"pred-ensemble-fold-{int(r['fold'])}.npz").exists()]
     ids = np.concatenate([p["object_ids"].astype(str) for p in parts])

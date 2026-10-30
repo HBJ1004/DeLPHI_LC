@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from repro import compute_reference_baselines as crb
+from repro.network_root import NetworkPath, check_npz, guard_output, network_metadata, switched
 
 from .search_external import FOLLOWUP, OUT
 
@@ -23,7 +24,7 @@ SEED = 20261021
 RESAMPLES = 10_000
 TOL = 1e-8
 FAILED_DEG = 90.0
-OOF = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
+OOF = NetworkPath("evaluations", "real-oof-ensemble.npz")
 COMPARATORS = FOLLOWUP / "inputs/frozen-artifacts/k3-2408c563/comparators/v1-comparators.npz"
 BASELINES = FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz"
 SENSITIVITY = FOLLOWUP / "data/publication-revision-20260917-r2/error-channel-sensitivity.json"
@@ -115,6 +116,8 @@ def cohort_block(ids, own, published, comparators, classes) -> dict:
 
 
 def main_sample(own_path: Path) -> dict:
+    check_npz(own_path)
+    check_npz(OOF)
     own = np.load(own_path)
     pub = np.load(OOF)
     comp = np.load(COMPARATORS)
@@ -198,7 +201,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oof", type=Path, default=OUT / "own-period-oof.npz")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--main-only", action="store_true", help="headline sample only; external cohorts are separate rerun families")
     args = parser.parse_args()
+    guard_output(args.output)
+    if switched() and not args.main_only:
+        raise ValueError("set --main-only for headline reruns; external network results need their own fresh inputs")
     result = {
         "schema": "delphi.own-period-scores.v1",
         "protocol": "PROTOCOL.md",
@@ -206,10 +213,15 @@ def main() -> int:
         "resamples": RESAMPLES,
         "main_sample": main_sample(args.oof),
     }
+    if switched():
+        result["network_binding_sha256"] = str(network_metadata()["network_binding_sha256"])
     for cohort in ("ztf", "alcdef"):
+        if args.main_only:
+            break
         predictions = OUT / f"own-period-{cohort}.jsonl"
         if predictions.exists():
             result[cohort] = external(cohort, predictions, OUT / f"own-periods-{cohort}.json")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=1) + "\n")
     for key in ("main_sample", "ztf", "alcdef"):
         if key in result:

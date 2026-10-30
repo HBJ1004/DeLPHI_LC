@@ -30,17 +30,17 @@ from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.publication_run import K3_OOF_SEEDS
 from lc_pipeline.k3.tokenizer import tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, collate_examples
-from lc_pipeline.k3.ztf_prediction import _load_models
 from lc_pipeline.v2.preprocessing import KnownPeriod
-
+from repro.network_root import NetworkPath, guard_output, network_metadata
+from repro.network_root import load_models as _load_models
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
 DATA = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
 DUMP = ROOT / "damit-20250610T000301Z"
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
+MODELS = NetworkPath("models")
+MODEL_MANIFEST = NetworkPath("binding")
 INPUT_KEYS = {"phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask"}
 
 
@@ -66,7 +66,9 @@ def main() -> int:
     parser.add_argument("--periods", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--objects", type=lambda value: value.split(","), help="CPU smoke subset")
     args = parser.parse_args()
+    guard_output(args.output)
     if args.output.exists():
         raise FileExistsError(args.output)
     catalog = {
@@ -90,8 +92,11 @@ def main() -> int:
     )
     for row in folds:
         fold = int(row["fold"])
+        selected = [oid for oid in row["test_ids"] if not args.objects or oid in args.objects]
+        if not selected:
+            continue
         models, _, _ = _load_models(MODELS, MODEL_MANIFEST, (fold,), args.device)
-        for oid in row["test_ids"]:
+        for oid in selected:
             entry = catalog[oid]
             targets = np.asarray([s["vector"] for s in entry["solutions"]], dtype=np.float32)
             period = periods.get(oid)
@@ -150,6 +155,7 @@ def main() -> int:
             refined_scores=np.asarray(scores_out),
             errors_deg=np.asarray(errors),
             inference_seconds=np.asarray(seconds),
+            **network_metadata(),
         )
     valid = np.asarray(errors)[np.isfinite(errors)]
     print(

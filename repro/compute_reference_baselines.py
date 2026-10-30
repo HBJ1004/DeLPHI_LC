@@ -14,13 +14,12 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import NetworkPath, check_npz, guard_output, switched
+
 ROOT = Path(__file__).resolve().parents[3]
 FOLLOWUP = ROOT / "DeLPHI-followup"
 CATALOG = FOLLOWUP / "source/repro/data/damit-20250610T000301Z/catalog.jsonl"
-ENSEMBLE = (
-    FOLLOWUP
-    / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
-)
+ENSEMBLE = NetworkPath("evaluations", "real-oof-ensemble.npz", legacy_followup=FOLLOWUP)
 OUT = Path(__file__).resolve().parent / "baselines_out"
 
 STANDARD_POLES_DEG = (
@@ -197,6 +196,10 @@ def random_reference_errors(references: list[np.ndarray], seed: int,
 
 
 def main() -> None:
+    guard_output(OUT)
+    if switched():
+        raise ValueError("standalone multi-family baseline export needs fresh external inputs; headline reruns use the fixed reference helpers only")
+    check_npz(ENSEMBLE)
     poles = reference_poles()
     ensemble = np.load(ENSEMBLE)
     identifiers = [str(value) for value in ensemble["object_ids"]]

@@ -37,21 +37,37 @@ from lc_pipeline.k3.evaluation import modes_from_score_grid  # noqa: E402
 from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
 from lc_pipeline.k3.internal_validation_reporting import reassignment_null  # noqa: E402
 from lc_pipeline.k3.reliability_supplement import _unseal  # noqa: E402
-
-from repro.own_period import DataPath
+from repro.network_root import (  # noqa: E402
+    NetworkPath,
+    check_json,
+    check_npz,
+    guard_output,
+    network_metadata,
+    switched,
+)
+from repro.own_period import DataPath  # noqa: E402
 
 FOLLOWUP = DataPath("../..")
 RELIABILITY = FOLLOWUP / "data/reliability-20260915/run-1"
 OWN = DataPath()
 SEEDS = (17, 42, 137, 777, 2027)
+LOWQ_MIRROR = NetworkPath(
+    "results", "mirror", "lowq-analysis.json", legacy_path=ms.LOWQ)
+ZTF_SCORES = NetworkPath(
+    "results", "ztf", "own-period-scores.json", legacy_path=OWN / "own-period-scores.json")
 
 
 def write_once(path: Path, value) -> None:
+    guard_output(path)
     with path.open("x", encoding="utf-8") as handle:
         handle.write(json.dumps(value, indent=1) + "\n")
 
 
 def run_mirror_symmetry(ensemble: Path, out: Path) -> dict:
+    guard_output(out)
+    check_npz(ensemble)
+    check_json(LOWQ_MIRROR)
+    ms.LOWQ = LOWQ_MIRROR
     target = out / "mirror-symmetry.json"
     if target.exists():
         raise FileExistsError(target)
@@ -62,6 +78,8 @@ def run_mirror_symmetry(ensemble: Path, out: Path) -> dict:
 
 
 def run_candidate_count(ensemble: Path, out: Path) -> dict:
+    guard_output(out)
+    check_npz(ensemble)
     target = out / "candidate-count.json"
     if target.exists():
         raise FileExistsError(target)
@@ -74,6 +92,8 @@ def run_candidate_count(ensemble: Path, out: Path) -> dict:
 def run_amplitude_aspect(ensemble_path: Path, out: Path) -> tuple[list, dict]:
     """``amplitude_aspect_comparison.main`` with the output paths changed and the
     printed null kept in a JSON file."""
+    guard_output(out)
+    check_npz(ensemble_path)
     ensemble = np.load(ensemble_path)
     grid = axial_healpix_grid(32)
     poles = base.reference_poles()
@@ -292,8 +312,18 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--skip", nargs="*", default=[])
     args = parser.parse_args()
+    guard_output(args.out)
     evaluations = args.run / "evaluations" if (args.run / "evaluations").is_dir() else args.run
     ensemble_path = evaluations / "real-oof-ensemble.npz"
+    check_npz(ensemble_path)
+    if switched():
+        # These helpers historically ran from source copies inside FOLLOWUP.
+        # Keep the fixed published inputs when running from this worktree.
+        base.FOLLOWUP = FOLLOWUP
+        base.ROOT = FOLLOWUP.parent
+        base.CATALOG = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl"
+        aa.DUMP = FOLLOWUP.parent / "damit-20250610T000301Z/files"
+        ms.DUMP = FOLLOWUP.parent / "damit-20250610T000301Z"
     args.out.mkdir(parents=True, exist_ok=True)
     ensemble = np.load(ensemble_path)
     errors = np.asarray(ensemble["oracle_errors_deg"], dtype=float)
@@ -311,6 +341,8 @@ def main() -> int:
         own_periods = periods
 
     summary: dict = {"run": str(ensemble_path), "periods": args.periods}
+    if switched():
+        summary["network_binding_sha256"] = str(network_metadata()["network_binding_sha256"])
     folds = ensemble["folds"]
     summary["overall"] = {
         "n": len(errors), "mean_deg": float(errors.mean()), "median_deg": float(np.median(errors)),
@@ -326,6 +358,8 @@ def main() -> int:
     for s in SEEDS:
         files = [evaluations / f"real-fold-{f}-seed-{s}.npz" for f in range(5)]
         if all(p.exists() for p in files):
+            for path in files:
+                check_npz(path)
             seeds[str(s)] = float(np.concatenate([np.load(p)["oracle_errors_deg"] for p in files]).mean())
     summary["per_seed_mean_deg"] = seeds
     if seeds:
@@ -360,7 +394,8 @@ def main() -> int:
     if "reassignment" not in args.skip:
         summary["reference_reassignment"] = run_reassignment(ensemble, args.out)
     if own_periods is not None and "ztf" not in args.skip:
-        ztf = json.loads((OWN / "own-period-scores.json").read_text())["ztf"]
+        check_json(ZTF_SCORES)
+        ztf = json.loads(ZTF_SCORES.read_text())["ztf"]
         at90, excl = ztf["own_period_failed_at_90"], ztf["own_period_failed_excluded"]
         summary["ztf_all_intended"] = {
             "source": "own-period-scores.json ztf; nine published no-data failures at 90 deg",
