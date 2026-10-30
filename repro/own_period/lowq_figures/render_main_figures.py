@@ -24,7 +24,8 @@ from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Rectangle
 
 
 # Own-period copy: the paths of the published layout, resolved from this worktree.
-from repro.own_period import DataPath
+from repro.own_period.reporting_inputs import DataPath, load_npz
+from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 ROOT = DataPath('lowq')
@@ -36,7 +37,7 @@ ORACLE_EXAMPLE_OBJECT = "asteroid_2514"  # DAMIT asteroid 2514, (3200) Phaethon
 INTERPRETATION_EXAMPLE_OBJECT = "asteroid_121"  # DAMIT asteroid 121, (41) Daphne
 CANDIDATE_SKY_SAMPLE = 25
 CANDIDATE_SKY_SEED = 20260922
-OUT = ROOT / "figures"
+OUT = network.NetworkPath("results", "figures", "lowq", legacy_path=ROOT / "figures")
 
 plt.rcParams.update(
     {
@@ -218,7 +219,7 @@ def render_worked_example() -> None:
     )
     reference_time = min(epoch[:, 0].min() for epoch in epochs)
 
-    ensemble = np.load(
+    ensemble = load_npz(
         FOLLOWUP
         / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
     )
@@ -668,7 +669,7 @@ def render_oracle_error() -> None:
     reference = np.asarray(record["solutions"][0]["vector"], dtype=float)
     reference /= np.linalg.norm(reference)
 
-    ensemble = np.load(
+    ensemble = load_npz(
         FOLLOWUP
         / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
     )
@@ -682,7 +683,6 @@ def render_oracle_error() -> None:
     centre = reference + near_side.sum(axis=0)
     centre /= np.linalg.norm(centre)
     view_lon = np.arctan2(centre[1], centre[0])
-    view_lat = np.arcsin(np.clip(centre[2], -1.0, 1.0))
     view = centre
     east = np.array([-np.sin(view_lon), np.cos(view_lon), 0.0])
     north = np.cross(view, east)
@@ -866,7 +866,7 @@ def render_candidate_sky() -> None:
     sys.path.insert(0, str(FOLLOWUP / "source/repro"))
     from compute_reference_baselines import reference_poles
 
-    ensemble = np.load(
+    ensemble = load_npz(
         FOLLOWUP
         / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
     )
@@ -966,11 +966,11 @@ def render_interpretation() -> None:
 
     interpretation = FOLLOWUP / "data/interpretation-20260923"
     amplitude = FOLLOWUP / "data/interpretation-20260930"
-    ensemble = np.load(
+    ensemble = load_npz(
         FOLLOWUP
         / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations/real-oof-ensemble.npz"
     )
-    physical = np.load(amplitude / "amplitude-aspect.npz")
+    physical = load_npz(amplitude / "amplitude-aspect.npz")
     comparison = json.loads((amplitude / "amplitude-aspect.json").read_text())
     symmetry = json.loads((interpretation / "mirror-symmetry.json").read_text())["objects"]
     names = [str(value) for value in ensemble["object_ids"]]
@@ -1140,8 +1140,8 @@ def render_appendix_checks() -> None:
         for seed in seeds:
             ablated, base = [], []
             for fold in range(5):
-                ablated.append(np.load(folder / f"real-fold-{fold}-seed-{seed}-{control}.npz")["oracle_errors_deg"])
-                base.append(np.load(evaluations / f"real-fold-{fold}-seed-{seed}.npz")["oracle_errors_deg"])
+                ablated.append(load_npz(folder / f"real-fold-{fold}-seed-{seed}-{control}.npz")["oracle_errors_deg"])
+                base.append(load_npz(evaluations / f"real-fold-{fold}-seed-{seed}.npz")["oracle_errors_deg"])
             gaps.append(np.concatenate(ablated).mean() - np.concatenate(base).mean())
         for colour, marker, gap in zip(colours, markers, gaps):
             ax.scatter(gap, position, s=18, color=colour, marker=marker, zorder=3,
@@ -1240,7 +1240,7 @@ def render_shapley() -> None:
     per_object = {}
     per_object_p = {}
     for path in sorted(glob.glob(str(FOLLOWUP / "data/interpretation-20260926/shapley/*.npz"))):
-        data = np.load(path)
+        data = load_npz(path)
         seed = int(path.split("seed-")[1].split(".")[0])
         percentile = data["percentile"].copy()
         percentile[:, masks] = 0.5
@@ -1403,7 +1403,7 @@ def _sampling_rows():
 
 def _standard_mean():
     """Mean oracle error of the six standard starting poles for the 170 asteroids."""
-    baselines = np.load(FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz")
+    baselines = load_npz(FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz")
     return float(baselines["standard_errors_deg"].mean())
 
 
@@ -1460,12 +1460,12 @@ def render_period_sensitivity() -> None:
 
 
 def render_coverage() -> None:
-    baselines = np.load(
+    baselines = load_npz(
         FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz"
     )
     delphi_x, delphi_y = empirical_cdf(baselines["delphi_errors_deg"])
     standard_x, standard_y = empirical_cdf(baselines["standard_errors_deg"])
-    random_cdf = np.load(FOLLOWUP / "data/interpretation-20260926/random-axes-cdf.npz")
+    random_cdf = load_npz(FOLLOWUP / "data/interpretation-20260926/random-axes-cdf.npz")
     fig, ax = plt.subplots(figsize=(5.3, 3.4))
     ax.step(delphi_x, delphi_y, where="post", lw=2.0, label="DeLPHI",
             color="#2878B5")
@@ -1586,6 +1586,15 @@ def render_inversion() -> None:
 
 
 def main() -> None:
+    global OUT
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=OUT)
+    args = parser.parse_args()
+    OUT = args.out
+    network.guard_output(OUT)
+    if "paper-rev-20261021" in OUT.resolve().parts:
+        raise ValueError("figure output must be outside the manuscript directory")
     OUT.mkdir(parents=True, exist_ok=True)
     # Own-period copy: only Figures 11 and 7, for both failure variants.
     for variant in VARIANTS:
@@ -1594,4 +1603,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from repro.own_period.figure_data import capture_figures
+    with capture_figures():
+        main()

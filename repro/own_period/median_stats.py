@@ -28,7 +28,8 @@ from repro import compute_reference_baselines as reference
 
 
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period import DataPath
+from repro.own_period.reporting_inputs import DataPath, load_npz, select
+from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 NOTEBOOKS = FOLLOWUP.parent
@@ -141,7 +142,8 @@ def audit_manuscript(path: Path, original: list[dict]) -> tuple[list[dict], list
 
 
 def read_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    from repro.own_period.reporting_inputs import read_json as selected_json
+    return selected_json(path)
 
 
 def parse_inputs(path: Path) -> list[dict]:
@@ -268,7 +270,7 @@ def source_path(comment: str) -> Path | None:
     match = re.search(r"(?:/[^:\n]*?)?DeLPHI-followup/[^:\n]+?\.json", comment)
     if match:
         path = Path(match.group())
-        return path if path.is_absolute() else NOTEBOOKS / path
+        return path if path.is_absolute() else Path(NOTEBOOKS) / path
     return None
 
 
@@ -296,13 +298,13 @@ class Evidence:
     @cached_property
     def baseline(self):
         path = FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz"
-        with np.load(path, allow_pickle=False) as data:
+        with load_npz(path, allow_pickle=False) as data:
             return {k: data[k] for k in data.files}
 
     @cached_property
     def ensemble(self):
         path = OWN / "maps/own-period/evaluations/real-oof-ensemble.npz"
-        with np.load(path, allow_pickle=False) as data:
+        with load_npz(path, allow_pickle=False) as data:
             return {k: data[k] for k in ("object_ids", "folds", "oracle_errors_deg",
                                          "grid_oracle_errors_deg", "refined_axes")}
 
@@ -341,7 +343,7 @@ class Evidence:
             raise ValueError("One unique identity is required for each error")
         indices = None if seed is None else bootstrap_indices(len(ids), seed, folds=folds, order=order)
         result = compute_statistics(first, second, indices=indices)
-        result.update(object_ids=list(ids), source_files=[str(p) for p in sources], method=method)
+        result.update(object_ids=list(ids), source_files=[str(select(p)) for p in sources], method=method)
         if indices is not None:
             result["bootstrap"] = {"seed": seed, "resamples": RESAMPLES,
                                    "rng_and_order": order, "unit": "asteroid" if folds is None else "asteroid_within_fold",
@@ -446,7 +448,7 @@ class Evidence:
         if main:
             if comp == "fitted_axes":
                 p = FOLLOWUP / "inputs/frozen-artifacts/k3-2408c563/comparators/v1-comparators.npz"
-                with np.load(p, allow_pickle=False) as d:
+                with load_npz(p, allow_pickle=False) as d:
                     lookup = dict(zip(d["object_ids"].astype(str), d["atlas_errors_deg"]))
                 sources.append(p)
             else:
@@ -533,7 +535,7 @@ class Evidence:
                 a, b, ids = [], [], []
                 for fold in range(5):
                     p, q = folder / f"real-fold-{fold}-seed-{seed}-{control}.npz", folder / f"real-fold-{fold}-seed-{seed}.npz"
-                    with np.load(p, allow_pickle=False) as d, np.load(q, allow_pickle=False) as raw:
+                    with load_npz(p, allow_pickle=False) as d, load_npz(q, allow_pickle=False) as raw:
                         if not np.array_equal(d["object_ids"], raw["object_ids"]):
                             raise ValueError("Control pairing changed")
                         ids.extend(d["object_ids"].astype(str).tolist()); a.extend(d["oracle_errors_deg"]); b.extend(raw["oracle_errors_deg"])
@@ -559,7 +561,7 @@ class Evidence:
         if name in ("LabelShuffleBefore", "LabelShuffleAfter"):
             folder = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations"
             p = folder / ("synthetic-test-seed-17.npz" if name.endswith("Before") else "synthetic-label-shuffle-test-seed-17.npz")
-            with np.load(p, allow_pickle=False) as d:
+            with load_npz(p, allow_pickle=False) as d:
                 return self.stat(d["oracle_errors_deg"], d["object_ids"].astype(str).tolist(), [p, REPO / "lc_pipeline/k3/release.py"],
                                  "Same 2000 simulated test asteroids; seed 17 alone, correct-label or shuffled-label network. No published bootstrap interval.")
         if name.startswith("Count"):
@@ -668,7 +670,7 @@ class Evidence:
         if key not in self.cache:
             grid = axial_healpix_grid(32)
             ids = self.ensemble["object_ids"].astype(str).tolist()
-            with np.load(path, allow_pickle=False) as d:
+            with load_npz(path, allow_pickle=False) as d:
                 maps = d["score_grids"]
             values = {k: [] for k in (1, 2, 3)}
             for i, s in zip(ids, maps):
@@ -696,7 +698,7 @@ class Evidence:
                 values, current_ids = [], []
                 for f in range(5):
                     p = OWN / f"maps/own-period/evaluations/real-fold-{f}-seed-{seed}.npz"
-                    with np.load(p, allow_pickle=False) as d:
+                    with load_npz(p, allow_pickle=False) as d:
                         values.extend(d["oracle_errors_deg"]); current_ids.extend(d["object_ids"].astype(str).tolist())
                     sources.append(p)
                 groups[str(seed)] = self.stat(values, current_ids, [], "")
@@ -825,7 +827,7 @@ class Evidence:
                      for s in (17, 42, 137, 777, 2027)]
             errors, ids = [], None
             for path in paths:
-                with np.load(path, allow_pickle=False) as d:
+                with load_npz(path, allow_pickle=False) as d:
                     current = d["object_ids"].astype(str).tolist()
                     if ids is not None and current != ids:
                         raise ValueError("Synthetic seed identities do not align")
@@ -882,7 +884,7 @@ class Evidence:
                 order="numpy_replicate_major", mean_interval=boot[which + "_ci95_deg"])
         if name == "KThreeAtlasMean":
             path = FOLLOWUP / "inputs/frozen-artifacts/k3-2408c563/comparators/v1-comparators.npz"
-            with np.load(path, allow_pickle=False) as d:
+            with load_npz(path, allow_pickle=False) as d:
                 return self.stat(d["atlas_errors_deg"], d["object_ids"].astype(str).tolist(),
                     [path, NOTEBOOKS / "paper/k3-reproduction/publication-summary.json"],
                     "Published fitted-axis comparator on all 170 asteroids; frozen per-asteroid seed aggregation, as released.")
@@ -1091,8 +1093,26 @@ class Evidence:
 
 def build(input_list: Path, manuscript: Path = PAPER) -> dict:
     items = parse_inputs(input_list)
+    from repro.own_period import DataPath as FixedDataPath
+    old_scope = FixedDataPath("median-stats.json")
+    if old_scope.is_file():
+        additions = {r["mean_macro"] for r in json.loads(old_scope.read_text())["entries"] if r.get("new_in_m1b")}
+        items = [{**r, **({"new_in_m1b": True} if r["mean_macro"] in additions else {})} for r in items]
     items, audit = audit_manuscript(manuscript, items)
     evidence = Evidence()
+    fixed_names = {"KThreeStandardMean", "KThreeRandomMean", "KThreeAtlasMean", "InterpAAMean", "InterpAAStandardMean",
+                   "WorkflowClassicalError", "WorkflowDamitClassicalError", "ExtendedNinetysixMeanError",
+                   "InterpAAOverStandard", "InterpAAOverStandardLow", "InterpAAOverStandardHigh", "FollowAlcdefRandomMean"}
+    # Fixed classical budget fits are protocol inputs. Comparators on selected
+    # successful cohorts or network-defined quartiles are still recomputed.
+    fixed_names.update(r["mean_macro"] for r in items
+                       if r["mean_macro"].startswith("Budget") and r["mean_macro"] != "BudgetDelphiError")
+    carried = {}
+    if network.switched():
+        from repro.own_period import DataPath as FixedDataPath
+        published = FixedDataPath("median-stats.json")
+        carried = {e["mean_macro"]: e for e in json.loads(published.read_text())["entries"]
+                   if e["mean_macro"] in fixed_names}
     entries, skipped, unavailable = [], [], []
     for item in items:
         name = item["mean_macro"]
@@ -1101,14 +1121,25 @@ def build(input_list: Path, manuscript: Path = PAPER) -> dict:
             continue
         print(f"Computing {name}", flush=True)
         try:
-            result = evidence.resolve(item)
+            if name in carried:
+                result = dict(carried[name])
+                result["carried_reference_only"] = True
+                result["carried_from"] = {"path": str(published), "sha256": network.sha256(published)}
+            else:
+                result = evidence.resolve(item)
         except (FileNotFoundError, KeyError) as exc:
             unavailable.append({**item, "reason": str(exc)})
             continue
         result.update(item)
+        if network.switched():
+            result["network_dependent"] = not result.get("carried_reference_only", False) and any(select(p) != Path(p).absolute() or str(network.NetworkPath("results")) in str(p) or str(network.NetworkPath("evaluations")) in str(p) for p in result["source_files"])
+            source_files = result["source_files"]
+            result["provenance"] = {str(p if result.get("carried_reference_only") else select(p)):
+                network.sha256(p if result.get("carried_reference_only") else select(p))
+                for p in source_files if Path(p if result.get("carried_reference_only") else select(p)).is_file()}
         result.update(check_printed_mean(result["mean_recomputed"], item["paper_numeric_text"]))
         entries.append(result)
-    return {"schema": "delphi.paper1-median-stats.v1", "input_list": str(input_list),
+    return {**network.json_metadata(), "schema": "delphi.paper1-median-stats.v1", "input_list": str(input_list),
             "manuscript": str(manuscript), "manuscript_sha256": hashlib.sha256(manuscript.read_bytes()).hexdigest(),
             "audit": audit,
             "input_sha256": hashlib.sha256(input_list.read_bytes()).hexdigest(),
@@ -1211,6 +1242,8 @@ def main() -> int:
     result = read_json(args.output) if args.report_only else build(args.input_list, args.manuscript)
     output_error = None
     if not args.report_only:
+        network.guard_output(args.output)
+        network.guard_output(args.report)
         try:
             args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         except OSError as exc:
@@ -1224,7 +1257,7 @@ def main() -> int:
                       "output": str(args.output), "report": str(args.report), "output_error": output_error}), flush=True)
     if output_error:
         return 2
-    return int(bool(result["mean_mismatches"] or result["source_validation_failures"] or result["not_computable"]))
+    return int(bool((result["mean_mismatches"] and not network.switched()) or result["source_validation_failures"] or result["not_computable"]))
 
 
 if __name__ == "__main__":

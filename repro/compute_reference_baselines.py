@@ -16,8 +16,10 @@ import numpy as np
 
 from repro.network_root import NetworkPath, check_npz, guard_output, switched
 
-ROOT = Path(__file__).resolve().parents[3]
-FOLLOWUP = ROOT / "DeLPHI-followup"
+from repro.own_period import DataPath
+
+ROOT = DataPath("../../..")
+FOLLOWUP = DataPath("../..")
 CATALOG = FOLLOWUP / "source/repro/data/damit-20250610T000301Z/catalog.jsonl"
 ENSEMBLE = NetworkPath("evaluations", "real-oof-ensemble.npz", legacy_followup=FOLLOWUP)
 OUT = Path(__file__).resolve().parent / "baselines_out"

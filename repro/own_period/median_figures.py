@@ -30,7 +30,8 @@ import numpy as np
 
 sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period import DataPath
+from repro.own_period.reporting_inputs import DataPath, load_npz, select
+from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 DATA = DataPath()
@@ -79,7 +80,7 @@ class Context:
         self.source(PAPER / "sample701.tex")
 
     def source(self, path):
-        path = Path(path)
+        path = select(path)
         if str(path) not in self.sources:
             self.sources[str(path)] = digest(path)
 
@@ -87,7 +88,8 @@ class Context:
         # self.sources is initialized after the initial median-stats read.
         if hasattr(self, "sources"):
             self.source(path)
-        return json.loads(Path(path).read_text(encoding="utf-8"))
+        from repro.own_period.reporting_inputs import read_json
+        return read_json(path)
 
     def figure(self, name, *, reference=None):
         self.source(PAPER / "figures" / f"{reference or name}.pdf")
@@ -444,6 +446,8 @@ def candidate_count(ctx):
     """Use median pole errors and median-error cone radii; retain p90 radii."""
     result = ctx.figure("candidate-count")
     path = ctx.candidate_count_json
+    if network.switched():
+        network.check_json(select(path))
     summary = ctx.read(path)
     rows = summary["k"]
     standard = ctx.macros["KThreeStandardMean"]["median"]
@@ -575,6 +579,9 @@ def inversion_benchmark(ctx):
 
     def printed(point, macro, value):
         expected = paper_numbers[macro]
+        if network.switched():
+            point.setdefault("published_values_for_comparison", {})[macro] = expected
+            return
         decimals = len(expected.partition(".")[2])
         ctx.check(result, macro + ": printed rounding", float(f"{value:.{decimals}f}"), float(expected))
         point.setdefault("printed_macros", []).append(macro)
@@ -954,8 +961,8 @@ def interpretation(ctx):
                      INTERPRETATION_EXAMPLE_OBJECT="asteroid_121")
     f2_definitions(MAPS_RENDERER, ["axial_grid_vectors", "ecliptic_angles"], namespace)
     # Record the unchanged map and scatter values as well as the eight summaries.
-    with np.load(namespace["ENSEMBLE"], allow_pickle=False) as ensemble, \
-            np.load(folder / "amplitude-aspect.npz", allow_pickle=False) as physical:
+    with load_npz(namespace["ENSEMBLE"], allow_pickle=False) as ensemble, \
+            load_npz(folder / "amplitude-aspect.npz", allow_pickle=False) as physical:
         maps = []
         for panel, data, field in [("a", ensemble, "score_grids"),
                                     ("b", physical, "amplitude_aspect_maps")]:
@@ -1006,7 +1013,7 @@ def shapley(ctx):
     grids = {}
     groups = None
     for path in paths:
-        with np.load(path, allow_pickle=False) as data:
+        with load_npz(path, allow_pickle=False) as data:
             seed = int(path.stem.split("seed-")[1])
             current = data["groups"].astype(str).tolist()
             if groups is not None and current != groups:
@@ -1245,7 +1252,7 @@ def input_removal(ctx):
             ablated, base, ids = [], [], []
             for fold in range(5):
                 p, q = folder / f"real-fold-{fold}-seed-{seed}-{control}.npz", folder / f"real-fold-{fold}-seed-{seed}.npz"
-                with np.load(p, allow_pickle=False) as a, np.load(q, allow_pickle=False) as b:
+                with load_npz(p, allow_pickle=False) as a, load_npz(q, allow_pickle=False) as b:
                     if not np.array_equal(a["object_ids"], b["object_ids"]):
                         raise ValueError(f"{control}: changed control pairing")
                     ids.extend(a["object_ids"].astype(str).tolist())
@@ -1560,19 +1567,25 @@ def write_f2_report(ctx, names):
 
 
 def main():
+    global PAPER
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--paper-dir", type=Path, default=PAPER, help="Read-only manuscript directory; its figures/*.pdf supply the original page geometry")
     parser.add_argument("--figures", nargs="+", required=True, help="Figure names, separated by spaces or commas")
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--candidate-count-json", type=Path, default=CANDIDATE_COUNT_JSON,
                         help="Candidate-count input JSON (default: frozen own-period analysis)")
     args = parser.parse_args()
+    PAPER = args.paper_dir
+    network.guard_output(args.out_dir)
+    if args.out_dir.resolve().is_relative_to(Path(PAPER).resolve()):
+        raise ValueError("figure output must be outside the manuscript directory")
     names = list(dict.fromkeys(name for group in args.figures for name in group.split(",")))
     unknown = set(names) - FIGURES.keys()
     if unknown:
         parser.error(f"Unknown figures: {sorted(unknown)}; available: {list(FIGURES)}")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     # All plotting caches are temporary and live inside the requested scratch output.
-    with tempfile.TemporaryDirectory(prefix=".matplotlib-", dir=args.out_dir) as cache:
+    with tempfile.TemporaryDirectory(prefix=".matplotlib-", dir=os.environ.get("TMPDIR")) as cache:
         os.environ["MPLCONFIGDIR"] = cache
         os.environ["MPLBACKEND"] = "Agg"
         import matplotlib.pyplot as plt
@@ -1587,6 +1600,8 @@ def main():
                 if name in F2_NAMES:
                     plt.rcParams["savefig.dpi"] = 300
                 FIGURES[name](ctx)
+                if network.switched():
+                    ctx.results[name]["visual_message"] = "Recomputed from selected network results; see the plotted values."
         validate_artifacts(ctx, [name for name in names if name != "training-test"])
         if "training-test" in names:
             validate_f2_training(ctx)
@@ -1595,7 +1610,9 @@ def main():
                 raise ValueError(f"Read-only input changed: {path}")
         values_path = args.out_dir / "values.json"
         values = json.loads(values_path.read_text()) if values_path.exists() else {"figures": {}}
-        values.update(schema="delphi.paper1-median-figures.v1", median_stats_sha256=digest(DATA / "median-stats.json"),
+        if values_path.exists() and network.switched():
+            network.check_json(values_path)
+        values.update(**network.json_metadata(), schema="delphi.paper1-median-figures.v1", median_stats_sha256=digest(select(DATA / "median-stats.json")),
                       paired_convention=ctx.frozen["paired_convention"], bootstrap_replicates=ctx.resamples)
         values["figures"].update(ctx.results)
         values["source_sha256"] = dict(values.get("source_sha256", {}), **ctx.sources)
@@ -1612,4 +1629,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from repro.own_period.figure_data import capture_figures
+    with capture_figures():
+        main()

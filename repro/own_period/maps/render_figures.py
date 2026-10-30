@@ -29,14 +29,17 @@ _ARGS.add_argument("--analyses", type=Path, required=True)
 _ARGS.add_argument("--run", type=Path, required=True, help="directory holding evaluations/")
 _ARGS.add_argument("--periods", required=True, help="damit or a periods JSON (worked-example folding)")
 _ARGS.add_argument("--out", type=Path, required=True)
+_ARGS.add_argument("--figures", nargs="+", choices=("worked-example", "oracle-error", "candidate-sky", "primary-coverage", "interpretation", "candidate-count", "reference-reassignment", "latitude"))
 ARGS = _ARGS.parse_args()
-from repro.own_period import DataPath
+from repro.own_period.reporting_inputs import DataPath, load_npz
+from repro import network_root as network
 
 ROOT = DataPath("../../../paper")
 FOLLOWUP = DataPath("../..")
 DAMIT_DUMP = ROOT.parent / "damit-20250610T000301Z"
-ENSEMBLE = ARGS.run / "evaluations" / "real-oof-ensemble.npz"
-ANALYSES = ARGS.analyses
+from repro.own_period.reporting_inputs import InputPath
+ENSEMBLE = InputPath(ARGS.run) / "evaluations" / "real-oof-ensemble.npz"
+ANALYSES = InputPath(ARGS.analyses)
 FIG_OUT = ARGS.out
 METHOD_EXAMPLE_OBJECT = "asteroid_107"
 ORACLE_EXAMPLE_OBJECT = "asteroid_2514"  # DAMIT asteroid 2514, (3200) Phaethon
@@ -227,7 +230,7 @@ def render_worked_example() -> None:
     )
     reference_time = min(epoch[:, 0].min() for epoch in epochs)
 
-    ensemble = np.load(
+    ensemble = load_npz(
         ENSEMBLE
     )
     position = int(np.flatnonzero(ensemble["object_ids"] == METHOD_EXAMPLE_OBJECT)[0])
@@ -676,7 +679,7 @@ def render_oracle_error() -> None:
     reference = np.asarray(record["solutions"][0]["vector"], dtype=float)
     reference /= np.linalg.norm(reference)
 
-    ensemble = np.load(
+    ensemble = load_npz(
         ENSEMBLE
     )
     position = int(np.flatnonzero(ensemble["object_ids"] == ORACLE_EXAMPLE_OBJECT)[0])
@@ -689,7 +692,6 @@ def render_oracle_error() -> None:
     centre = reference + near_side.sum(axis=0)
     centre /= np.linalg.norm(centre)
     view_lon = np.arctan2(centre[1], centre[0])
-    view_lat = np.arcsin(np.clip(centre[2], -1.0, 1.0))
     view = centre
     east = np.array([-np.sin(view_lon), np.cos(view_lon), 0.0])
     north = np.cross(view, east)
@@ -873,7 +875,7 @@ def render_candidate_sky() -> None:
     sys.path.insert(0, str(FOLLOWUP / "source/repro"))
     from compute_reference_baselines import reference_poles
 
-    ensemble = np.load(
+    ensemble = load_npz(
         ENSEMBLE
     )
     poles = reference_poles()
@@ -972,10 +974,10 @@ def render_interpretation() -> None:
 
     interpretation = ANALYSES
     amplitude = ANALYSES
-    ensemble = np.load(
+    ensemble = load_npz(
         ENSEMBLE
     )
-    physical = np.load(amplitude / "amplitude-aspect.npz")
+    physical = load_npz(amplitude / "amplitude-aspect.npz")
     comparison = json.loads((amplitude / "amplitude-aspect.json").read_text())
     symmetry = json.loads((interpretation / "mirror-symmetry.json").read_text())["objects"]
     names = [str(value) for value in ensemble["object_ids"]]
@@ -1117,7 +1119,6 @@ def render_candidate_count() -> None:
 def render_appendix_checks() -> None:
     """Input removals, training against test error, and reference reassignment."""
     import csv
-    import json
 
     evaluations = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/evaluations"
     finer = FOLLOWUP / "data/interpretation-20260923/ablations"
@@ -1145,8 +1146,8 @@ def render_appendix_checks() -> None:
         for seed in seeds:
             ablated, base = [], []
             for fold in range(5):
-                ablated.append(np.load(folder / f"real-fold-{fold}-seed-{seed}-{control}.npz")["oracle_errors_deg"])
-                base.append(np.load(evaluations / f"real-fold-{fold}-seed-{seed}.npz")["oracle_errors_deg"])
+                ablated.append(load_npz(folder / f"real-fold-{fold}-seed-{seed}-{control}.npz")["oracle_errors_deg"])
+                base.append(load_npz(evaluations / f"real-fold-{fold}-seed-{seed}.npz")["oracle_errors_deg"])
             gaps.append(np.concatenate(ablated).mean() - np.concatenate(base).mean())
         for colour, marker, gap in zip(colours, markers, gaps):
             ax.scatter(gap, position, s=18, color=colour, marker=marker, zorder=3,
@@ -1247,7 +1248,7 @@ def render_shapley() -> None:
     per_object = {}
     per_object_p = {}
     for path in sorted(glob.glob(str(FOLLOWUP / "data/interpretation-20260926/shapley/*.npz"))):
-        data = np.load(path)
+        data = load_npz(path)
         seed = int(path.split("seed-")[1].split(".")[0])
         percentile = data["percentile"].copy()
         percentile[:, masks] = 0.5
@@ -1404,7 +1405,7 @@ def _sampling_rows():
 
 def _standard_mean():
     """Mean oracle error of the six standard starting poles for the 170 asteroids."""
-    baselines = np.load(FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz")
+    baselines = load_npz(FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz")
     return float(baselines["standard_errors_deg"].mean())
 
 
@@ -1461,12 +1462,12 @@ def render_period_sensitivity() -> None:
 
 
 def render_coverage() -> None:
-    baselines = np.load(
+    baselines = load_npz(
         FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz"
     )
-    delphi_x, delphi_y = empirical_cdf(np.load(ENSEMBLE)["oracle_errors_deg"])
+    delphi_x, delphi_y = empirical_cdf(load_npz(ENSEMBLE)["oracle_errors_deg"])
     standard_x, standard_y = empirical_cdf(baselines["standard_errors_deg"])
-    random_cdf = np.load(FOLLOWUP / "data/interpretation-20260926/random-axes-cdf.npz")
+    random_cdf = load_npz(FOLLOWUP / "data/interpretation-20260926/random-axes-cdf.npz")
     fig, ax = plt.subplots(figsize=(5.3, 3.4))
     ax.step(delphi_x, delphi_y, where="post", lw=2.0, label="DeLPHI",
             color="#2878B5")
@@ -1576,16 +1577,19 @@ def render_inversion() -> None:
 
 
 def main() -> None:
+    network.guard_output(OUT)
+    if "paper-rev-20261021" in OUT.resolve().parts:
+        raise ValueError("figure output must be outside the manuscript directory")
     OUT.mkdir(parents=True, exist_ok=True)
-    render_worked_example()
-    render_oracle_error()
-    render_candidate_sky()
-    render_interpretation()
-    render_candidate_count()
-    render_reference_reassignment()
-    render_latitude()
-    render_coverage()
+    producers = {"worked-example": render_worked_example, "oracle-error": render_oracle_error,
+                 "candidate-sky": render_candidate_sky, "interpretation": render_interpretation,
+                 "candidate-count": render_candidate_count, "reference-reassignment": render_reference_reassignment,
+                 "latitude": render_latitude, "primary-coverage": render_coverage}
+    for name in ARGS.figures or producers:
+        producers[name]()
 
 
 if __name__ == "__main__":
-    main()
+    from repro.own_period.figure_data import capture_figures
+    with capture_figures():
+        main()

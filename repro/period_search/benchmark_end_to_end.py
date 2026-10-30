@@ -200,13 +200,26 @@ def report(summary: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--search", type=Path, required=True)
-    parser.add_argument("--candidates", type=Path, required=True)
-    parser.add_argument("--screen", type=Path, required=True)
-    parser.add_argument("--scores", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
+    parser.add_argument("--plot-summary", type=Path, help="Render only the already bound RT3c2 benchmark summary")
+    parser.add_argument("--figure-output-dir", type=Path)
+    parser.add_argument("--search", type=Path)
+    parser.add_argument("--candidates", type=Path)
+    parser.add_argument("--screen", type=Path)
+    parser.add_argument("--scores", type=Path)
+    parser.add_argument("--output-directory", type=Path)
     parser.add_argument('--summary-only', action='store_true', help='leave figures for the separate figure rerun')
     args = parser.parse_args()
+    if args.plot_summary:
+        if args.figure_output_dir is None:
+            parser.error('--figure-output-dir is required with --plot-summary')
+        network.guard_output(args.figure_output_dir)
+        network.check_json(args.plot_summary)
+        args.figure_output_dir.mkdir(parents=True, exist_ok=True)
+        plot(json.loads(args.plot_summary.read_text()), args.figure_output_dir / 'period-search.pdf',
+             args.figure_output_dir / 'period-search.png')
+        return
+    if any(getattr(args, k) is None for k in ('search', 'candidates', 'screen', 'scores', 'output_directory')):
+        parser.error('--search, --candidates, --screen, --scores and --output-directory are required')
     network.guard_output(args.output_directory)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     outputs = [args.output_directory / name for name in
@@ -223,4 +236,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from repro.own_period.figure_data import capture_figures
+    with capture_figures():
+        main()
