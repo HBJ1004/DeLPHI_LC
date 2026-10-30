@@ -18,6 +18,14 @@ import numpy as np
 
 from lc_pipeline.v2.data import parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod, Observation, ObservationEpoch
+from repro.network_root import (
+    NetworkPath,
+    check_json,
+    check_jsonl,
+    guard_output,
+    json_metadata,
+    switched,
+)
 
 from . import DataPath
 from .search_external import FOLLOWUP, curves_of, sha256
@@ -30,9 +38,9 @@ AXIS_TOLERANCE_DEG = 0.01
 MODEL_SHA256 = "6d041bcbedd9e7ecacc9c4768d0eeb81827065f016dd4db9e982373db3ebfefa"
 INDEX_SHA256 = "392d2dda3336bee1c4639b93f90fc1db4225aff57bb30c78d5435bbb0625a4be"
 PUBLISHED_SHA256 = "b3adff514191f4f72f325587c64342859224a75333aa9b7ade18bf2e6ae8f861"
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
-ARCHIVE = MODELS.parent / "release/archive-index.json"
+MODELS = NetworkPath("models")
+MODEL_MANIFEST = NetworkPath("binding")
+ARCHIVE = NetworkPath("artifacts", "release/archive-index.json")
 OLD_SNAPSHOT = FOLLOWUP.parent / "damit-20250610T000301Z"
 OLD_CENSUS = FOLLOWUP / "source/experiments/lowq_damit_census_20260917"
 REFERENCE = FOLLOWUP / "data/damit-postsnapshot-check/raw/asteroid_models.csv"
@@ -53,6 +61,8 @@ def read(path):
 
 
 def write(path, value):
+    guard_output(path)
+    value = {**value, **json_metadata()}
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x") as handle:
         handle.write(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n")
@@ -286,6 +296,7 @@ def prepare(out):
 
 
 def context(out):
+    out = input_root(out)
     manifest = read(out / "prepared-manifest.json")
     if manifest["protocol"]["sha256"] != PROTOCOL_SHA256:
         raise ValueError("prepared protocol mismatch")
@@ -304,6 +315,7 @@ def context(out):
 
 
 def validated(out, manifest):
+    out = input_root(out)
     validation = read(out / "validation.json")
     if (
         validation.get("passed") is not True
@@ -322,9 +334,9 @@ def validated(out, manifest):
 def load_models(networks, device):
     import torch
 
-    from lc_pipeline.k3.ztf_prediction import _load_models
+    from repro.network_root import load_models as _load_models
 
-    if device != "cuda" or not torch.cuda.is_available():
+    if device != "cpu" and (device != "cuda" or not torch.cuda.is_available()):
         raise ValueError(
             "this subcommand requires CUDA and must be run by Claude under the shared lock"
         )
@@ -473,16 +485,25 @@ def prediction_path(out, periods, networks):
     )
 
 
+def input_root(out):
+    """Preparation, exposure audit and searched periods are fixed old inputs."""
+    return DATA if switched() else out
+
+
 def load_predictions(out, periods, networks):
     path = prediction_path(out, periods, networks)
+    check_json(path.with_suffix(".manifest.json"))
+    check_jsonl(path)
     manifest = read(path.with_suffix(".manifest.json"))
     if (
         manifest["periods"] != periods
         or manifest["networks"] != networks
-        or manifest["prepared_manifest_sha256"] != sha256(out / "prepared-manifest.json")
+        or manifest["prepared_manifest_sha256"] != sha256(input_root(out) / "prepared-manifest.json")
     ):
         raise ValueError("prediction policy/prepared input mismatch")
     checked(manifest["period_input"])
+    if switched() and Path(manifest["predictions"]["path"]).resolve() != path.resolve():
+        raise ValueError("prediction manifest points at another file")
     rows = checked_jsonl(manifest["predictions"])
     if set(rows) != {r[0] for r in OBJECTS}:
         raise ValueError("prediction cohort mismatch")
@@ -490,9 +511,10 @@ def load_predictions(out, periods, networks):
 
 
 def own_score_ready(out):
+    check_json(out / "scores-own.json")
     value = read(out / "scores-own.json")
     if value["stage"] != "own" or value["prepared_manifest_sha256"] != sha256(
-        out / "prepared-manifest.json"
+        input_root(out) / "prepared-manifest.json"
     ):
         raise ValueError("own-period scoring has not been written for these inputs")
     for record in value["prediction_inputs"]:
@@ -528,6 +550,7 @@ def reference_periods(manifest):
 
 
 def predict(out, periods, networks, device):
+    guard_output(out)
     manifest = context(out)
     validated(out, manifest)
     if periods == "damit":
@@ -538,11 +561,11 @@ def predict(out, periods, networks, device):
         provenance = "current-DAMIT-quality3plus-lowest-model-id; secondary-reference-input"
         period_input = binding(out / "scores-own.json")
     else:
-        found = read(out / "periods.json")
-        if found["prepared_manifest_sha256"] != sha256(out / "prepared-manifest.json"):
+        found = read(input_root(out) / "periods.json")
+        if found["prepared_manifest_sha256"] != sha256(input_root(out) / "prepared-manifest.json"):
             raise ValueError("period input mismatch")
         chosen, provenance = found["periods_hours"], found["provenance"]
-        period_input = binding(out / "periods.json")
+        period_input = binding(input_root(out) / "periods.json")
     models, bindings = load_models(networks, device)
     path = prediction_path(out, periods, networks)
     with path.open("x", buffering=1) as handle:
@@ -564,7 +587,7 @@ def predict(out, periods, networks, device):
                         "period_hours": chosen[oid],
                         "reason": str(error),
                     }
-            handle.write(json.dumps({"object_id": oid, **result}, allow_nan=False) + "\n")
+            handle.write(json.dumps({"object_id": oid, **result, **json_metadata()}, allow_nan=False) + "\n")
             print(oid, periods, networks, result["status"], flush=True)
     write(
         path.with_suffix(".manifest.json"),
@@ -572,10 +595,11 @@ def predict(out, periods, networks, device):
             "periods": periods,
             "networks": networks,
             "checkpoint_bindings": bindings,
+            **({"validation_role": "reused historical adapter check; no new-network parity claim"} if switched() else {}),
             "device": device,
             "predictions": binding(path),
             "period_input": period_input,
-            "prepared_manifest_sha256": sha256(out / "prepared-manifest.json"),
+            "prepared_manifest_sha256": sha256(input_root(out) / "prepared-manifest.json"),
         },
     )
 
@@ -592,6 +616,7 @@ def metric_summary(rows, field):
 
 
 def score(out, stage):
+    guard_output(out)
     from repro.compute_reference_baselines import standard_axes, unit_from_degrees
 
     from .score import axial_error, period_class
@@ -648,7 +673,7 @@ def score(out, stage):
     result = {
         "stage": stage,
         "objects": rows,
-        "prepared_manifest_sha256": sha256(out / "prepared-manifest.json"),
+        "prepared_manifest_sha256": sha256(input_root(out) / "prepared-manifest.json"),
         "prediction_inputs": [binding(prediction_path(out, "own", n)) for n in ("fold0", "all25")],
         "summary_policy": "descriptive; median over scored objects; failures listed, no imputation; count <=20 deg",
         "summaries": {
@@ -668,6 +693,7 @@ def score(out, stage):
 
 
 def write_results(path, result):
+    guard_output(path)
     final = result["stage"] == "final"
     columns = [
         "Asteroid",
@@ -737,13 +763,16 @@ def main(argv=None):
         child = commands.add_parser(name)
         child.add_argument("--out-dir", type=Path, required=True)
         if name in ("validate", "predict"):
-            child.add_argument("--device", choices=("cuda",), default="cuda")
+            child.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
         if name == "predict":
             child.add_argument("--periods", choices=("own", "damit"), required=True)
             child.add_argument("--networks", choices=("fold0", "all25"), required=True)
         if name == "score":
             child.add_argument("--stage", choices=("own", "final"), required=True)
     args = parser.parse_args(argv)
+    guard_output(args.out_dir)
+    if switched() and args.command not in ("predict", "score"):
+        parser.error("switched runs reuse published preparation, validation and periods; run predict/score only")
     if args.command == "prepare":
         prepare(args.out_dir)
     elif args.command == "validate":

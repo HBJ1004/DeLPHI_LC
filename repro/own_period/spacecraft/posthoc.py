@@ -618,16 +618,18 @@ def cmd_score(args) -> dict:
     from repro.own_period.score import period_class
 
     out = args.output_dir
+    fixed = run.input_root(out)
     run.available(out, "scores.json")
     run.available(out, "RESULTS.md")
     lock, rows = run.locked(out)
     inputs = run.prepared(out)
-    own = run.read(out / "search/periods.json")
+    own = run.read(fixed / "search/periods.json")
+    run.check_json(out / "predictions/manifest.json")
     manifest = run.read(out / "predictions/manifest.json")
-    for key, path in (("cohort_lock_sha256", out / "lock/cohort-lock.json"),
-                      ("search_sha256", out / "search/periods.json"),
-                      ("prepared_manifest_sha256", out / "prepared/manifest.json"),
-                      ("validation_sha256", out / "validation/result.json")):
+    for key, path in (("cohort_lock_sha256", fixed / "lock/cohort-lock.json"),
+                      ("search_sha256", fixed / "search/periods.json"),
+                      ("prepared_manifest_sha256", fixed / "prepared/manifest.json"),
+                      ("validation_sha256", fixed / "validation/result.json")):
         if manifest[key] != run.sha(path):
             raise ValueError(f"prediction dependency differs: {path}")
     if (own["cohort_lock_sha256"] != manifest["cohort_lock_sha256"]
@@ -639,6 +641,7 @@ def cmd_score(args) -> dict:
     predictions = {}
     for mode in run.OOF_FILES:
         path = run.checked(manifest["outputs"][mode], out / "predictions")
+        run.check_jsonl(path)
         values = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
         predictions[mode] = {r["run_id"]: r for r in values}
         if len(values) != len(rows) or set(predictions[mode]) != {r["run_id"] for r in rows}:
@@ -670,7 +673,7 @@ def cmd_score(args) -> dict:
             {"posthoc": True, "spacecraft_reference": ref,
              "period_class": period_class(values["own"]["period_hours"], values["catalogue"]["period_hours"]), **values})
     run.write(out / "scores.json", {"schema": "delphi.spacecraft-posthoc-scores.v1", "scope": POSTHOC,
-        "cohort_lock_sha256": run.sha(out / "lock/cohort-lock.json"),
+        "cohort_lock_sha256": run.sha(fixed / "lock/cohort-lock.json"),
         "reference_poles_sha256": run.sha(reference_path), "predictions_manifest_sha256": run.sha(out / "predictions/manifest.json"),
         "objects": objects, "aggregation": "none; post hoc variants reported per run"})
     lines = ["# Spacecraft poles: POST HOC (Addendum 1)", "", POSTHOC + ".", "",
@@ -686,7 +689,7 @@ def cmd_score(args) -> dict:
                  fmt(a["oracle_deg"]), fmt(a["best_scored_deg"]), fmt(b["oracle_deg"]), fmt(b["best_scored_deg"])]
         lines.append("| " + " | ".join(cells) + " |")
     lines += ["", "No across-variant aggregate. Reference provenance and secondary DAMIT errors, where available, are in scores.json.",
-              f"Cohort lock SHA-256: `{run.sha(out / 'lock/cohort-lock.json')}`.", ""]
+              f"Cohort lock SHA-256: `{run.sha(fixed / 'lock/cohort-lock.json')}`.", ""]
     with (out / "RESULTS.md").open("x", encoding="utf-8") as stream:
         stream.write("\n".join(lines))
     return {"stage": "score", "objects": len(objects), "scope": POSTHOC}
@@ -718,6 +721,8 @@ def main(argv=None) -> int:
             p.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
             p.add_argument("--threads", type=int, default=4)
     args = parser.parse_args(argv)
+    if run.switched() and args.command not in ("predict", "score"):
+        parser.error("switched runs reuse published inputs; run predict/score only")
     args.output_dir = args.output_dir.resolve()
     args.spacecraft_dir = args.spacecraft_dir.resolve()
     if args.output_dir == args.spacecraft_dir or args.spacecraft_dir.is_relative_to(args.output_dir):

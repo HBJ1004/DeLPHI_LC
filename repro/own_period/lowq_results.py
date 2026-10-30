@@ -15,12 +15,12 @@ from pathlib import Path
 import numpy as np
 
 from repro import compute_reference_baselines as base
+from repro.network_root import NetworkPath, check_json, guard_output, json_metadata, switched
+from repro.own_period import DataPath
 
 from .lowq_search import FOLLOWUP
 
-from repro.own_period import DataPath
-
-OUT = DataPath('lowq')
+OUT = NetworkPath("results", "lower-quality-census", legacy_path=DataPath("lowq"))
 REVISION = FOLLOWUP / "data/publication-revision-20260917-r2"
 BASELINES = FOLLOWUP / "source/repro/baselines_out/reference-baselines.json"
 MIRROR = FOLLOWUP / "data/interpretation-20260926/mirror-symmetry.json"
@@ -42,8 +42,34 @@ def interval(block):
 
 def main() -> int:
     destination = OUT / "RESULTS.md"
+    guard_output(destination)
     if destination.exists():
         raise FileExistsError(destination)
+    if switched():
+        summaries = {}
+        for name in ("reference", "own", "damit-period-500"):
+            path = OUT / f"scores-{name}/summary.json"
+            check_json(path)
+            summaries[name] = load(path)
+        check_json(OUT / "check-published-v2.json")
+        check_json(OUT / "validation-damit-period-500-check-v3.json")
+        lines = ["# Lower-quality census with the selected networks", "",
+                 "Fixed run-0 five-seed ensemble; published photometry, periods, failures and reference poles.",
+                 "Reference-period and own-period inference and downstream analyses were recomputed.",
+                 "Historical publication equality is not asserted for the new networks.", "",
+                 "Binding SHA-256: `" + json_metadata()["network_binding_sha256"] + "`.", "",
+                 "| Period / sample | Scored | Mean error (deg) | Median (deg) | Within 20 deg |",
+                 "| --- | ---: | ---: | ---: | ---: |"]
+        for name, value in summaries.items():
+            for variant, block in value["variants"].items():
+                c = block["census_primary"]
+                lines.append(f"| {name}, {variant} | {c['n_objects']} | {c['mean_oracle_at_3_error_deg']:.6f} | "
+                             f"{c['median_oracle_at_3_error_deg']:.6f} | {100*c['within_20_deg']:.6f}% |")
+        lines += ["", "Complete lineage, latitude, baseline, period-class and paired comparisons: ",
+                  *[f"- `scores-{name}/summary.json` and its bound analysis files." for name in summaries], ""]
+        destination.write_text("\n".join(lines))
+        print(destination)
+        return 0
     own = load(OUT / "scores-own/summary.json")
     sub = load(OUT / "scores-damit-period-500/summary.json")
     check = load(OUT / "check-published-v2.json")

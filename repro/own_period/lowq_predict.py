@@ -18,7 +18,6 @@ writes a manifest once.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import time
 from pathlib import Path
@@ -29,14 +28,15 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _load_models
 from lc_pipeline.v2.data import parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro.network_root import NetworkPath, check_jsonl, guard_output, json_metadata, switched
+from repro.network_root import load_models as _load_models
 
-from .lowq_search import FOLLOWUP, INDEX, INDEX_SHA256, SNAPSHOT, sha256
+from .lowq_search import INDEX, INDEX_SHA256, SNAPSHOT, sha256
 
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
+MODELS = NetworkPath("models")
+MODEL_MANIFEST = NetworkPath("binding")
 MODEL_MANIFEST_SHA256 = "6d041bcbedd9e7ecacc9c4768d0eeb81827065f016dd4db9e982373db3ebfefa"
 FOLD = 0  # the published census policy: fixed fold-0 five-seed ensemble
 
@@ -94,6 +94,7 @@ def predict_one(models, row: dict, period: KnownPeriod, target: torch.device) ->
 def done_ids(path: Path) -> set[str]:
     if not path.is_file():
         return set()
+    check_jsonl(path)
     with path.open() as handle:
         return {json.loads(line)["object_id"] for line in handle if line.strip()}
 
@@ -106,13 +107,14 @@ def selected_rows(limit: int | None) -> list[dict]:
 
 
 def run(args) -> int:
+    guard_output(args.output)
     rows = selected_rows(args.limit)
     own = None
     if args.periods != "published":
         own = json.loads(Path(args.periods).read_text())
         if own.get("cohort") != "lowq" or own.get("census_index_sha256") != INDEX_SHA256:
             raise ValueError("period file belongs to another cohort")
-    if sha256(MODEL_MANIFEST) != MODEL_MANIFEST_SHA256:
+    if not switched() and sha256(MODEL_MANIFEST) != MODEL_MANIFEST_SHA256:
         raise ValueError("model manifest differs from the published census")
     target = torch.device(args.device)
     if target.type == "cuda" and not torch.cuda.is_available():
@@ -138,13 +140,13 @@ def run(args) -> int:
                 item = {"object_id": object_id, "status": "no_period",
                         "quality_flag": int(row["quality_flag"]), "search_status": status,
                         "reason": f"no_period:{status}", "wall_seconds": 0.0}
-                stream.write(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\n")
+                stream.write(json.dumps({**item, **json_metadata()}, sort_keys=True, separators=(",", ":")) + "\n")
                 count += 1
                 continue
             else:
                 period = KnownPeriod(float(own["periods_hours"][object_id]), own["provenance"])
             item = predict_one(models, row, period, target)
-            stream.write(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\n")
+            stream.write(json.dumps({**item, **json_metadata()}, sort_keys=True, separators=(",", ":")) + "\n")
             count += 1
             if count % 100 == 0:
                 print(f"{count} this chunk, {time.perf_counter() - started:.0f} s", flush=True)
@@ -154,6 +156,8 @@ def run(args) -> int:
 
 
 def finalize(args) -> None:
+    guard_output(args.finalize)
+    check_jsonl(args.output)
     rows = selected_rows(args.limit)
     items = {}
     with args.output.open() as handle:
@@ -166,6 +170,8 @@ def finalize(args) -> None:
     missing = [r["object_id"] for r in rows if r["object_id"] not in items]
     if missing:
         raise ValueError(f"{len(missing)} asteroids missing")
+    if switched() and set(items) != {r["object_id"] for r in rows}:
+        raise ValueError("prediction cohort differs from the selected census")
     counts: dict[str, int] = {}
     for item in items.values():
         counts[item["status"]] = counts.get(item["status"], 0) + 1
@@ -176,7 +182,8 @@ def finalize(args) -> None:
         "periods": args.periods if args.periods == "published" else str(Path(args.periods).name),
         "periods_sha256": None if args.periods == "published" else sha256(Path(args.periods)),
         "census_index_sha256": INDEX_SHA256,
-        "model_manifest_sha256": MODEL_MANIFEST_SHA256,
+        "model_manifest_sha256": sha256(MODEL_MANIFEST) if switched() else MODEL_MANIFEST_SHA256,
+        **json_metadata(),
         "device": args.device,
         "limit": args.limit,
         "rows": len(items),

@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
 
@@ -37,6 +36,14 @@ from repro import analyze_k3_lowq_lineage as lineage
 from repro import compute_reference_baselines as base
 from repro import mirror_symmetry as ms
 from repro import run_k3_lowq_census as census
+from repro.network_root import (
+    NetworkPath,
+    check_json,
+    check_jsonl,
+    guard_output,
+    json_metadata,
+    switched,
+)
 
 from .lowq_search import CENSUS, FOLLOWUP, INDEX, SNAPSHOT, sha256
 from .score import FAILED_DEG, SEED, paired, period_class, summary
@@ -44,19 +51,24 @@ from .score import FAILED_DEG, SEED, paired, period_class, summary
 REFERENCE = CENSUS / "reference-cohort.json"
 ATLAS = CENSUS / "fold0-train-only-atlas.json"
 PUBLISHED_PREDICTIONS = CENSUS / "predictions-fold0-five-seed"
-PUBLISHED_ANALYSIS = FOLLOWUP / "data/publication-revision-20260917-r2/lowq-analysis.json"
+PUBLISHED_ANALYSIS = NetworkPath("results", "lower-quality-census", "scores-reference/census-analysis-excluded.json",
+                               legacy_path=FOLLOWUP / "data/publication-revision-20260917-r2/lowq-analysis.json")
 SPLITS = (
     FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
 )
 
 
 def write_once(path: Path, value: object) -> None:
+    guard_output(path)
+    value = {**value, **json_metadata()}
     with path.open("x") as stream:
         stream.write(json.dumps(value, indent=1, sort_keys=True, allow_nan=False) + "\n")
 
 
 def prediction_directory(predictions: Path, destination: Path) -> Path:
     """Wrap a JSONL file in the census prediction-directory layout."""
+    guard_output(destination)
+    check_jsonl(predictions)
     destination.mkdir(parents=True)
     target = destination / "predictions.jsonl"
     target.write_bytes(predictions.read_bytes())
@@ -197,7 +209,7 @@ def direction_block(analysis_rows: list[dict]) -> dict:
     from collections import defaultdict
 
     solutions = defaultdict(list)
-    with (ms.DUMP / "tables/asteroid_models.csv").open(encoding="utf-8", newline="") as stream:
+    with ((SNAPSHOT if switched() else ms.DUMP) / "tables/asteroid_models.csv").open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream):
             try:
                 solutions[int(row["asteroid_id"])].append((float(row["lambda"]), float(row["beta"])))
@@ -239,6 +251,7 @@ def direction_block(analysis_rows: list[dict]) -> dict:
 
 
 def variant_outputs(analysis: dict, name: str, output: Path) -> dict:
+    analysis = {**analysis, **json_metadata()}
     analysis_path = output / f"census-analysis-{name}.json"
     if not analysis_path.exists():
         write_once(analysis_path, analysis)
@@ -249,6 +262,8 @@ def variant_outputs(analysis: dict, name: str, output: Path) -> dict:
         lin, lineage_csv = {"error": str(error)}, None
     else:
         lin, lineage_csv = json.loads((lineage_dir / "analysis.json").read_text()), lineage_dir / "objects.csv"
+        if switched():
+            (lineage_dir / "analysis.json").write_text(json.dumps({**lin, **json_metadata()}, indent=1, sort_keys=True) + "\n")
     baselines = baselines_block(analysis["objects"], lineage_csv)
     direction = direction_block(analysis["objects"])
     write_once(output / f"baselines-{name}.json", baselines)
@@ -272,7 +287,16 @@ def main() -> int:
     parser.add_argument("--predictions", required=True, help="own JSONL or 'published'")
     parser.add_argument("--periods", type=Path, default=None, help="own-period file (alias classes)")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--reference-run", action="store_true", help="score the fresh reference-period census first")
     args = parser.parse_args()
+    guard_output(args.output)
+    if switched():
+        if args.predictions == "published":
+            raise ValueError("switched scoring requires fresh chosen-network predictions")
+        check_jsonl(args.predictions)
+        base.FOLLOWUP = FOLLOWUP
+        base.ROOT = FOLLOWUP.parent
+        base.CATALOG = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl"
     args.output.mkdir(parents=True)
     if args.predictions == "published":
         directory = PUBLISHED_PREDICTIONS
@@ -283,10 +307,14 @@ def main() -> int:
     excluded_path = args.output / "census-analysis-excluded.json"
     census.analyze(REFERENCE, directory, ATLAS, SPLITS, excluded_path, fold=0)
     excluded = json.loads(excluded_path.read_text())
+    if switched():
+        excluded.update(json_metadata())
+        excluded_path.write_text(json.dumps(excluded, indent=1, sort_keys=True) + "\n")
     report: dict = {
         "schema": "delphi.own-period-lowq-scores.v1",
         "predictions": str(jsonl),
         "predictions_sha256": sha256(jsonl),
+        **({"comparison_role": "published_* fields use fresh reference-period inference with the selected networks"} if switched() else {}),
         "variants": {"failed_excluded": variant_outputs(excluded, "excluded", args.output)},
     }
     statuses: dict[str, int] = {}
@@ -305,9 +333,11 @@ def main() -> int:
         at90 = excluded
 
     # DAMIT-period (published) DeLPHI against this run, paired over asteroids.
+    comparison = excluded_path if switched() and args.reference_run else PUBLISHED_ANALYSIS
+    check_json(comparison)
     published = {
         row["object_id"]: float(row["oracle_at_3_error_deg"])
-        for row in json.loads(PUBLISHED_ANALYSIS.read_text())["objects"]
+        for row in json.loads(comparison.read_text())["objects"]
     }
     own = {row["object_id"]: row for row in at90["objects"]}
     ids = [i for i in published if i in own]

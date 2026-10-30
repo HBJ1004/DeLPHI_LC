@@ -23,13 +23,15 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_prepared
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro.network_root import NetworkPath, guard_output, json_metadata
+from repro.network_root import load_models as _load_models
 
 from .search_external import FOLLOWUP, PREPARED, ready_objects
 
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
+MODELS = NetworkPath("models")
+MODEL_MANIFEST = NetworkPath("binding")
 SPLITS = (
     FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z/publication-splits-v2.3.json"
 )
@@ -54,7 +56,9 @@ def main() -> int:
     parser.add_argument("--periods", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--objects", help="comma-separated identities for a CPU switch check")
     args = parser.parse_args()
+    guard_output(args.output)
     own = None if args.periods == "published" else json.loads(Path(args.periods).read_text())
     if own is not None and own.get("cohort") != args.cohort:
         raise ValueError("period file belongs to another cohort")
@@ -69,6 +73,7 @@ def main() -> int:
             digest,
         )
         for oid, path, digest in ready_objects(args.cohort)
+        if args.objects is None or oid in args.objects.split(",")
     ]
     with args.output.open("x", buffering=1) as stream:
         for folds, object_id, path, digest in sorted(items):
@@ -78,7 +83,7 @@ def main() -> int:
             if own is None:
                 period = published
             elif own["periods_hours"].get(object_id) is None:
-                stream.write(json.dumps({"object_id": object_id, "status": "no_period"}) + "\n")
+                stream.write(json.dumps({"object_id": object_id, "status": "no_period", **json_metadata()}) + "\n")
                 continue
             else:
                 period = KnownPeriod(float(own["periods_hours"][object_id]), own["provenance"])
@@ -96,6 +101,7 @@ def main() -> int:
                         "folds": list(folds),
                         "axes": np.asarray(axes).tolist(),
                         "scores": np.asarray(scores).tolist(),
+                        **json_metadata(),
                     }
                 )
                 + "\n"

@@ -22,6 +22,7 @@ import torch
 
 from lc_pipeline.k3.config import K3TokenizerConfig
 from lc_pipeline.k3.grid import axial_healpix_grid
+from repro.network_root import NetworkPath, check_npz, guard_output, json_metadata, switched
 from repro.own_period import predict_oof as prediction
 
 sys.dont_write_bytecode = True
@@ -30,7 +31,8 @@ OBJECT_ID = "asteroid_1714"
 from repro.own_period import DataPath
 
 OWN = DataPath()
-SPACECRAFT = OWN / "spacecraft"
+SPACECRAFT = NetworkPath("results", "spacecraft", legacy_path=OWN / "spacecraft")
+OOF = NetworkPath("results", "headline", "own-period-oof.npz", legacy_path=OWN / "own-period-oof.npz")
 EXPECTED_ERROR_DEG = 71.67375588798046
 TOLERANCE = 1e-3  # GPU-to-GPU rounding; attempt 2 differed by 1.52e-06 per axis component, 1.0e-04 deg
 
@@ -167,6 +169,17 @@ def progress(step: int, total: int, note: str) -> None:
         subprocess.run(["job", "step", str(step), "--of", str(total), "--note", note], check=True)
 
 
+def expected_baseline():
+    check_npz(OOF)
+    with np.load(OOF, allow_pickle=False) as archive:
+        index = list(archive["object_ids"]).index(OBJECT_ID)
+        axes = archive["refined_axes"][index].copy()
+        error = float(archive["errors_deg"][index])
+        if (not switched() and error != EXPECTED_ERROR_DEG) or int(archive["folds"][index]) != 1:
+            raise ValueError("stored baseline differs from the plan")
+    return axes, error
+
+
 def report(result: dict) -> str:
     check = result["baseline_reproduction"]
     lines = [
@@ -234,6 +247,8 @@ def main() -> int:
         parser.error("--threads must be positive")
     torch.set_num_threads(args.threads)
     output = SPACECRAFT / "eros-loo"
+    guard_output(output)
+    check_npz(OOF)
     if output.exists():
         raise FileExistsError(output)
     catalog = {row["object_id"]: row for row in map(
@@ -249,7 +264,7 @@ def main() -> int:
     source = prediction.load_damit_object(prediction.DUMP, OBJECT_ID)
     targets = np.asarray([s["vector"] for s in catalog[OBJECT_ID]["solutions"]], dtype=np.float32)
     reference_record = next(row for row in json.loads(
-        (SPACECRAFT / "reference-poles.json").read_text()
+        (OWN / "spacecraft/reference-poles.json").read_text()
     )["objects"] if row["object"] == "Eros")
     reference = np.asarray(reference_record["unit_vector"], dtype=np.float64)
     known_period = prediction.KnownPeriod(period, provenance)
@@ -280,8 +295,8 @@ def main() -> int:
     )
     if len(models) != len(prediction.K3_OOF_SEEDS):
         raise ValueError("incorrect seed count")
-    paths = [OWN / "own-periods-170.json", OWN / "own-period-oof.npz",
-             SPACECRAFT / "reference-poles.json", SPACECRAFT / "PROTOCOL.md",
+    paths = [OWN / "own-periods-170.json", OOF,
+             OWN / "spacecraft/reference-poles.json", OWN / "spacecraft/PROTOCOL.md",
              prediction.DATA / "catalog.jsonl", prediction.DATA / "publication-splits-v2.3.json",
              prediction.MODEL_MANIFEST, prediction.DUMP / f"files/{OBJECT_ID}/lc.txt",
              prediction.DUMP / f"files/{OBJECT_ID}/model_{source.model_id}/spin.txt",
@@ -289,6 +304,7 @@ def main() -> int:
              Path(prediction.__file__)]
     paths += [prediction.MODELS / name for name in names]
     result = {
+        **json_metadata(),
         "schema": "delphi.eros-loo.v1", "label": "POST HOC EXPLORATORY",
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "object_id": OBJECT_ID, "period_hours": period, "period_provenance": provenance,
@@ -311,12 +327,7 @@ def main() -> int:
             "amplitude": "median across original lightcurves of ptp(-2.5*log10(relative_brightness))",
         }, "variants": [],
     }
-    with np.load(OWN / "own-period-oof.npz", allow_pickle=False) as archive:
-        index = list(archive["object_ids"]).index(OBJECT_ID)
-        expected_axes = archive["refined_axes"][index].copy()
-        expected_error = float(archive["errors_deg"][index])
-        if expected_error != EXPECTED_ERROR_DEG or int(archive["folds"][index]) != 1:
-            raise ValueError("stored baseline differs from the plan")
+    expected_axes, expected_error = expected_baseline()
     progress(0, len(variants), "baseline reproduction")
     for step, (variant_id, kind, epochs) in enumerate(variants, 1):
         variant_started = time.perf_counter()

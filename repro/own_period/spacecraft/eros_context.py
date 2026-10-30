@@ -18,12 +18,12 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import NetworkPath, check_npz, guard_output, json_metadata
+from repro.own_period import DataPath
 from repro.own_period import predict_oof as prediction
 
-from repro.own_period import DataPath
-
 OWN = DataPath()
-SPACECRAFT = OWN / "spacecraft"
+SPACECRAFT = NetworkPath("results", "spacecraft", legacy_path=OWN / "spacecraft")
 OBJECT_ID = "asteroid_1714"
 MIN_POINTS = 15
 LARGE_AMPLITUDE = 0.4
@@ -58,7 +58,10 @@ def r2_amplitude_aspect(rows, axis) -> float:
 
 
 def main() -> int:
-    oof_path = OWN / "own-period-oof.npz"
+    oof_path = NetworkPath("results", "headline", "own-period-oof.npz", legacy_path=OWN / "own-period-oof.npz")
+    out = SPACECRAFT / "eros-loo/context.json"
+    guard_output(out)
+    check_npz(oof_path)
     with np.load(oof_path) as data:
         ids = [str(x) for x in data["object_ids"]]
         errors = dict(zip(ids, map(float, data["errors_deg"])))
@@ -74,13 +77,14 @@ def main() -> int:
     amp = np.array([v["median_amplitude_mag"] for v in per_object.values()])
     phase = np.array([v["median_phase_deg"] for v in per_object.values()])
     eros = per_object[OBJECT_ID]
-    reference = next(r for r in json.loads((SPACECRAFT / "reference-poles.json").read_text())["objects"]
+    reference = next(r for r in json.loads((OWN / "spacecraft/reference-poles.json").read_text())["objects"]
                      if r["object"] == "Eros")
     eros_rows = list(lightcurves(OBJECT_ID))
     similar = {k: v for k, v in per_object.items() if k != OBJECT_ID
                and v["median_amplitude_mag"] >= 0.8 * eros["median_amplitude_mag"]
                and v["median_phase_deg"] >= 0.8 * eros["median_phase_deg"]}
     result = {
+        **json_metadata(),
         "schema": "delphi.eros-context.v1", "label": "POST HOC EXPLORATORY",
         "script": str(Path(__file__).resolve()), "oof": str(oof_path), "min_points": MIN_POINTS,
         "n_objects": len(per_object),

@@ -15,6 +15,8 @@ import argparse
 import json
 from pathlib import Path
 
+from repro.network_root import check_json, check_jsonl, guard_output, json_metadata, switched
+
 from .lowq_search import FOLLOWUP
 
 REVISION = FOLLOWUP / "data/publication-revision-20260917-r2"
@@ -53,6 +55,31 @@ def main() -> int:
     parser.add_argument("--scores", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    guard_output(args.output)
+    if switched():
+        # Original publication parity is not a gate on newly trained networks.
+        # Verify the recomputed chain and its chosen-network prediction bytes.
+        from .lowq_search import sha256
+        check_json(args.scores / "summary.json")
+        summary = json.loads((args.scores / "summary.json").read_text())
+        predictions = Path(summary["predictions"])
+        check_jsonl(predictions)
+        if sha256(predictions) != summary["predictions_sha256"]:
+            raise ValueError("score prediction bytes changed")
+        paths = [args.scores / "census-analysis-excluded.json",
+                 args.scores / "baselines-excluded.json", args.scores / "direction-excluded.json",
+                 args.scores / "lineage-excluded/analysis.json"]
+        for path in paths:
+            check_json(path)
+        report = {"schema": "delphi.own-period-lowq-selected-check.v1", **json_metadata(),
+                  "passed": True, "historical_numerical_parity_checked": False,
+                  "reason": "new networks require fresh results; publication equality is not asserted",
+                  "verified_files": [str(path) for path in paths],
+                  "predictions_sha256": summary["predictions_sha256"]}
+        with args.output.open("x") as stream:
+            stream.write(json.dumps(report, indent=1, sort_keys=True) + "\n")
+        print(json.dumps(report, sort_keys=True))
+        return 0
     rows: list[dict] = []
     census_pub = json.loads((REVISION / "lowq-analysis.json").read_text())
     census_new = json.loads((args.scores / "census-analysis-excluded.json").read_text())

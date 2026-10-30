@@ -76,7 +76,8 @@ class NetworkPath(os.PathLike[str]):
 
     def __truediv__(self, part):
         return NetworkPath(self.role, *self.parts, os.fspath(part),
-                           legacy_followup=self.legacy_followup, legacy_path=self.legacy_path)
+                           legacy_followup=self.legacy_followup,
+                           legacy_path=(self.legacy_path / part if self.legacy_path is not None else None))
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -124,6 +125,27 @@ def check_checkpoint(path) -> None:
 
 def network_metadata() -> dict:
     return {"network_binding_sha256": np.asarray(sha256(NetworkPath("binding")))} if switched() else {}
+
+
+def json_metadata() -> dict:
+    return {key: str(value) for key, value in network_metadata().items()}
+
+
+def check_jsonl(path) -> None:
+    """Every row, including failures, must belong to the selected networks."""
+    if not switched():
+        return
+    path = Path(path)
+    guard_output(path)
+    expected = json_metadata()
+    seen = set()
+    with path.open() as stream:
+        for line in stream:
+            row = json.loads(line)
+            identity = row.get("run_id", row.get("object_id"))
+            if identity is None or identity in seen or any(row.get(k) != v for k, v in expected.items()):
+                raise ValueError(f"network binding mismatch or duplicate identity: {path}")
+            seen.add(identity)
 
 
 def check_npz(path) -> None:

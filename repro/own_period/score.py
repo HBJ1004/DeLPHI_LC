@@ -16,7 +16,14 @@ from pathlib import Path
 import numpy as np
 
 from repro import compute_reference_baselines as crb
-from repro.network_root import NetworkPath, check_npz, guard_output, network_metadata, switched
+from repro.network_root import (
+    NetworkPath,
+    check_jsonl,
+    check_npz,
+    guard_output,
+    network_metadata,
+    switched,
+)
 
 from .search_external import FOLLOWUP, OUT
 
@@ -147,6 +154,7 @@ def main_sample(own_path: Path) -> dict:
 
 
 def external(cohort: str, predictions: Path, periods_path: Path) -> dict:
+    check_jsonl(predictions)
     rows = {r["object_id"]: r for r in map(json.loads, predictions.read_text().splitlines())}
     periods = json.loads(periods_path.read_text())["periods_hours"]
     table, catalog, gaia = (
@@ -164,6 +172,11 @@ def external(cohort: str, predictions: Path, periods_path: Path) -> dict:
         fitted = {r["object_id"]: r["atlas_oracle_at_3_error_deg"] for r in source}
     from .search_external import ready_objects
 
+    if switched():
+        path = NetworkPath("results", cohort, f"validation-{cohort}-published.jsonl")
+        check_jsonl(path)
+        fresh = {r["object_id"]: r for r in map(json.loads, path.read_text().splitlines())}
+
     ids, own, refs, classes, reference_periods = [], [], [], [], {}
     for object_id, path, _ in ready_objects(cohort):
         references = (
@@ -173,6 +186,11 @@ def external(cohort: str, predictions: Path, periods_path: Path) -> dict:
         )
         if references is None:
             raise ValueError(f"{object_id}: no reference poles")
+        if switched():
+            reference_row = fresh[object_id]
+            if reference_row["status"] != "ok":
+                raise ValueError(f"{object_id}: reference-period inference failed")
+            published[object_id] = axial_error(reference_row["axes"], references)
         known = json.loads(path.read_text())["known_period_hours"]
         reference_periods[object_id] = float(known)
         row = rows[object_id]
@@ -202,24 +220,32 @@ def main() -> int:
     parser.add_argument("--oof", type=Path, default=OUT / "own-period-oof.npz")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--main-only", action="store_true", help="headline sample only; external cohorts are separate rerun families")
+    parser.add_argument("--cohort", choices=("ztf", "alcdef"), help="score one external family only")
     args = parser.parse_args()
     guard_output(args.output)
-    if switched() and not args.main_only:
-        raise ValueError("set --main-only for headline reruns; external network results need their own fresh inputs")
+    if args.main_only and args.cohort:
+        parser.error("--main-only and --cohort are mutually exclusive")
+    if switched():
+        crb.FOLLOWUP, crb.CATALOG = FOLLOWUP, CATALOG
+        crb.ROOT = FOLLOWUP.parent
     result = {
         "schema": "delphi.own-period-scores.v1",
         "protocol": "PROTOCOL.md",
         "seed": SEED,
         "resamples": RESAMPLES,
-        "main_sample": main_sample(args.oof),
     }
+    if not args.cohort:
+        result["main_sample"] = main_sample(args.oof)
     if switched():
         result["network_binding_sha256"] = str(network_metadata()["network_binding_sha256"])
     for cohort in ("ztf", "alcdef"):
         if args.main_only:
             break
-        predictions = OUT / f"own-period-{cohort}.jsonl"
-        if predictions.exists():
+        if args.cohort and args.cohort != cohort:
+            continue
+        predictions = (NetworkPath("results", cohort, f"own-period-{cohort}.jsonl")
+                       if switched() else OUT / f"own-period-{cohort}.jsonl")
+        if switched() or predictions.exists():
             result[cohort] = external(cohort, predictions, OUT / f"own-periods-{cohort}.json")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=1) + "\n")

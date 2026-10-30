@@ -57,9 +57,12 @@ from lc_pipeline.v2.convexinv import (  # noqa: E402
 from lc_pipeline.v2.preprocessing import Observation, ObservationEpoch  # noqa: E402
 
 from repro.own_period import DataPath
+from repro.network_root import (NetworkPath, check_json, check_jsonl, guard_output,
+                                json_metadata, switched)
+from repro.own_period.spacecraft import run as network_run
 
 OWN = DataPath()
-SPACECRAFT = OWN / "spacecraft"
+SPACECRAFT = NetworkPath("results", "spacecraft", legacy_path=OWN / "spacecraft")
 BENCHMARK = OWN / "benchmark"
 OUTPUT = SPACECRAFT / "classical"
 ARMS = ("standard6", "classical20")
@@ -111,12 +114,14 @@ def relative_binding(path: Path, root: Path) -> dict:
 
 
 def available(path: Path) -> None:
+    guard_output(path)
     if path.exists() or path.is_symlink():
         raise FileExistsError(f"refusing to overwrite: {path}")
 
 
 def write(path: Path, value: dict) -> None:
-    grid.write_once(path, value)
+    guard_output(path)
+    grid.write_once(path, {**value, **json_metadata()})
 
 
 def write_or_verify(path: Path, value: dict) -> None:
@@ -444,7 +449,7 @@ def cmd_validate(args) -> dict:
 
 def load_export(out: Path) -> dict:
     manifest = read(out / "export/manifest.json")
-    if checked(manifest["script"]) != Path(__file__).resolve():
+    if checked(manifest["script"]) != Path(__file__).resolve() and not switched():
         raise ValueError("export used another script")
     checked(manifest["protocol"])
     for entry in manifest["convention_sources"]:
@@ -596,9 +601,11 @@ def outcomes(fits: list[dict], reference, axial: bool) -> dict:
 
 
 def cmd_score(args) -> dict:
-    out = args.output_dir
-    available(out / "scores.json")
-    available(out / "RESULTS.md")
+    destination = args.output_dir
+    out = getattr(args, "fit_dir", None) or destination
+    available(destination / "scores.json")
+    available(destination / "RESULTS.md")
+    destination.mkdir(parents=True, exist_ok=True)
     execution = read(out / "execution.json")
     plan = read(checked(execution["run_plan"]))
     if (execution["status"] != "all_planned_starts_attempted"
@@ -607,8 +614,9 @@ def cmd_score(args) -> dict:
     if not plan["full_grid"] and not args.allow_partial:
         raise ValueError("partial grids require --allow-partial; only for a labelled smoke test")
     manifest = load_export(out)
-    if plan["export"] != binding(out / "export/manifest.json") or plan["script"] != binding(Path(__file__)):
+    if plan["export"] != binding(out / "export/manifest.json") or (not switched() and plan["script"] != binding(Path(__file__))):
         raise ValueError("execution inputs/script changed")
+    checked(plan["script"])
     for entry in plan["implementations"].values():
         checked(entry)
     checked(plan["validation"])
@@ -634,23 +642,27 @@ def cmd_score(args) -> dict:
                 fits.append({**record["selected_fit"], "arm": spec["arm"],
                              "chi2": read(diagnostics_path)["chi2"], "record": entry["record"]})
     # Reference and DeLPHI score files are first opened here, after fitting.
-    reference_path = args.spacecraft_dir / "reference-poles.json"
+    reference_path = network_run.input_root(args.spacecraft_dir) / "reference-poles.json"
     reference = read(reference_path)
     if reference["schema"] != "delphi.spacecraft-reference-poles.v1" or reference["ecliptic_frame"] != "ECLIPJ2000":
         raise ValueError("unexpected reference schema/frame")
     refs = {r["object"].lower(): r for r in reference["objects"]}
     score_paths = [args.spacecraft_dir / "scores.json", args.spacecraft_dir / "posthoc/scores.json"]
+    for path in score_paths:
+        check_json(path)
     delphi = [read(p) for p in score_paths]
     predictions = {}
     for base, document in zip((args.spacecraft_dir, args.spacecraft_dir / "posthoc"), delphi, strict=True):
         if document["reference_poles_sha256"] != grid.digest(reference_path):
             raise ValueError("DeLPHI used different spacecraft reference poles")
         prediction_manifest_path = base / "predictions/manifest.json"
+        check_json(prediction_manifest_path)
         if document["predictions_manifest_sha256"] != grid.digest(prediction_manifest_path):
             raise ValueError("DeLPHI score/prediction binding differs")
         prediction_manifest = read(prediction_manifest_path)
         for mode in plan["periods"]:
             path = checked(prediction_manifest["outputs"][mode], base / "predictions")
+            check_jsonl(path)
             predictions[base, mode] = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     objects = []
     for (run_id, mode), fits in grouped.items():
@@ -714,8 +726,8 @@ def cmd_score(args) -> dict:
                      fmt(d["oracle_deg"]), fmt(d["best_scored_deg"])]
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
-    write(out / "scores.json", result)
-    with (out / "RESULTS.md").open("x", encoding="utf-8") as stream:
+    write(destination / "scores.json", result)
+    with (destination / "RESULTS.md").open("x", encoding="utf-8") as stream:
         stream.write("\n".join(lines))
     return {"stage": "score", "input_period_pairs": len(objects), "scope": label}
 
@@ -735,12 +747,15 @@ def main(argv=None) -> int:
             p.add_argument("--periods", nargs="+", choices=MODES, default=list(MODES))
             p.add_argument("--max-starts", type=int, help="SMOKE TEST only: first N of 152 starts per input/period")
         if name == "score":
+            p.add_argument("--fit-dir", type=Path, help="read-only published standard-start fits for a network rerun")
             p.add_argument("--allow-partial", action="store_true", help="permit explicitly labelled smoke-test reports")
         if name == "validate":
             p.add_argument("--object-id", default="asteroid_1733")
             p.add_argument("--arm", choices=ARMS, default="standard6")
             p.add_argument("--start-index", type=int, default=0)
     args = parser.parse_args(argv)
+    if switched() and (args.command != "score" or args.fit_dir is None):
+        parser.error("switched classical runs score --fit-dir only; reuse the published standard-start fits")
     for key in ("output_dir", "spacecraft_dir", "benchmark_dir"):
         setattr(args, key, getattr(args, key).resolve())
     if args.command == "run":

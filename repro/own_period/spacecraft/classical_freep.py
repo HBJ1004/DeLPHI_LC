@@ -167,7 +167,7 @@ def cmd_export(args) -> dict:
 def load_export(out: Path, addendum: int = 3) -> dict:
     manifest = c.read(out / "export/manifest.json")
     if (manifest["schema"] != "delphi.spacecraft-classical-freep-export.v1"
-            or c.checked(manifest["script"]) != Path(__file__).resolve()
+            or (c.checked(manifest["script"]) != Path(__file__).resolve() and not c.switched())
             or [r["run_id"] for r in manifest["inputs"]] != list(ADDENDUM4_RUNS if addendum == 4 else RUNS)):
         raise ValueError(f"export must use this script and exactly the Addendum {addendum} inputs")
     c.checked(manifest["protocol"])
@@ -468,18 +468,21 @@ def cmd_run(args) -> dict:
 
 def delphi_comparisons(spacecraft: Path, manifest: dict, reference_path: Path, modes: list[str]) -> dict:
     """Score-only: verify ordinary predictions and DAMIT rescore OOF rows."""
+    c.check_json(spacecraft / "scores.json")
     document = c.read(spacecraft / "scores.json")
-    lock_path = spacecraft / "lock/cohort-lock.json"
-    lock = c.read(lock_path)
+    lock_path = c.network_run.input_root(spacecraft) / "lock/cohort-lock.json"
+    lock = c.network_run.locked(spacecraft)[0] if c.switched() else c.read(lock_path)
     prediction_path = spacecraft / "predictions/manifest.json"
     if (document["reference_poles_sha256"] != grid.digest(reference_path)
             or document["cohort_lock_sha256"] != grid.digest(lock_path)
             or document["predictions_manifest_sha256"] != grid.digest(prediction_path)):
         raise ValueError("DeLPHI score/reference/prediction binding differs")
+    c.check_json(prediction_path)
     prediction_manifest = c.read(prediction_path)
     predictions = {}
     for mode in modes:
         path = c.checked(prediction_manifest["outputs"][mode], spacecraft / "predictions")
+        c.check_jsonl(path)
         predictions[mode] = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     result = {}
     for row in manifest["inputs"]:
@@ -516,9 +519,11 @@ def delphi_comparisons(spacecraft: Path, manifest: dict, reference_path: Path, m
 
 
 def cmd_score(args) -> dict:
-    out = args.output_dir
-    c.available(out / "scores.json")
-    c.available(out / "RESULTS.md")
+    destination = args.output_dir
+    out = getattr(args, "fit_dir", None) or destination
+    c.available(destination / "scores.json")
+    c.available(destination / "RESULTS.md")
+    destination.mkdir(parents=True, exist_ok=True)
     execution = c.read(out / "execution.json")
     plan = c.read(c.checked(execution["run_plan"]))
     if (execution["status"] != "all_planned_starts_attempted"
@@ -528,8 +533,9 @@ def cmd_score(args) -> dict:
     if not plan["full_grid"] and not args.allow_partial:
         raise ValueError("partial grids require --allow-partial; only for a labelled smoke test")
     manifest = load_export(out, args.addendum)
-    if plan["export"] != c.binding(out / "export/manifest.json") or plan["script"] != c.binding(Path(__file__)):
+    if plan["export"] != c.binding(out / "export/manifest.json") or (not c.switched() and plan["script"] != c.binding(Path(__file__))):
         raise ValueError("execution inputs/script changed")
+    c.checked(plan["script"])
     for entry in plan["implementations"].values():
         c.checked(entry)
     c.checked(plan["validation"])
@@ -557,7 +563,7 @@ def cmd_score(args) -> dict:
                              **pole_degrees(record["selected_fit"]["axis"]),
                              "chi2": c.read(diagnostics_path)["chi2"], "record": entry["record"]})
     # These are the first reference-pole / score reads in this workflow.
-    reference_path = args.spacecraft_dir / "reference-poles.json"
+    reference_path = c.network_run.input_root(args.spacecraft_dir) / "reference-poles.json"
     reference = c.read(reference_path)
     if reference["schema"] != "delphi.spacecraft-reference-poles.v1" or reference["ecliptic_frame"] != "ECLIPJ2000":
         raise ValueError("unexpected reference schema/frame")
@@ -592,7 +598,7 @@ def cmd_score(args) -> dict:
                               for r in representatives], allow_nan=False), flush=True)
     label = f"POST HOC: Addendum {args.addendum}" + ("" if plan["full_grid"] else " SMOKE TEST, PARTIAL GRID")
     score_paths = [args.spacecraft_dir / "scores.json"]
-    oof = c.read(args.spacecraft_dir / "lock/cohort-lock.json")["files"]
+    oof = (c.network_run.locked(args.spacecraft_dir)[0] if c.switched() else c.read(args.spacecraft_dir / "lock/cohort-lock.json"))["files"]
     result = {"schema": "delphi.spacecraft-classical-freep-scores.v1", "scope": label, "posthoc": True,
               "execution": c.binding(out / "execution.json"), "reference_poles": c.binding(reference_path),
               "delphi_scores": [c.binding(p) for p in score_paths],
@@ -638,8 +644,8 @@ def cmd_score(args) -> dict:
             values = "; ".join(f"({r['lambda_deg']:.6f}, {r['beta_deg']:.6f}, {r['rms_relative_to_best']:.8f})" for r in reps)
             lines.append(f"- {row['run_id']} {row['mode']}: {values or 'none'}")
         lines.append("")
-    c.write(out / "scores.json", result)
-    with (out / "RESULTS.md").open("x", encoding="utf-8") as stream:
+    c.write(destination / "scores.json", result)
+    with (destination / "RESULTS.md").open("x", encoding="utf-8") as stream:
         stream.write("\n".join(lines) + "\n")
     return {"stage": "score", "input_period_pairs": len(objects), "scope": label}
 
@@ -660,6 +666,7 @@ def main(argv=None) -> int:
             p.add_argument("--periods", nargs="+", choices=c.MODES, default=list(c.MODES))
             p.add_argument("--max-starts", type=int, help="SMOKE TEST: first N of 152 starts per input/period")
         if name == "score":
+            p.add_argument("--fit-dir", type=Path, help="read-only published standard-start fits")
             p.add_argument("--allow-partial", action="store_true")
         if name == "validate":
             p.add_argument("--classical-dir", type=Path, help="default: --spacecraft-dir/classical (read only)")
@@ -668,6 +675,8 @@ def main(argv=None) -> int:
             p.add_argument("--arm", choices=c.ARMS, default="standard6")
             p.add_argument("--start-index", type=int, default=0)
     args = parser.parse_args(argv)
+    if c.switched() and (args.command != "score" or args.fit_dir is None):
+        parser.error("switched classical runs score --fit-dir only; reuse the published standard-start fits")
     if args.output_dir is None:
         args.output_dir = c.SPACECRAFT / "classical-freep-ceres-vesta" if args.addendum == 4 else OUTPUT
     for key in ("output_dir", "spacecraft_dir", "benchmark_dir", "classical_dir"):

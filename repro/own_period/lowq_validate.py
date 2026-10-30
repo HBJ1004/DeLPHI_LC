@@ -17,9 +17,12 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import NetworkPath, check_jsonl, guard_output, json_metadata, switched
+
 from .lowq_search import CENSUS, sha256
 
-PUBLISHED = CENSUS / "predictions-fold0-five-seed/predictions.jsonl"
+PUBLISHED = NetworkPath("results", "lower-quality-census", "damit-period-lowq-predictions.jsonl",
+                        legacy_path=CENSUS / "predictions-fold0-five-seed/predictions.jsonl")
 PUBLISHED_SHA256 = "b3adff514191f4f72f325587c64342859224a75333aa9b7ade18bf2e6ae8f861"
 TOLERANCE_DEG = 1e-6
 
@@ -29,14 +32,18 @@ def main() -> int:
     parser.add_argument("--rerun", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if sha256(PUBLISHED) != PUBLISHED_SHA256:
+    guard_output(args.output)
+    check_jsonl(PUBLISHED)
+    check_jsonl(args.rerun)
+    if not switched() and sha256(PUBLISHED) != PUBLISHED_SHA256:
         raise ValueError("published predictions differ from the census manifest")
     published = {}
     with PUBLISHED.open() as handle:
         for line in handle:
             item = json.loads(line)
             published[item["object_id"]] = item
-    rerun = [json.loads(line) for line in args.rerun.open() if line.strip()]
+    with args.rerun.open() as stream:
+        rerun = [json.loads(line) for line in stream if line.strip()]
     order = list(published)[: len(rerun)]
     if [r["object_id"] for r in rerun] != order:
         raise ValueError("rerun is not the first N asteroids in the published order")
@@ -64,11 +71,13 @@ def main() -> int:
             index_mismatch.append(new["object_id"])
     ok_count = sum(r["status"] == "ok" for r in rerun)
     report = {
+        **json_metadata(),
         "schema": "delphi.own-period-lowq-validation.v1",
         "subset": f"first {len(rerun)} asteroids of the published census order",
         "rerun": str(args.rerun),
         "rerun_sha256": sha256(args.rerun),
-        "published_predictions_sha256": PUBLISHED_SHA256,
+        "published_predictions_sha256": sha256(PUBLISHED) if switched() else PUBLISHED_SHA256,
+        **({"comparison_role": "fresh chosen-network reference-period inference"} if switched() else {}),
         "rows": len(rerun),
         "ok_rows": ok_count,
         "status_mismatches": status_mismatch,

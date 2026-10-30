@@ -25,15 +25,24 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 WORKTREE = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(WORKTREE))
+from repro.network_root import (
+    NetworkPath,
+    check_json,
+    check_jsonl,
+    check_npz,
+    guard_output,
+    json_metadata,
+    switched,
+)
 from repro.own_period import DataPath
 
 FOLLOWUP = DataPath("../..")
 OWN = DataPath()
-OUTPUT = OWN / "spacecraft"
+OUTPUT = NetworkPath("results", "spacecraft", legacy_path=OWN / "spacecraft")
 SNAPSHOT = FOLLOWUP.parent / "damit-20250610T000301Z"
 TRAINING = FOLLOWUP / "inputs/training-run/repro/data/damit-20250610T000301Z"
-MODELS = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/models"
-MODEL_MANIFEST = FOLLOWUP / "data/external-models-final.json"
+MODELS = NetworkPath("models")
+MODEL_MANIFEST = NetworkPath("binding")
 PUBLISHED_PREPARED = FOLLOWUP / "data/generalization-20260910/locked-cohort/alcdef-prepared-30-20260911"
 PUBLISHED_AXES = OWN / "validation-alcdef-published.jsonl"
 NEW = {"itokawa": (25143, ("alcdef", "lowry2014", "combined")),
@@ -70,6 +79,8 @@ def checked(row: dict, root: Path | None = None) -> Path:
 
 
 def write(path: Path, value: object) -> None:
+    guard_output(path)
+    value = {**value, **json_metadata()}
     payload = json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as stream:
@@ -77,12 +88,14 @@ def write(path: Path, value: object) -> None:
 
 
 def stage(out: Path, name: str) -> Path:
+    guard_output(out)
     path = out / name
     path.mkdir(parents=True, exist_ok=False)
     return path
 
 
 def available(out: Path, name: str) -> None:
+    guard_output(out)
     path = out / name
     if path.exists() or path.is_symlink():
         raise FileExistsError(f"refusing to overwrite stage: {path}")
@@ -93,10 +106,24 @@ def relative_binding(path: Path, root: Path) -> dict:
 
 
 def raw_path(out: Path, row: dict) -> Path:
+    out = input_root(out)
     return checked(row, out / "lock" if row["kind"] == "external" else None)
 
 
+def input_root(out: Path) -> Path:
+    if not switched():
+        return out
+    return Path(OWN / "spacecraft") / ("posthoc" if Path(out).name == "posthoc" else "")
+
+
+def oof_path(mode: str) -> Path:
+    path = Path(NetworkPath("results", "headline", OOF_FILES[mode], legacy_path=OWN / OOF_FILES[mode]))
+    check_npz(path)
+    return path
+
+
 def locked(out: Path) -> tuple[dict, list[dict]]:
+    out = input_root(out)
     root = out / "lock"
     manifest = read(root / "manifest.json")
     lock_path = checked(manifest["cohort_lock"], root)
@@ -119,6 +146,10 @@ def locked(out: Path) -> tuple[dict, list[dict]]:
         for key in ("run_id", "kind", "object_id", "name", "source_name", "primary"):
             if row[key] != original[key]:
                 raise ValueError(f"locked metadata differs: {key}")
+    if switched():
+        lock["files"]["model_manifest"] = binding(Path(MODEL_MANIFEST))
+        for mode in OOF_FILES:
+            lock["files"][f"oof_{mode}"] = binding(oof_path(mode))
     return lock, rows
 
 
@@ -223,6 +254,7 @@ def cmd_sbdb(args) -> dict:
 
 
 def geometry_rows(out: Path) -> dict:
+    out = input_root(out)
     manifest = read(out / "geometry/manifest.json")
     if manifest["cohort_lock_sha256"] != sha(out / "lock/cohort-lock.json"):
         raise ValueError("geometry manifest belongs to another lock")
@@ -261,6 +293,7 @@ def cmd_prepare(args) -> dict:
 
 
 def prepared(out: Path) -> dict:
+    out = input_root(out)
     manifest = read(out / "prepared/manifest.json")
     for key, path in (("cohort_lock_sha256", out / "lock/cohort-lock.json"),
                       ("period_receipts_sha256", out / "sbdb/periods.json"),
@@ -324,7 +357,8 @@ def cmd_search(args) -> dict:
 
 def ensemble(device: str, threads: int):
     import torch
-    from lc_pipeline.k3.ztf_prediction import _load_models
+
+    from repro.network_root import load_models as _load_models
     torch.set_num_threads(threads)
     models, names, bindings = _load_models(MODELS, MODEL_MANIFEST, tuple(range(5)), device)
     if len(models) != 25:
@@ -334,6 +368,7 @@ def ensemble(device: str, threads: int):
 
 def prediction(models, epochs, hours: float, provenance: str, device: str) -> dict:
     import numpy as np
+
     from lc_pipeline.v2.preprocessing import KnownPeriod
     from repro.own_period.predict_external import predict
     started = time.perf_counter()
@@ -347,7 +382,15 @@ def prediction(models, epochs, hours: float, provenance: str, device: str) -> di
 
 
 def validation(out: Path) -> dict:
+    out = input_root(out)
     report = read(out / "validation/result.json")
+    if switched():
+        # A fixed historical adapter check is evidence about the old run only.
+        files = read(out / "lock/cohort-lock.json")["files"]
+        if (report["status"] != "PASS" or report["max_axis_difference"] > AXIS_TOLERANCE
+                or report["model_manifest_sha256"] != files["model_manifest"]["sha256"]):
+            raise ValueError("historical adapter validation is invalid")
+        return report
     if (report["status"] != "PASS" or report["script_sha256"] != sha(Path(__file__))
             or report["model_manifest_sha256"] != sha(MODEL_MANIFEST)
             or report["max_axis_difference"] > AXIS_TOLERANCE
@@ -368,13 +411,14 @@ def cmd_predict(args) -> dict:
     from lc_pipeline.k3.ztf_prediction import _load_prepared
     from lc_pipeline.v2.data import parse_damit_lightcurve
     out = args.output_dir
+    fixed = input_root(out)
     available(out, "predictions")
     validation(out)
     lock, rows = locked(out)
     inputs = prepared(out)
-    own = read(out / "search/periods.json")
-    if (own["cohort_lock_sha256"] != sha(out / "lock/cohort-lock.json")
-            or own["prepared_manifest_sha256"] != sha(out / "prepared/manifest.json")
+    own = read(fixed / "search/periods.json")
+    if (own["cohort_lock_sha256"] != sha(fixed / "lock/cohort-lock.json")
+            or own["prepared_manifest_sha256"] != sha(fixed / "prepared/manifest.json")
             or set(own["periods_hours"]) != {r["run_id"] for r in rows}):
         raise ValueError("period file belongs to different inputs")
     table = model_rows(lock)
@@ -409,13 +453,14 @@ def cmd_predict(args) -> dict:
         path = root / f"{mode}.jsonl"
         with path.open("x", encoding="utf-8") as stream:
             for row in values:
-                stream.write(json.dumps(row, allow_nan=False) + "\n")
+                stream.write(json.dumps({**row, **json_metadata()}, allow_nan=False) + "\n")
         products[mode] = relative_binding(path, root)
     write(root / "manifest.json", {"schema": "delphi.spacecraft-predictions.v1",
-          "cohort_lock_sha256": sha(out / "lock/cohort-lock.json"), "device": args.device,
-          "search_sha256": sha(out / "search/periods.json"),
-          "prepared_manifest_sha256": sha(out / "prepared/manifest.json"),
-          "validation_sha256": sha(out / "validation/result.json"),
+          "cohort_lock_sha256": sha(fixed / "lock/cohort-lock.json"), "device": args.device,
+          "search_sha256": sha(fixed / "search/periods.json"),
+          "prepared_manifest_sha256": sha(fixed / "prepared/manifest.json"),
+          "validation_sha256": sha(fixed / "validation/result.json"),
+          **({"validation_role": "reused historical adapter check; no new-network parity claim"} if switched() else {}),
           "models": names, "model_bindings": bindings, "outputs": products})
     return {"stage": "predict", "inputs": len(rows), "models": len(models), "modes": list(outputs)}
 
@@ -423,6 +468,7 @@ def cmd_predict(args) -> dict:
 def cmd_validate(args) -> dict:
     import numpy as np
     import torch
+
     from lc_pipeline.k3.ztf_prediction import _load_prepared
     out = args.output_dir
     available(out, "validation")
@@ -463,6 +509,7 @@ def cmd_validate(args) -> dict:
 
 def errors(result: dict, spacecraft, damit) -> dict:
     import numpy as np
+
     from repro.own_period.score import FAILED_DEG, axial_error
     if result["status"] == "no_period":
         return {"status": "no_period", "period_hours": None, "oracle_deg": FAILED_DEG,
@@ -488,19 +535,22 @@ def errors(result: dict, spacecraft, damit) -> dict:
 
 def cmd_score(args) -> dict:
     import numpy as np
+
     from repro.compute_reference_baselines import unit_from_degrees
     from repro.own_period.score import period_class
     out = args.output_dir
+    fixed = input_root(out)
     available(out, "scores.json")
     available(out, "RESULTS.md")
     lock, rows = locked(out)
     inputs = prepared(out)
-    own = read(out / "search/periods.json")
+    own = read(fixed / "search/periods.json")
+    check_json(out / "predictions/manifest.json")
     manifest = read(out / "predictions/manifest.json")
-    for key, path in (("cohort_lock_sha256", out / "lock/cohort-lock.json"),
-                      ("search_sha256", out / "search/periods.json"),
-                      ("prepared_manifest_sha256", out / "prepared/manifest.json"),
-                      ("validation_sha256", out / "validation/result.json")):
+    for key, path in (("cohort_lock_sha256", fixed / "lock/cohort-lock.json"),
+                      ("search_sha256", fixed / "search/periods.json"),
+                      ("prepared_manifest_sha256", fixed / "prepared/manifest.json"),
+                      ("validation_sha256", fixed / "validation/result.json")):
         if manifest[key] != sha(path):
             raise ValueError(f"prediction dependency differs: {path}")
     validation(out)
@@ -508,6 +558,7 @@ def cmd_score(args) -> dict:
     predictions = {}
     for mode in OOF_FILES:
         path = checked(manifest["outputs"][mode], out / "predictions")
+        check_jsonl(path)
         values = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
         predictions[mode] = {r["run_id"]: r for r in values}
         if len(values) != len(rows) or set(predictions[mode]) != {r["run_id"] for r in rows}:
@@ -570,14 +621,15 @@ def cmd_score(args) -> dict:
             medians[mode][f"median_{key}_failed_at_90"] = float(np.median([r[mode][key] for r in primary]))
             medians[mode][f"median_{key}_failed_excluded"] = (float(np.median([r[mode][key] for r in good])) if good else None)
     result = {"schema": "delphi.spacecraft-scores.v1", "scope": "exploratory; no post-score variants",
-              "cohort_lock_sha256": sha(out / "lock/cohort-lock.json"),
+              "cohort_lock_sha256": sha(fixed / "lock/cohort-lock.json"),
               "reference_poles_sha256": sha(reference_path), "predictions_manifest_sha256": sha(out / "predictions/manifest.json"),
               "primary_policy": "three combined new-data inputs, three unseen DAMIT objects, three existing OOF objects",
               "damit_reference_policy": "all frozen model-table poles; oracle over poles, ignoring sign",
               "objects": objects, "primary_medians": medians}
     lines = ["# Spacecraft poles: exploratory results", "",
              "Primary: combined new-data inputs, unseen DAMIT inputs, and existing OOF rescoring. Mathilde excluded.",
-             "All new predictions use 25 frozen networks. Eros/Ceres/Vesta retain their original five-model OOF predictions.",
+             ("New objects use all 25 chosen networks; Eros/Ceres/Vesta use refreshed five-model OOF predictions."
+              if switched() else "All new predictions use 25 frozen networks. Eros/Ceres/Vesta retain their original five-model OOF predictions."),
              "Errors are axial degrees. Oracle uses all three candidates; best uses the largest network score.",
              "Failures count as 90 degrees and are also excluded in the primary medians. No rescue or post-score changes.",
              "", "| Run | Primary | Period class | Own P (h) | Catalogue P (h) | Own oracle | Own best | Catalogue oracle | Catalogue best | DAMIT own oracle / best | DAMIT catalogue oracle / best |",
@@ -595,7 +647,7 @@ def cmd_score(args) -> dict:
     lines += ["", "Primary medians (degrees; no other averages):", "", "```json",
               json.dumps(medians, indent=2, allow_nan=False), "```", "",
               f"Reference SHA-256: `{sha(reference_path)}`.",
-              f"Cohort lock SHA-256: `{sha(out / 'lock/cohort-lock.json')}`.",
+              f"Cohort lock SHA-256: `{sha(fixed / 'lock/cohort-lock.json')}`.",
               "Kernel URLs and hashes and all per-object statuses are retained in scores.json."]
     write(out / "scores.json", result)
     with (out / "RESULTS.md").open("x", encoding="utf-8") as stream:
@@ -629,6 +681,8 @@ def main(argv=None) -> int:
             command.add_argument("--batch-size", type=int, default=20)
             command.add_argument("--request-interval-seconds", type=float, default=0.2)
     args = parser.parse_args(argv)
+    if switched() and args.command not in ("predict", "score"):
+        parser.error("switched runs reuse published preparation, validation and periods; run predict/score only")
     args.output_dir = args.output_dir.resolve()
     if hasattr(args, "threads") and args.threads < 1:
         parser.error("--threads must be positive")
