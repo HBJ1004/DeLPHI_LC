@@ -12,9 +12,18 @@ MARK="$DELPHI_DATA/benchmark/explore-timed.log"
 export PYTHONPATH="$W" OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}" MKL_NUM_THREADS="${OMP_NUM_THREADS:-2}" OPENBLAS_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 cd "$W"
 
-until grep -q "exploratory timing done" "$MARK" 2>/dev/null; do sleep 300; done
+if [[ -n "${DELPHI_NETWORK_ROOT:-}${DELPHI_MODEL_BINDING:-}${DELPHI_BUNDLE_ROOT:-}" ]]; then
+  case "${1:-}" in pilot|search-main|search-withheld|validate) echo 'reuse fixed inputs; old publication validation is separate' >&2; exit 2;; esac
+  OUT="$("$PY" -B -c 'from repro.own_period.reliability import OUT; print(OUT)')"
+else
+  until grep -q "exploratory timing done" "$MARK" 2>/dev/null; do sleep 300; done
+fi
 
 gpu() {  # one locked GPU chunk
+  if [[ -n "${DELPHI_NETWORK_ROOT:-}" ]]; then
+    "$(dirname "$DELPHI_NETWORK_ROOT")/runners/gpu_run.sh" -- "$PY" -B -m repro.own_period.reliability "$@"
+    return
+  fi
   if [ -n "${GPU_WAIT:-}" ]; then bash "$GPU_WAIT"; fi
   echo "$(date -u +%FT%TZ) chunk: $*"
   if [ -n "${GPU_LOCK:-}" ]; then
@@ -26,7 +35,11 @@ gpu() {  # one locked GPU chunk
 
 until_marker() {  # repeat a chunked GPU command until its marker exists
   local marker="$1"; shift
-  while [ ! -e "$marker" ]; do gpu "$@"; done
+  while [ ! -e "$marker" ]; do
+    local status=0
+    gpu "$@" || status=$?
+    if [[ $status != 0 && $status != 3 ]]; then return "$status"; fi
+  done
 }
 
 stage="$1"; shift || true

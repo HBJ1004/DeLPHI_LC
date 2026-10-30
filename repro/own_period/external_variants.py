@@ -36,7 +36,8 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_prepared
+from repro import network_root as network
 from lc_pipeline.v2.preprocessing import KnownPeriod
 
 from .nettests_common import FOLLOWUP, MODEL_MANIFEST, MODELS, OUT, SPLITS, sha256, write_json_once
@@ -48,8 +49,10 @@ DIAG_SCORE = GEN / "mapped-ztf-development-diagnostic-score-current-endpoint.jso
 ZTF_PREPARED = GEN / "mapped-ztf/prepared-current-endpoint"
 ALCDEF_PREPARED = GEN / "locked-cohort/alcdef-prepared-30-20260911"
 REVISION = FOLLOWUP / "data/publication-revision-20260917-r2"
-VARIANTS_OUT = OUT / "ztf-variants"
-NOERR_OUT = OUT / "no-uncertainty"
+FIXED_VARIANTS = OUT / 'ztf-variants'
+FIXED_NOERR = OUT / 'no-uncertainty'
+VARIANTS_OUT = network.NetworkPath('results', 'external-variants', 'ztf-variants', legacy_path=FIXED_VARIANTS)
+NOERR_OUT = network.NetworkPath('results', 'external-variants', 'no-uncertainty', legacy_path=FIXED_NOERR)
 PROVENANCE = "own-fourier-gpu-top1"
 SEED = 20261021
 FAILED_DEG = 90.0
@@ -67,7 +70,7 @@ def variant_items() -> dict[str, list[tuple[str, Path | None, str | None]]]:
 def no_error_items() -> dict[str, list[tuple[str, Path | None, str | None]]]:
     items = {}
     for cohort in ("ztf", "alcdef"):
-        root = NOERR_OUT / f"prepared-{cohort}-no-error"
+        root = (FIXED_NOERR if network.switched() else NOERR_OUT) / f"prepared-{cohort}-no-error"
         manifest = json.loads((root / "manifest.json").read_text())
         items[cohort] = [
             (r["object_id"], root / r["path"] if r.get("path") else None, r.get("sha256"))
@@ -80,11 +83,17 @@ def items_of(name: str):
     return variant_items() if name == "ztf-variants" else no_error_items()
 
 
+def fixed_of(name: str):
+    return FIXED_VARIANTS if name == 'ztf-variants' else FIXED_NOERR
+
+
 def out_of(name: str) -> Path:
     return VARIANTS_OUT if name == "ztf-variants" else NOERR_OUT
 
 
 def prepare_no_error(_args) -> int:
+    if network.switched():
+        raise ValueError('reuse the fixed prepared no-error inputs')
     from repro.run_k3_error_channel_sensitivity import prepare_directory
 
     report = {}
@@ -109,6 +118,8 @@ def prepare_no_error(_args) -> int:
 
 
 def search(args) -> int:
+    if network.switched():
+        raise ValueError('reuse the fixed per-variant period searches')
     from repro.period_search.search import estimate
 
     from .search_external import curves_of
@@ -175,15 +186,18 @@ def _predict(models, epochs, period, device, chunk, sensitivity_style):
 
 def predict(args) -> int:
     out = out_of(args.set)
+    network.guard_output(out)
     for variant, items in sorted(items_of(args.set).items()):
         if args.only and variant not in args.only:
             continue
         destination = out / f"predictions-{args.periods}-{variant}.jsonl"
         if destination.exists():
+            network.check_jsonl(destination)
             continue
         own = None
         if args.periods == "own":
-            own = json.loads((out / f"periods-{variant}.json").read_text())["periods_hours"]
+            own = json.loads(((fixed_of(args.set) if network.switched() else out) /
+                              f"periods-{variant}.json").read_text())["periods_hours"]
         if args.set == "ztf-variants" or variant == "ztf":
             groups = defaultdict(list)
             for item in items:
@@ -196,7 +210,8 @@ def predict(args) -> int:
         for folds, rows in sorted(groups.items()):
             models = None
             for object_id, path, digest in rows:
-                record = {"object_id": object_id, "variant": variant, "folds": list(folds)}
+                record = {"object_id": object_id, "variant": variant, "folds": list(folds),
+                          **network.json_metadata()}
                 if path is None:
                     lines.append({**record, "status": "failed", "reason": "input_unavailable"})
                     continue
@@ -213,7 +228,7 @@ def predict(args) -> int:
                 else:
                     period = KnownPeriod(float(own[object_id]), PROVENANCE)
                 if models is None:
-                    models = _load_models(MODELS, MODEL_MANIFEST, folds, args.device)[0]
+                    models = network.load_models(MODELS, MODEL_MANIFEST, folds, args.device)[0]
                 try:
                     axes = _predict(models, epochs, period, args.device, chunk, sensitivity_style)
                     lines.append({**record, "status": "ok", "period_hours": period.hours,
@@ -244,15 +259,20 @@ def score(args) -> int:
     from repro import compute_reference_baselines as crb
 
     out = out_of(args.set)
+    network.guard_output(out)
+    if network.switched():
+        crb.FOLLOWUP, crb.ROOT = FOLLOWUP, FOLLOWUP.parent
+        crb.CATALOG = FOLLOWUP / 'inputs/training-run/repro/data/damit-20250610T000301Z/catalog.jsonl'
     table, catalog, gaia = crb.damit_table_poles(), crb.reference_poles(), crb.gaia_reference_poles()
     standard_axes = crb.standard_axes()
-    result = {"set": args.set, "periods": args.periods, "variants": {}}
+    result = {"set": args.set, "periods": args.periods, "variants": {}, **network.json_metadata()}
     published_checks = {}
-    if args.set == "ztf-variants":
+    if args.set == "ztf-variants" and not network.switched():
         published = json.loads(DIAG_SCORE.read_text())["variants"]
-    else:
+    elif not network.switched():
         sensitivity = json.loads((REVISION / "error-channel-sensitivity.json").read_text())
     for variant in sorted(items_of(args.set)):
+        network.check_jsonl(out / f'predictions-{args.periods}-{variant}.jsonl')
         lines = [json.loads(l) for l in (out / f"predictions-{args.periods}-{variant}.jsonl").read_text().splitlines()]
         alcdef = args.set == "no-error" and variant == "alcdef"
         ids, err, std, reasons = [], [], [], defaultdict(int)
@@ -296,7 +316,7 @@ def score(args) -> int:
                 std[ok], err[ok], 20260924
             )
         result["variants"][variant] = block
-        if args.periods == "published":
+        if args.periods == "published" and not network.switched():
             if args.set == "ztf-variants":
                 pv = published[variant]
                 old = {r["object_id"]: r for r in pv["objects"]} if "objects" in pv else None

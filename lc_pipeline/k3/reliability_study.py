@@ -492,13 +492,14 @@ def predict_curve(predictor, curve, object_id):
     return axes.tolist()
 
 
-def prediction_cell(root, row, config, repeat, predictor):
+def prediction_cell(root, row, config, repeat, predictor, *, network_metadata=None):
     target = Path(root) / "predictions" / row["object_id"] / config["condition"] / f"repeat-{repeat}.json"
     cached = checkpoint_read(target)
     if cached is not None:
         expected = {"object_id": row["object_id"], "condition": config["condition"], "repeat": repeat,
                     "fold": row["fold"], "seed": SEEDS[repeat], "source_sha256": row["lightcurve"]["sha256"],
                     "model_count": 5, "model_id": "k3"}
+        expected.update(network_metadata or {})
         if any(cached.get(k) != v for k, v in expected.items()):
             raise ValueError("prediction checkpoint identity mismatch")
         if cached.get("input_sha256") is not None:
@@ -509,6 +510,7 @@ def prediction_cell(root, row, config, repeat, predictor):
     value = {"object_id": row["object_id"], "fold": row["fold"], "condition": config["condition"],
              "condition_family": config["family"], "repeat": repeat, "seed": SEEDS[repeat],
              "source_sha256": row["lightcurve"]["sha256"], "model_id": "k3", "model_count": 5}
+    value.update(network_metadata or {})
     try:
         curve = selected_curve(row, config, repeat)
         value.update(input_sha256=input_hash(curve), metadata=input_metadata(curve, curve.period_hours),
@@ -629,12 +631,15 @@ def forward_parity(selected_folder, native_path):
     return maximum
 
 
-def fit_cell(root, row, sampling, arm, lock, predictor, budget):
+def fit_cell(root, row, sampling, arm, lock, predictor, budget, *, workers=6):
     from ..grid_benchmark import guided_starts, pole_grid
     directory = Path(root) / "fits" / row["object_id"] / sampling / arm
     result_path = directory / "result.json"
     cached = checkpoint_read(result_path)
     if cached is not None:
+        if arm == 'k3' and lock.get('network_binding_sha256') is not None and cached.get(
+                'network_binding_sha256') != lock['network_binding_sha256']:
+            raise ValueError('fit checkpoint network binding mismatch')
         expected = {"object_id": row["object_id"], "fold": row["fold"], "sampling": sampling, "arm": arm}
         if any(cached.get(k) != v for k, v in expected.items()):
             raise ValueError("fit checkpoint identity mismatch")
@@ -657,6 +662,9 @@ def fit_cell(root, row, sampling, arm, lock, predictor, budget):
             axes = predict_curve(predictor, curve, row["object_id"])
             prediction = {"axes": axes, "input_sha256": input_hash(curve), "fold": row["fold"]}
             seal(prediction_file, prediction)
+        if lock.get('network_binding_sha256') is not None and prediction.get(
+                'network_binding_sha256') != lock['network_binding_sha256']:
+            raise ValueError('holdout prediction network binding mismatch')
         if prediction["input_sha256"] != input_hash(curve) or prediction["fold"] != row["fold"]:
             raise ValueError("holdout prediction input/fold changed")
         axes = prediction["axes"]
@@ -667,7 +675,7 @@ def fit_cell(root, row, sampling, arm, lock, predictor, budget):
     starts = pole_grid(20) if axes is None else guided_starts(axes, 20)
     observed = tuple(np.asarray([o.flux for o in s.observations]) for s in curve.sessions)
     job = {"period_hours": row["period_hours"], "lightcurve": binding(native_path)}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(native_start_resumable, job, index, axis, observed, lock, directory, budget)
                    for index, axis in enumerate(starts)]
         records = [future.result() for future in futures]
@@ -685,6 +693,8 @@ def fit_cell(root, row, sampling, arm, lock, predictor, budget):
               "metadata": input_metadata(curve, row["period_hours"]),
               "forward_native_max_difference": parity, "runtime_s": time.monotonic() - started,
               "withheld_scores_opened": False}
+    if arm == 'k3' and lock.get('network_binding_sha256') is not None:
+        result['network_binding_sha256'] = lock['network_binding_sha256']
     seal(result_path, result)
     return result
 
@@ -965,3 +975,118 @@ def score(root, lock, schedule):
                               for p in write_reports(root, rows, report, lock)]
     seal(root / "report.json", report)
     return report
+
+
+def prepare_period_rerun(*, root, published_root):
+    """Seal the original supplied-period conditions/schedule with chosen bundles.
+
+    The old study remains historical evidence. No new adaptive timing pilot,
+    holdout fits, sampling conditions or publication promotion are performed.
+    """
+    from repro import network_root as network
+    if not network.switched():
+        raise ValueError('period rerun requires the network switch')
+    root, published_root = Path(root), Path(published_root)
+    network.guard_output(root)
+    if root.exists():
+        raise FileExistsError(root)
+    old = unseal(published_root / 'study.json')
+    schedule = unseal(published_root / 'schedule.json')
+    bundles = [network.bundle_record(f, old['bundles']) for f in range(5)]
+    for row in old['objects']:
+        verify(row['lightcurve'])
+    verify(old['catalog'])
+    lock = {**old, 'schema': 'delphi.k3-local-period-rerun.v1',
+            'conditions': [c for c in old['conditions'] if c['family'] == 'period' or c['condition'] == 'full'],
+            'bundles': bundles, 'runtime_sources': runtime_sources(Path(__file__).resolve().parents[2]),
+            'fixed_sources': [binding(published_root / n) for n in ('study.json', 'schedule.json')],
+            'fixed_schedule': schedule, **network.json_metadata(),
+            'publication_promotion_claimed': False,
+            'reused_historical_evidence': 'original study, inputs, exposure/role audits and schedule; never relabelled',
+            'skipped_publication_gates': ['publication promotion', 'new adaptive timing pilot (fixed schedule reused)']}
+    seal(root / 'study.json', lock)
+    seal(root / 'schedule.json', schedule)
+    return {'root': str(root), 'objects': len(lock['objects']), 'conditions': len(lock['conditions'])}
+
+
+def _period_rerun_lock(root):
+    from repro import network_root as network
+    if not network.switched():
+        raise ValueError('period rerun requires the network switch')
+    lock = network.check_sealed(Path(root) / 'study.json')
+    if lock.get('schema') != 'delphi.k3-local-period-rerun.v1':
+        raise ValueError('not a local period rerun')
+    if lock['runtime_sources'] != runtime_sources(Path(__file__).resolve().parents[2]):
+        raise ValueError('period rerun runtime source changed')
+    for item in lock['fixed_sources']:
+        verify(item)
+    if unseal(Path(root) / 'schedule.json') != lock['fixed_schedule']:
+        raise ValueError('period rerun schedule changed')
+    for row in lock['objects']:
+        verify(row['lightcurve'])
+    return lock
+
+
+def run_period_rerun(*, root, device='cuda', max_seconds=3300):
+    from repro import network_root as network
+    from .bundle import K3EnsemblePredictor
+    import torch
+    root = Path(root)
+    lock = _period_rerun_lock(root)
+    torch.set_num_threads(int(os.environ.get('OMP_NUM_THREADS', 4)))
+    deadline = time.monotonic() + max_seconds
+    remaining = 0
+    for fold in range(5):
+        bundle = network.bundle_record(fold, lock['bundles'])
+        predictor = None
+        for row in (r for r in lock['objects'] if r['fold'] == fold):
+            for config in lock['conditions']:
+                for repeat in range(lock['fixed_schedule']['repeats'] if config['repeatable'] else 1):
+                    path = root / 'predictions' / row['object_id'] / config['condition'] / f'repeat-{repeat}.json'
+                    if path.exists():
+                        # prediction_cell validates identity and transformed input on resume.
+                        prediction_cell(root, row, config, repeat, None, network_metadata=network.json_metadata())
+                    elif time.monotonic() >= deadline:
+                        remaining += 1
+                    else:
+                        if predictor is None:
+                            predictor = K3EnsemblePredictor(bundle['directory'], device=device)
+                        prediction_cell(root, row, config, repeat, predictor, network_metadata=network.json_metadata())
+        del predictor
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    if not remaining and not (root / 'inference-complete.json').exists():
+        seal(root / 'inference-complete.json', network.json_metadata())
+    return {'remaining': remaining, **network.json_metadata()}
+
+
+def score_period_rerun(*, root):
+    from repro import network_root as network
+    from ..v2.data import load_catalog
+    from .reliability_scoring import render_reliability_csv, score_reliability
+    root = Path(root)
+    lock = _period_rerun_lock(root)
+    network.check_sealed(root / 'inference-complete.json')
+    catalog = load_catalog(verify(lock['catalog']))
+    repeats = {c['condition']: list(range(lock['fixed_schedule']['repeats'] if c['repeatable'] else 1))
+               for c in lock['conditions']}
+    rows = []
+    for row in lock['objects']:
+        for config in lock['conditions']:
+            for repeat in repeats[config['condition']]:
+                value = network.check_sealed(root / 'predictions' / row['object_id'] /
+                                             config['condition'] / f'repeat-{repeat}.json')
+                # Reuse the unchanged checkpoint/input validation and oracle metric.
+                prediction_cell(root, row, config, repeat, None, network_metadata=network.json_metadata())
+                value['error_deg'] = oracle_error(value['axes'], catalog[row['object_id']].solution_vectors) if value['status'] == 'ok' else 90.0
+                rows.append(value)
+    summary = score_reliability(rows, expected_objects={r['object_id']: r['fold'] for r in lock['objects']},
+                                expected_conditions=list(repeats), expected_repeats_by_condition=repeats,
+                                baseline_by_condition=baselines_by_condition(lock['conditions']))
+    seal(root / 'scored-rows.json', rows)
+    _write_text_new(root / 'sampling-table.csv', render_reliability_csv(summary))
+    result = {'schema': 'delphi.k3-local-period-rerun-report.v1', 'sampling': summary,
+              'scope': 'supplied-DAMIT-period sensitivity only; no holdout or grid claims',
+              **network.json_metadata()}
+    seal(root / 'report.json', result)
+    return result

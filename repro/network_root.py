@@ -98,7 +98,9 @@ def guard_output(path) -> None:
     if ("own-period-20261021" in parts or "frozen-artifacts" in parts
             or "DeLPHI-k3-release-assets-20260906" in parts
             or any(p in parts for p in ("interpretation-20260923", "interpretation-20260926",
-                                       "interpretation-20260930", "publication-revision-20260917-r2"))):
+                                       "interpretation-20260930", "publication-revision-20260917-r2",
+                                       "reliability-20260915", "internal-validation-20260916",
+                                       "period-refinement-20260921", "generalization-20260910"))):
         raise ValueError(f"network switch refuses published output folder: {destination}")
 
 
@@ -138,7 +140,7 @@ def evaluation_metadata(count: int) -> dict:
     return {key: np.full(count, value) for key, value in json_metadata().items()}
 
 
-def check_jsonl(path) -> None:
+def check_jsonl(path, *, identity_fields=None) -> None:
     """Every row, including failures, must belong to the selected networks."""
     if not switched():
         return
@@ -149,10 +151,63 @@ def check_jsonl(path) -> None:
     with path.open() as stream:
         for line in stream:
             row = json.loads(line)
-            identity = row.get("run_id", row.get("object_id"))
+            identity = (tuple(row.get(k) for k in identity_fields) if identity_fields
+                        else row.get("run_id", row.get("object_id")))
             if identity is None or identity in seen or any(row.get(k) != v for k, v in expected.items()):
                 raise ValueError(f"network binding mismatch or duplicate identity: {path}")
             seen.add(identity)
+
+
+def check_sealed(path) -> dict:
+    """Check the existing sealed format as well as its network identity."""
+    from lc_pipeline.k3.reliability_study import unseal
+
+    value = unseal(path)
+    if switched():
+        guard_output(path)
+        if any(value.get(k) != v for k, v in json_metadata().items()):
+            raise ValueError(f"network binding hash mismatch: {path}")
+    return value
+
+
+def bundle_record(fold: int, published_bundles) -> dict:
+    """Select and verify one safe ensemble without rebinding the old study."""
+    if not switched():
+        record = next(b for b in published_bundles if json.loads(
+            (Path(b["directory"]) / "bundle.json").read_text())["fold"] == fold)
+        for item in record["files"]:
+            if sha256(item["path"]) != item["sha256"]:
+                raise ValueError(f"bundle file changed: {item['path']}")
+        return record
+    root = Path(NetworkPath("bundles"))
+    directory = root / f"k3-oof-fold-{fold}"
+    manifest = json.loads((directory / "bundle.json").read_text())
+    known = {r["filename"]: r["sha256"] for r in binding()["models"]}
+    if manifest.get("fold") != fold or [m.get("seed") for m in manifest["members"]] != list(SEEDS):
+        raise ValueError("bundle fold/seed identity mismatch")
+    for member in manifest["members"]:
+        if member.get("source_checkpoint_sha256") != known.get(f"real-fold-{fold}-seed-{member['seed']}.pt"):
+            raise ValueError("bundle source checkpoint binding mismatch")
+        path = directory / member["file"]
+        if path.resolve().parent != directory.resolve() or sha256(path) != member["sha256"]:
+            raise ValueError("bundle weight hash mismatch")
+    paths = [directory / "bundle.json", *(directory / m["file"] for m in manifest["members"])]
+    if binding()["schema"] == LOCAL_SCHEMA:
+        receipt = root / "local-export.json"
+        check_json(receipt)
+        hashes = json.loads(receipt.read_text())["file_sha256"]
+        if any(hashes.get(p.relative_to(root).as_posix()) != sha256(p) for p in paths):
+            raise ValueError("local bundle export hash mismatch")
+    else:
+        # The old-switch Check 3 path must use exactly the locked release files.
+        expected = {Path(item["path"]).name: item["sha256"]
+                    for b in published_bundles if json.loads(
+                        (Path(b["directory"]) / "bundle.json").read_text())["fold"] == fold
+                    for item in b["files"]}
+        if any(expected.get(p.name) != sha256(p) for p in paths):
+            raise ValueError("published bundle files differ from sealed study")
+    return {"fold": fold, "directory": str(directory),
+            "files": [{"path": str(p), "sha256": sha256(p)} for p in paths]}
 
 
 def check_npz(path) -> None:

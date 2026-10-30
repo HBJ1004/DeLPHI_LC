@@ -36,6 +36,8 @@ from lc_pipeline.k3.reliability_study import unseal, verify
 
 from .nettests_common import FOLLOWUP, max_abs, period_override, write_json_once
 
+from repro import network_root as network
+
 PUBLISHED = FOLLOWUP / "data/internal-validation-20260916/run-1"
 
 
@@ -49,17 +51,17 @@ def run(args) -> int:
     periods, provenance, label = period_override(args.periods)
     torch.set_num_threads(6)
     lock = unseal(PUBLISHED / "study.json")
-    for bundle in lock["bundles"]:
-        for item in bundle["files"]:
-            verify(item)
+    bundles = [network.bundle_record(f, lock['bundles']) for f in range(5)]
     by_fold = {
         json.loads((Path(b["directory"]) / "bundle.json").read_text())["fold"]: b["directory"]
-        for b in lock["bundles"]
+        for b in bundles
     }
+    network.guard_output(args.out_dir)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for fold in args.folds:
         destination = args.out_dir / f"cells-fold-{fold}.jsonl"
         if destination.exists():
+            network.check_jsonl(destination, identity_fields=('object_id', 'fold', 'role'))
             continue
         rows = [r for r in lock["rows"] if r["fold"] == fold]
         rows = [r for r in rows if r["role"] == "test"] + [r for r in rows if r["role"] != "test"]
@@ -90,6 +92,7 @@ def run(args) -> int:
                     "axes": axes,
                     "error_deg": _error(axes, row["references"]),
                     "runtime_s": time.monotonic() - started,
+                    **network.json_metadata(),
                 }
                 cells.append(value)
             del predictor
@@ -104,6 +107,11 @@ def run(args) -> int:
 
 
 def report(args) -> int:
+    network.guard_output(args.output)
+    if network.switched() and args.compare_published:
+        raise ValueError('historical numerical parity is checked separately with the old networks')
+    for path in args.cells.glob('cells-fold-*.jsonl'):
+        network.check_jsonl(path, identity_fields=('object_id', 'fold', 'role'))
     cells = [
         json.loads(line)
         for path in sorted(args.cells.glob("cells-fold-*.jsonl"))
@@ -132,7 +140,10 @@ def report(args) -> int:
         if oid in test
     ]
     folds = {oid: c["fold"] for oid, c in test.items()}
+    if network.switched() and not complete:
+        raise ValueError('incomplete internal-validation role cells')
     value = {
+        **network.json_metadata(),
         "cells": str(args.cells),
         "period_source": sorted({c["period_source"] for c in cells}),
         "complete": complete,

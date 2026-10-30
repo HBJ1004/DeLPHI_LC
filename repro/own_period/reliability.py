@@ -44,11 +44,13 @@ from pathlib import Path
 import numpy as np
 
 from repro.own_period import DataPath
+from repro import network_root as network
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
 RUN = FOLLOWUP / "data/reliability-20260915/run-1"
-OUT = DataPath('reliability')
+FIXED = DataPath('reliability')
+OUT = network.NetworkPath('results', 'reliability', legacy_path=FIXED)
 OWN_FULL = DataPath('own-periods-170.json')
 SEEDS = (20260915, 20260916, 20260917)
 SEARCH = dict(method="fourier_gpu", resolution=1, timeout=180, sparse_fallback=True)
@@ -198,6 +200,8 @@ def _worker_init():
 
 
 def command_search(args) -> int:
+    if network.switched():
+        raise ValueError("reuse the fixed published period searches for a network rerun")
     lock, schedule = published_lock(), published_schedule()
     by_id = {r["object_id"]: r for r in lock["objects"]}
     configs = {c["condition"]: c for c in lock["conditions"]}
@@ -293,7 +297,7 @@ def command_search(args) -> int:
 # ----------------------------------------------------------------------------- periods
 
 def own_periods(scope: str) -> dict[tuple[str, str, int], float | None]:
-    path = OUT / "search" / f"periods-{scope}.jsonl"
+    path = (FIXED if network.switched() else OUT) / "search" / f"periods-{scope}.jsonl"
     marker = path.with_suffix(".complete")
     if not marker.exists():
         raise ValueError(f"{path} is not complete")
@@ -326,9 +330,14 @@ def command_predict(args) -> int:
     configs = {c["condition"]: c for c in lock["conditions"]}
     by_id = {r["object_id"]: r for r in lock["objects"]}
     target = OUT / "predictions" / f"{args.mode}.jsonl"
+    network.guard_output(target)
+    if target.exists():
+        network.check_jsonl(target, identity_fields=('object_id', 'condition', 'repeat'))
     target.parent.mkdir(parents=True, exist_ok=True)
     periods = own_periods("main") if args.mode == "own" else None
     cells = [c for c in main_cells(lock, schedule) if by_id[c[0]]["fold"] in args.folds]
+    if getattr(args, 'limit', 0):
+        cells = cells[:args.limit]
     done = {(r["object_id"], r["condition"], r["repeat"]) for r in read_jsonl(target)}
     deadline = time.monotonic() + args.max_seconds
     torch.set_num_threads(6)
@@ -338,7 +347,7 @@ def command_predict(args) -> int:
             todo = [c for c in cells if by_id[c[0]]["fold"] == fold and c not in done]
             if not todo or time.monotonic() >= deadline:
                 continue
-            bundle = lock["bundles"][fold]
+            bundle = network.bundle_record(fold, lock["bundles"])
             for item in bundle["files"]:
                 if sha256_file(Path(item["path"])) != item["sha256"]:
                     raise ValueError(f"bundle file changed: {item['path']}")
@@ -352,7 +361,8 @@ def command_predict(args) -> int:
                 started = time.monotonic()
                 record = {"object_id": oid, "fold": fold, "condition": condition, "repeat": repeat,
                           "seed": SEEDS[repeat], "mode": args.mode, "period_hours": period,
-                          "source_sha256": row["lightcurve"]["sha256"], "model_count": 5}
+                          "source_sha256": row["lightcurve"]["sha256"], "model_count": 5,
+                          **network.json_metadata()}
                 if period is None:
                     record.update(status="failed", axes=None, failure_code="period_search_failed")
                 else:
@@ -377,11 +387,12 @@ def command_predict(args) -> int:
                 torch.cuda.empty_cache()
     remaining = sum(c not in done for c in cells)
     print(json.dumps({"mode": args.mode, "written": written, "remaining": remaining}), flush=True)
-    if not remaining:
+    if not remaining and not getattr(args, 'limit', 0):
         marker = target.with_suffix(f".folds-{''.join(map(str, args.folds))}.complete")
         if not marker.exists():
-            marker.write_text(json.dumps({"cells": len(cells), "finished_epoch": time.time()}) + "\n")
-    return 0
+            marker.write_text(json.dumps({"cells": len(cells), "finished_epoch": time.time(),
+                                          **network.json_metadata()}) + "\n")
+    return 3 if network.switched() and remaining and not getattr(args, 'limit', 0) else 0
 
 
 def axial_angle_deg(a, b) -> float:
@@ -396,6 +407,8 @@ def axial_angle_deg(a, b) -> float:
 
 def command_validate(args) -> int:
     """DAMIT-period predictions against the published sealed predictions."""
+    if network.switched():
+        raise ValueError("historical numerical validation belongs to the old networks; use Check 3 separately")
     records = read_jsonl(OUT / "predictions" / "damit.jsonl")
     published_rows = {(r["object_id"], r["condition"], r["repeat"]): r
                       for r in json.loads((RUN / "scored-rows.json").read_text())["payload"]
@@ -468,12 +481,14 @@ def command_withheld_candidates(args) -> int:
     ids = args.ids or schedule["holdout_ids"]
     periods = withheld_periods(args.mode, lock, ids)
     root = withheld_root(args.mode)
+    network.guard_output(root)
     torch.set_num_threads(6)
     for fold in range(5):
         todo = [oid for oid in ids if by_id[oid]["fold"] == fold]
         if not todo:
             continue
-        predictor = K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=args.device)
+        bundle = network.bundle_record(fold, lock['bundles'])
+        predictor = K3EnsemblePredictor(bundle["directory"], device=args.device)
         for oid in todo:
             for sampling in WITHHELD_SAMPLINGS:
                 period = periods[(oid, sampling)]
@@ -482,15 +497,18 @@ def command_withheld_candidates(args) -> int:
                 row = withheld_row(by_id[oid], period)
                 directory = root / "fits" / oid / sampling / "k3"
                 directory.mkdir(parents=True, exist_ok=True)
+                if (directory / 'prediction.json').exists() and network.switched():
+                    network.check_sealed(directory / 'prediction.json')
                 if checkpoint_read(directory / "prediction.json") is not None:
                     continue
                 curve, _ = holdout_input(root, row, sampling)
                 axes = predict_curve(predictor, curve, oid)
                 seal(directory / "prediction.json", {"axes": axes, "input_sha256": input_hash(curve),
-                                                     "fold": row["fold"]})
+                                                     "fold": row["fold"], **network.json_metadata()})
                 print(oid, sampling, f"{period:.6f}", flush=True)
         del predictor
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     return 0
 
 
@@ -502,12 +520,18 @@ def command_withheld_fits(args) -> int:
     ids = args.ids or schedule["holdout_ids"]
     periods = withheld_periods(args.mode, lock, ids)
     root = withheld_root(args.mode)
+    network.guard_output(root)
     solver = Path(lock["solver"]["executable"]["path"])
     if sha256_file(solver) != lock["solver"]["executable"]["sha256"]:
         raise ValueError("solver binary changed")
     minimal = {"solver": lock["solver"], "solver_settings": lock["solver_settings"], "atlases": lock["atlases"]}
+    minimal.update(network.json_metadata())
     deadline = time.monotonic() + args.max_seconds
     arms = args.arms or list(WITHHELD_ARMS)
+    if network.switched():
+        if args.arms and args.arms != ['k3']:
+            raise ValueError("network reruns reuse classical20 fits and rerun only the k3 arm")
+        arms = ['k3']
     samplings = args.samplings or list(WITHHELD_SAMPLINGS)
     for oid in ids:
         for sampling in samplings:
@@ -517,14 +541,17 @@ def command_withheld_fits(args) -> int:
             for arm in arms:
                 if time.monotonic() >= deadline:
                     print(json.dumps({"stopped": "max-seconds"}), flush=True)
-                    return 0
+                    return 3 if network.switched() else 0
                 row = withheld_row(by_id[oid], period)
                 started = time.monotonic()
-                value = fit_cell(root, row, sampling, arm, minimal, None, _NoBudget())
+                if network.switched():
+                    network.check_sealed(root / 'fits' / oid / sampling / arm / 'prediction.json')
+                value = fit_cell(root, row, sampling, arm, minimal, None, _NoBudget(),
+                                 workers=4 if network.switched() else 6)
                 print(oid, sampling, arm, value["status"], f"{time.monotonic() - started:.1f}s", flush=True)
     marker = root / "fits.complete"
-    if not args.ids and not args.arms and not args.samplings and not marker.exists():
-        marker.write_text(json.dumps({"finished_epoch": time.time()}) + "\n")
+    if not args.ids and (not args.arms or network.switched()) and not args.samplings and not marker.exists():
+        marker.write_text(json.dumps({"finished_epoch": time.time(), **network.json_metadata()}) + "\n")
     return 0
 
 
@@ -543,6 +570,7 @@ def main() -> int:
     p.add_argument("--folds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     p.add_argument("--max-seconds", type=float, default=3300)
     p.add_argument("--device", default="cuda")
+    p.add_argument('--limit', type=int, default=0, help='first N cells only, for CPU equivalence checks')
     sub.add_parser("validate")
     for name in ("withheld-candidates", "withheld-fits"):
         w = sub.add_parser(name)

@@ -8,7 +8,12 @@ import math
 from pathlib import Path
 
 import numpy as np
-from physical import CATALOG
+if __package__:
+    from .physical import CATALOG
+else:
+    from physical import CATALOG
+from repro import network_root as network
+from repro.own_period import DataPath
 
 
 def sha256(path: Path) -> str:
@@ -33,7 +38,9 @@ def raw_method_rows(path: Path) -> dict[tuple[str, str], dict]:
 
 
 def summarize(search_path: Path, candidate_path: Path, screen_path: Path, score_path: Path) -> dict:
-    catalog = {row["object_id"]: row for row in map(json.loads, (CATALOG / "catalog.jsonl").read_text().splitlines())}
+    network.check_jsonl(score_path)
+    catalog_root = DataPath('../../inputs/training-run/repro/data/damit-20250610T000301Z') if network.switched() else CATALOG
+    catalog = {row["object_id"]: row for row in map(json.loads, (catalog_root / "catalog.jsonl").read_text().splitlines())}
     searches = raw_method_rows(search_path)
     candidates = [json.loads(line) for line in candidate_path.read_text().splitlines() if line.strip()]
     screens = [json.loads(line) for line in screen_path.read_text().splitlines() if line.strip()]
@@ -122,6 +129,7 @@ def summarize(search_path: Path, candidate_path: Path, screen_path: Path, score_
         ),
         "inputs": {str(path): sha256(path) for path in (search_path, candidate_path, screen_path, score_path)},
         "script_sha256": sha256(Path(__file__)),
+        **network.json_metadata(),
     }
 
 
@@ -197,16 +205,21 @@ def main() -> None:
     parser.add_argument("--screen", type=Path, required=True)
     parser.add_argument("--scores", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
+    parser.add_argument('--summary-only', action='store_true', help='leave figures for the separate figure rerun')
     args = parser.parse_args()
+    network.guard_output(args.output_directory)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     outputs = [args.output_directory / name for name in
                ("benchmark-summary.json", "benchmark-report.md", "accuracy-cost.pdf", "accuracy-cost.png")]
+    if args.summary_only:
+        outputs = outputs[:2]
     if any(path.exists() for path in outputs):
         raise FileExistsError("benchmark output already exists")
     result = summarize(args.search, args.candidates, args.screen, args.scores)
     outputs[0].write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     outputs[1].write_text(report(result))
-    plot(result, outputs[2], outputs[3])
+    if not args.summary_only:
+        plot(result, outputs[2], outputs[3])
 
 
 if __name__ == "__main__":

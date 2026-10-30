@@ -15,11 +15,11 @@ import csv
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import numpy as np
 
 from repro.own_period import reliability as R
+from repro import network_root as network
 
 PUB_GRID = R.FOLLOWUP / "data/reliability-publication-20260916-final/k3_data_degradation.csv"
 PUB_TABLE = R.RUN / "sampling-table.csv"
@@ -59,6 +59,8 @@ def withheld_validation() -> dict:
 
 
 def command_gate(args) -> int:
+    if network.switched():
+        raise ValueError('the publication parity gate belongs to the old networks; use Check 3 separately')
     prediction = json.loads((R.OUT / "validation-damit-period.json").read_text())
     scoring = json.loads((R.OUT / "validation-scoring.json").read_text())
     withheld = withheld_validation()
@@ -102,6 +104,27 @@ def ci(lo, hi, d=2):
 
 
 def command_results(args) -> int:
+    network.guard_output(R.OUT)
+    if network.switched():
+        source = R.OUT / 'score/reliability-own-period.json'
+        network.check_json(source)
+        score = json.loads(source.read_text())
+        lines = ['# Selected-network reliability rerun', '',
+                 f"Network binding: `{network.json_metadata()['network_binding_sha256']}`.", '',
+                 'Saved reduced/noisy inputs, seeds, periods, retained-data searches and classical20 fits are reused.',
+                 'Five test-fold networks per object; guided fits rerun with the fixed 15.8 degree radius.',
+                 'Historical validation and runtime receipts remain old evidence. No publication parity is claimed.', '',
+                 '| Condition | Mean, failures at 90 deg | Mean, failed excluded |', '|---|---:|---:|']
+        for condition, value in sorted(score['failed_at_90']['sampling_summary'].items()):
+            excluded = score['failed_excluded']['conditions'][condition]
+            lines.append(f"| {condition} | {fmt(value.get('mean_error_deg'))} | {fmt(excluded.get('mean_error_deg'))} |")
+        lines.extend(['', 'Withheld comparisons (fresh guided arm, fixed classical arm):', '',
+                      '```json', json.dumps(score['withheld'], indent=2), '```', '',
+                      'Period-sensitivity results are rerun separately under `results/period-sensitivity`.'])
+        target = R.OUT / 'RESULTS.md'
+        with target.open('x') as stream:
+            stream.write('\n'.join(lines) + '\n')
+        return 0
     score = json.loads((R.OUT / "score" / "reliability-own-period.json").read_text())
     f90, fex = score["failed_at_90"], score["failed_excluded"]
     s90 = f90["sampling_summary"]

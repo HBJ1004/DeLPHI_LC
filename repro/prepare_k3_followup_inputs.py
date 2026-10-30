@@ -106,6 +106,11 @@ def _parser() -> argparse.ArgumentParser:
     local.add_argument("--output", type=Path, required=True)
     local.add_argument("--allow-unpublished-local-rerun", action="store_true", required=True)
 
+    bundles = commands.add_parser("export-local-rerun-bundles", help="export freshly calibrated local ensembles")
+    for name in ("artifact-root", "splits", "output", "repository"):
+        bundles.add_argument("--" + name, type=Path, required=True)
+    bundles.add_argument("--allow-unpublished-local-rerun", action="store_true", required=True)
+
     step = commands.add_parser(
         "local-rerun-step", help="call an unchanged evaluation function with a recorded dirty-checkout exception"
     )
@@ -139,6 +144,8 @@ def local_rerun_step(argv: list[str]) -> dict:
     allowed = {
         "evaluate-publication-real-oof", "aggregate-publication-real-oof",
         "evaluate-publication-real-oof-ensemble", "evaluate-publication-synthetic",
+        "evaluate-publication-real-calibration", "evaluate-publication-real-calibration-ensemble",
+        "calibrate-publication-real-oof-ensemble",
     }
     if args.command not in allowed:
         raise ValueError("local rerun adapter permits only headline prerequisite evaluations")
@@ -147,6 +154,17 @@ def local_rerun_step(argv: list[str]) -> dict:
         result = run.evaluate_real_oof_checkpoint(
             args.checkpoint, args.catalog, args.dump_root, args.splits, args.output,
             fold=args.fold, seed=args.seed, device=args.device, batch_size=args.batch_size)
+    elif args.command == "evaluate-publication-real-calibration":
+        result = run.evaluate_real_calibration_checkpoint(
+            args.checkpoint, args.catalog, args.dump_root, args.splits, args.output,
+            fold=args.fold, seed=args.seed, device=args.device, batch_size=args.batch_size)
+    elif args.command == "evaluate-publication-real-calibration-ensemble":
+        result = run.evaluate_real_calibration_ensemble(
+            args.evaluation_directory, args.model_directory, args.catalog, args.dump_root,
+            args.splits, args.output, seeds=args.seeds, device=args.device)
+    elif args.command == "calibrate-publication-real-oof-ensemble":
+        result = run.calibrate_real_oof_ensemble_artifacts(
+            args.calibration_ensemble, args.splits, args.oof_ensemble, args.output)
     elif args.command == "aggregate-publication-real-oof":
         result = run.aggregate_real_oof_artifacts(
             args.evaluation_directory, args.splits, args.output, seed=args.seed)
@@ -376,6 +394,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
     elif args.command == "bind-local-rerun":
         result = bind_local_rerun(args.artifact_root, args.output)
+    elif args.command == "export-local-rerun-bundles":
+        from repro.export_k3_bundles import export
+
+        result = export(args.artifact_root, args.splits, args.output, args.repository, local_rerun=True)
     elif args.command == "local-rerun-step":
         result = local_rerun_step(args.argv)
     elif args.command == "fetch-temporal-damit":

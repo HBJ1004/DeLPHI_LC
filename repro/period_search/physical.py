@@ -171,19 +171,20 @@ def score_selected(selected, reference_period, references):
     }
 
 
-def load_models(fold):
+def load_models(fold, device='cuda'):
     import torch
 
-    from lc_pipeline.k3.ztf_prediction import _load_models
+    from repro import network_root as network
 
     torch.set_num_threads(1)
-    models, _, bindings = _load_models(
-        BASE / "inputs/frozen-artifacts/k3-definitive-7874092/models",
-        BASE / "data/external-models-final.json",
+    models, _, bindings = network.load_models(
+        network.NetworkPath('models', legacy_followup=BASE),
+        network.NetworkPath('binding', legacy_followup=BASE),
         (fold,),
-        "cuda",
+        device,
     )
-    torch.cuda.synchronize()
+    if device.startswith('cuda'):
+        torch.cuda.synchronize()
     return models, bindings
 
 

@@ -5,7 +5,10 @@ import argparse
 import json
 from pathlib import Path
 
-from lc_pipeline.k3.reliability_study import execute, prepare, start_background, status
+from lc_pipeline.k3.reliability_study import (
+    execute, prepare, start_background, status, prepare_period_rerun, run_period_rerun, score_period_rerun,
+)
+from repro import network_root as network
 
 
 def main():
@@ -23,10 +26,27 @@ def main():
         command.add_argument("--root", type=Path, required=True)
         if name == "run":
             command.add_argument("--pilot-only", action="store_true")
+    local = commands.add_parser('prepare-period-rerun')
+    local.add_argument('--root', type=Path, required=True)
+    local.add_argument('--published-root', type=Path, required=True)
+    local = commands.add_parser('run-period-rerun')
+    local.add_argument('--root', type=Path, required=True)
+    local.add_argument('--device', default='cuda')
+    local.add_argument('--max-seconds', type=float, default=3300)
+    local = commands.add_parser('score-period-rerun')
+    local.add_argument('--root', type=Path, required=True)
     args = vars(parser.parse_args())
     command = args.pop("command")
     try:
-        if command == "prepare":
+        if network.switched() and command in ('prepare', 'run', 'start'):
+            raise ValueError('use the period-rerun commands with the fixed published schedule')
+        if command == 'prepare-period-rerun':
+            result = prepare_period_rerun(**args)
+        elif command == 'run-period-rerun':
+            result = run_period_rerun(**args)
+        elif command == 'score-period-rerun':
+            result = score_period_rerun(**args)
+        elif command == "prepare":
             result = prepare(**args)
         elif command == "run":
             result = execute(**args)
@@ -37,6 +57,8 @@ def main():
     except (OSError, ValueError, TimeoutError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, sort_keys=True), flush=True)
+    if result.get('remaining', 0):
+        raise SystemExit(3)
 
 
 if __name__ == "__main__":

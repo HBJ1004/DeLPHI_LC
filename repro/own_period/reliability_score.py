@@ -16,13 +16,13 @@ import argparse
 import csv
 import io
 import json
-import math
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
 from repro.own_period import reliability as R
+from repro import network_root as network
 
 FIG8_BLOCKS = (1, 3, 5, 10)
 CAPS = ("10", "20", "50", "100", "200", "500", "None")
@@ -146,6 +146,8 @@ def grid_table(rows, *, exclude_failed=False):
 def sampling_baselines(rows, *, exclude_failed=False):
     """``repro/sampling_baselines.py`` on scored rows (same seeds and definitions)."""
     import repro.compute_reference_baselines as base
+    if network.switched():
+        base.CATALOG = DAMIT_CATALOG
     rows = [r for r in rows if r.get("status") != "ineligible" and (r["status"] == "ok" or not exclude_failed)]
     out = {"groups": {}}
     for blocks in FIG8_BLOCKS:
@@ -246,11 +248,22 @@ def score_withheld(root: Path, ids, lock, catalog, arms=("classical20", "k3")):
                        for s in withheld.sessions)
         for sampling in R.WITHHELD_SAMPLINGS:
             for arm in arms:
-                path = root / "fits" / oid / sampling / arm / "result.json"
+                fit_root = root
+                if network.switched() and arm == 'classical20':
+                    fit_root = R.FIXED / 'withheld' / Path(root).name
+                path = fit_root / "fits" / oid / sampling / arm / "result.json"
                 row = {"object_id": oid, "fold": entry["fold"], "sampling": sampling, "arm": arm,
                        "withheld_normalized_curve_rms": None, "status": "missing"}
                 if path.exists():
                     fitted = json.loads(path.read_text())["payload"]
+                    if network.switched():
+                        from lc_pipeline.k3.reliability_study import unseal, verify
+                        fitted = network.check_sealed(path) if arm == 'k3' else unseal(path)
+                        verify(fitted['fit_input'])
+                        for name, checksum in fitted['start_records'].items():
+                            if R.sha256_file(path.parent / name) != checksum:
+                                raise ValueError('fixed solver receipt changed')
+                            validate_start((path.parent / name).parent)
                     row["status"] = fitted["status"]
                     row["period_hours"] = None
                     if fitted["selected_fit"] is not None:
@@ -307,6 +320,8 @@ def published_records():
 
 
 def command_validate_scoring(args) -> int:
+    if network.switched():
+        raise ValueError('historical scoring validation is old evidence; use the old-network Check 3 harness')
     lock, schedule = R.published_lock(), R.published_schedule()
     catalog = catalog_references(lock)
     rows = build_rows(published_records(), lock, schedule, catalog)
@@ -349,7 +364,7 @@ def command_validate_scoring(args) -> int:
 
 
 def _period_stats(lock, schedule):
-    periods = R.read_jsonl(R.OUT / "search" / "periods-main.jsonl")
+    periods = R.read_jsonl((R.FIXED if network.switched() else R.OUT) / "search" / "periods-main.jsonl")
     reference = damit_periods()
     by_condition = defaultdict(list)
     for r in periods:
@@ -382,10 +397,14 @@ def _period_stats(lock, schedule):
 
 
 def command_score(args) -> int:
+    network.guard_output(R.OUT)
+    network.check_jsonl(R.OUT / 'predictions/own.jsonl', identity_fields=('object_id', 'condition', 'repeat'))
     lock, schedule = R.published_lock(), R.published_schedule()
     catalog = catalog_references(lock)
     records = {(r["object_id"], r["condition"], r["repeat"]): r
                for r in R.read_jsonl(R.OUT / "predictions" / "own.jsonl")}
+    if network.switched() and set(records) != set(R.main_cells(lock, schedule)):
+        raise ValueError('incomplete reliability predictions')
     rows = build_rows(records, lock, schedule, catalog)
     summary, table = summarize(rows, lock, schedule)
     out = R.OUT / "score"
@@ -414,7 +433,7 @@ def command_score(args) -> int:
                              v["n_failed_cells"], v.get("mean_error_deg"), v.get("ci95_low_deg"),
                              v.get("ci95_high_deg"), v.get("median_error_deg"), v.get("within20_fraction")])
     with (out / "scored-rows-own.json").open("x") as s:
-        json.dump(rows, s)
+        json.dump([{**r, **network.json_metadata()} for r in rows], s)
     withheld_rows, withheld = ({}, {})
     if (R.withheld_root("own") / "fits.complete").exists():
         withheld_rows, withheld = score_withheld(R.withheld_root("own"), schedule["holdout_ids"], lock, catalog)
@@ -424,7 +443,7 @@ def command_score(args) -> int:
               "failed_excluded": {"conditions": excluded, "data_degradation": grid_ex,
                                   "sampling_baselines": base_ex},
               "period_search": _period_stats(lock, schedule),
-              "withheld": withheld, "withheld_rows": withheld_rows}
+              "withheld": withheld, "withheld_rows": withheld_rows, **network.json_metadata()}
     with (out / "reliability-own-period.json").open("x") as s:
         json.dump(result, s, indent=1)
     print("written", out)

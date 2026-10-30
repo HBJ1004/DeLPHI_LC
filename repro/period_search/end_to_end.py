@@ -18,8 +18,14 @@ import time
 from pathlib import Path
 
 import numpy as np
-from physical import BASE, CATALOG, ROOT, SOURCE, STANDARD, load_models, preflight
-from search import estimate, read_curves
+if __package__:
+    from .physical import BASE, CATALOG, ROOT, SOURCE, STANDARD, load_models, preflight
+    from .search import estimate, read_curves
+else:
+    from physical import BASE, CATALOG, ROOT, SOURCE, STANDARD, load_models, preflight
+    from search import estimate, read_curves
+from repro import network_root as network
+from repro.own_period import DataPath
 
 METHODS = ("fourier_gpu", "pdm")
 # Internal DAMIT catalogue identifiers for Asterope, Jena, Veveri, and Peitho.
@@ -376,8 +382,9 @@ def resummarize_screen(screen_path: Path, output: Path) -> None:
 
 
 def score_periods(candidates_path: Path, output: Path, sample: str,
-                  object_ids: list[str] | None = None) -> None:
+                  object_ids: list[str] | None = None, *, device='cuda') -> None:
     """Record frozen DeLPHI score-map diagnostics for every period candidate."""
+    network.guard_output(output)
     if output.exists():
         raise FileExistsError(f"output exists: {output}")
     rows = [json.loads(line) for line in candidates_path.read_text().splitlines() if line.strip()]
@@ -391,10 +398,12 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
     else:
         selected_ids = pilot_ids(all_ids) if sample == "pilot" else all_ids
     selected = {row["object_id"]: row for row in rows if row["object_id"] in set(selected_ids)}
-    catalog = {row["object_id"]: row for row in map(json.loads, (CATALOG / "catalog.jsonl").read_text().splitlines())}
-    folds = {oid: fold["fold"] for fold in json.loads((CATALOG / "publication-splits-v2.3.json").read_text())["folds"]
+    catalog_root = DataPath('../../inputs/training-run/repro/data/damit-20250610T000301Z') if network.switched() else CATALOG
+    catalog = {row["object_id"]: row for row in map(json.loads, (catalog_root / "catalog.jsonl").read_text().splitlines())}
+    folds = {oid: fold["fold"] for fold in json.loads((catalog_root / "publication-splits-v2.3.json").read_text())["folds"]
              for oid in fold["test_ids"]}
-    sys.path.insert(0, str(BASE / "source"))
+    if not network.switched():
+        sys.path.insert(0, str(BASE / "source"))
     import torch
 
     from lc_pipeline.k3.bundle import _model_inputs
@@ -402,7 +411,7 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
     from lc_pipeline.k3.inference import score_axial_grid
     from lc_pipeline.v2.data import parse_damit_lightcurve
     from lc_pipeline.v2.preprocessing import KnownPeriod
-    if not torch.cuda.is_available():
+    if device.startswith('cuda') and not torch.cuda.is_available():
         raise RuntimeError("period score comparison requires CUDA")
     torch.set_num_threads(1)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -411,23 +420,25 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
             fold_ids = [oid for oid in selected_ids if folds[oid] == fold]
             if not fold_ids:
                 continue
-            models, bindings = load_models(fold)
+            models, bindings = load_models(fold, device=device)
             for oid in fold_ids:
                 row = selected[oid]
-                lightcurve = ROOT / "damit-20250610T000301Z" / catalog[oid]["lightcurve"]["source_path"]
+                input_root = DataPath('../../..') if network.switched() else ROOT
+                lightcurve = input_root / "damit-20250610T000301Z" / catalog[oid]["lightcurve"]["source_path"]
                 epochs = parse_damit_lightcurve(lightcurve)
                 scores = []
                 for candidate in row["candidates"]:
                     started = time.perf_counter()
                     inputs = _model_inputs(
                         epochs, KnownPeriod(candidate["period_hours"], "end-to-end-period-candidate"),
-                        torch.device("cuda"),
+                        torch.device(device),
                     )
                     with torch.inference_mode():
                         grids = np.stack([score_axial_grid(model, inputs, chunk_size=1024) for model in models])
                     mean_grid = ensemble_score_grids(grids[:, None, :])[0]
                     modes = modes_from_score_grid(mean_grid)
-                    torch.cuda.synchronize()
+                    if device.startswith('cuda'):
+                        torch.cuda.synchronize()
                     probabilities = 1 / (1 + np.exp(-np.clip(mean_grid, -50, 50)))
                     scores.append({
                         "candidate_index": candidate["candidate_index"],
@@ -443,11 +454,13 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
                     "schema": "delphi.end-to-end-period-score-diagnostics.v1",
                     "object_id": oid, "fold": fold, "scores": scores,
                     "checkpoint_bindings": bindings, "selection_uses_reference": False,
+                    **network.json_metadata(),
                 }
                 stream.write(json.dumps(result, allow_nan=False) + "\n")
                 print(oid, len(scores), f"{sum(item['seconds'] for item in scores):.2f}s", flush=True)
             del models
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     output.with_suffix(".metadata.json").write_text(json.dumps({
         "schema": "delphi.end-to-end-period-score-diagnostics-metadata.v1",
         "candidate_input_sha256": digest(candidates_path),
@@ -456,6 +469,7 @@ def score_periods(candidates_path: Path, output: Path, sample: str,
         "objects": selected_ids,
         "reference_data_used_for_selection": False,
         "note": "Score-map diagnostics are exploratory and are not calibrated period probabilities.",
+        **network.json_metadata(),
     }, indent=2) + "\n")
 
 
@@ -481,6 +495,7 @@ def main() -> None:
     scoring.add_argument("--output", type=Path, required=True)
     scoring.add_argument("--sample", choices=("pilot", "all"), default="pilot")
     scoring.add_argument("--object-id", action="append", dest="object_ids")
+    scoring.add_argument('--device', default='cuda')
     resummary = sub.add_parser("resummarize")
     resummary.add_argument("--screen", type=Path, required=True)
     resummary.add_argument("--output", type=Path, required=True)
@@ -496,7 +511,7 @@ def main() -> None:
     elif args.command == "pole-input":
         export_pole_input(args.screen, args.output)
     elif args.command == "score-periods":
-        score_periods(args.candidates, args.output, args.sample, args.object_ids)
+        score_periods(args.candidates, args.output, args.sample, args.object_ids, device=args.device)
     else:
         resummarize_screen(args.screen, args.output)
 
