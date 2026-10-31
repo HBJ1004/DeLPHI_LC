@@ -90,12 +90,12 @@ def modules():
 
 
 def timed_workers(original, timing):
-    """Reuse historical timing concurrency; retain RT3d1's retiming cap."""
+    """Keep the source lock's solver concurrency for reused and fresh timings."""
     if type(original) is not int or original < 1:
         raise ValueError("original solver workers must be a positive integer")
     if timing not in ("reuse", "retime"):
         raise ValueError("unknown classical timing mode")
-    return original if timing == "reuse" else 4
+    return original
 
 
 def prepare(source, output, device="cuda", timing="reuse", workers=None):
@@ -327,10 +327,52 @@ def verify_execution(lock_path, execution_path):
     return value
 
 
-def analyses(output):
+def reused_exploratory(source, lock):
+    """Audit a reuse-mode ladder without rebinding it to the retimed lock."""
+    source = Path(source)
+    source_lock = source / "evaluation-lock.json"
+    reused = validate(source_lock, environment=False)
+    if lock["rerun"]["classical_timing"] != "retime" or reused["rerun"]["classical_timing"] != "reuse":
+        raise ValueError("exploratory reuse requires a retime target and a reuse source")
+    for key in ("source_lock", "source_scoring"):
+        if bound(verify(reused["rerun"][key])) != bound(verify(lock["rerun"][key])):
+            raise ValueError("exploratory reuse source belongs to different benchmark inputs")
+    for key in ("objects", "classical_starts", "selected_classical_starts", "settings",
+                "solver", "solver_settings", "bundles"):
+        if reused[key] != lock[key]:
+            raise ValueError(f"exploratory reuse source differs: {key}")
+    execution_path = source / "exploratory-loaded-ladder/execution.json"
+    execution = verify_execution(source_lock, execution_path)
+    if execution["mode"] != "exploratory":
+        raise ValueError("exploratory reuse source has the wrong execution mode")
+    score_path = source / "exploratory-loaded-ladder/score.json"
+    network.check_json(score_path)
+    score = read(score_path)
+    saved_fits = source / "classical-ladder-exploratory.json"
+    network.check_json(saved_fits)
+    if (score["execution_sha256"] != network.sha256(execution_path)
+            or score["saved_fit_sha256"] != network.sha256(saved_fits)):
+        raise ValueError("exploratory reuse score bindings changed")
+    old = read(verify(reused["rerun"]["source_lock"]))
+    metadata = {"status": "reused_not_retimed", "source_lock": bound(source_lock),
+        "source_execution": bound(execution_path), "source_score": bound(score_path),
+        "source_saved_fits": bound(saved_fits), "classical_environment": old["environment"],
+        "delphi_environment": reused["environment"],
+        "note": "18/96-start classical ladder times are from the old machine (September); "
+                "DeLPHI ladder times are from the existing reuse-mode run. RT4 retimes neither."}
+    return score, metadata
+
+
+def analyses(output, exploratory_source=None):
     """Recompute every original statistic with the unchanged saved producers."""
     lock_path = output / "evaluation-lock.json"
     lock = validate(lock_path, environment=False)
+    reused_score, exploratory_metadata = (reused_exploratory(exploratory_source, lock)
+        if exploratory_source is not None else (None, None))
+    metadata = {**network.json_metadata(), "solver_workers": lock["rerun"]["solver_workers"],
+        "environment": lock["environment"], "classical_timing": lock["rerun"]["classical_timing"]}
+    if exploratory_metadata is not None:
+        metadata["exploratory_timing"] = exploratory_metadata
     verify(read(output / "scoring-lock.json")["reference_catalog"])
     direct, _ = modules()
     for mode, folder, filename in (("cold", "evaluation", "score.json"),
@@ -339,7 +381,7 @@ def analyses(output):
         if not (output / filename).exists():
             direct.score(lock_path, output / "scoring-lock.json", output / folder / "execution.json", output / filename)
             value = read(output / filename)
-            value.update(network.json_metadata(), solver_workers=lock["rerun"]["solver_workers"])
+            value.update(metadata)
             (output / filename).write_text(json.dumps(value, sort_keys=True) + "\n")
         network.check_json(output / filename)
     source = Path(lock["rerun"]["source_directory"])
@@ -362,7 +404,12 @@ def analyses(output):
         "score_classical_ladder.py": "classical-ladder-intervals.json",
         "score_exploratory_timing.py": "exploratory-loaded-ladder/score.json",
         "budget_equivalence.py": "budget-equivalence.json", "candidate_accuracy_cost.py": "candidate-accuracy-cost.json"}
-    verify_execution(lock_path, output / "exploratory-loaded-ladder/execution.json")
+    if reused_score is None:
+        verify_execution(lock_path, output / "exploratory-loaded-ladder/execution.json")
+    else:
+        save(output / "exploratory-loaded-ladder/score.json", {**reused_score,
+            **network.json_metadata(), "environment": exploratory_metadata["delphi_environment"],
+            "exploratory_timing": exploratory_metadata})
     for name, filename in outputs.items():
         path = output / filename
         if path.exists():
@@ -376,12 +423,12 @@ def analyses(output):
         if hasattr(module, "main"):
             module.main()
         value = read(path)
-        value.update(network.json_metadata(), solver_workers=lock["rerun"]["solver_workers"])
+        value.update(metadata)
         path.write_text(json.dumps(value, sort_keys=True) + "\n")
-    value = {**network.json_metadata(), "timing_option": lock["rerun"]["classical_timing"],
-        "solver_workers": lock["rerun"]["solver_workers"],
+    folders = ("evaluation", "evaluation-loaded") + (() if reused_score is not None else ("exploratory-loaded-ladder",))
+    value = {**metadata, "timing_option": lock["rerun"]["classical_timing"],
         "classical_retiming_cpu_seconds": sum(read(output / folder / row["path"]).get("retiming_cpu_seconds", 0)
-            for folder in ("evaluation", "evaluation-loaded", "exploratory-loaded-ladder")
+            for folder in folders
             for row in read(output / folder / "execution.json")["rows"]
             if read(output / folder / row["path"])["arm"] != "delphi")}
     save(output / "timing-cost.json", value)
@@ -398,13 +445,15 @@ def main():
     parser.add_argument("--mode", choices=("cold", "loaded", "exploratory"), default="cold")
     parser.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
     parser.add_argument("--workers", type=int)
+    parser.add_argument("--exploratory-source", type=Path,
+                        help="reuse-mode benchmark directory supplying the unchanged exploratory ladder")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.source, args.output, args.device, args.classical_timing, args.workers)
     elif args.command == "execute":
         execute(args.lock.resolve(), args.output.resolve(), args.mode)
     elif args.command == "score":
-        analyses(args.output.resolve())
+        analyses(args.output.resolve(), args.exploratory_source)
     else:
         direct, _ = modules()
         direct.worker(args.lock, args.job)

@@ -81,12 +81,13 @@ def make_source(tmp_path, monkeypatch):
     monkeypatch.setattr(rerun, 'SOURCES', source)
     monkeypatch.setattr(rerun, 'HASHES', {'native.py': network.sha256(code)})
     monkeypatch.setattr(network, 'bundle_record', lambda fold, old: {'fold': fold, 'directory': f'chosen-{fold}'})
-    monkeypatch.setattr(grid, '_environment', lambda device: {'device': device})
+    monkeypatch.setattr(grid, '_environment', lambda device: {
+        'device': device, 'cpu_models': ['new CPU'], 'gpu': ['new GPU']})
     lock = dict(objects=[dict(object_id='a', fold=0, period_hours=10.123456, lightcurve=rerun.bound(lc))],
         settings=dict(workers=6, repeats=3, seed=20260923, bootstrap_resamples=10000),
         solver_settings={'timeout_seconds_per_start': 300, 'iteration_cap': 1000},
         solver={'executable': rerun.bound(exe)}, bundles=[], selected_classical_starts=12,
-        classical_starts=[[1, 0, 0]] * 12)
+        classical_starts=[[1, 0, 0]] * 12, environment={'cpu_models': ['old CPU'], 'gpu': ['old GPU']})
     dump(source / 'evaluation-lock.json', lock)
     dump(source / 'scoring-lock.json', dict(evaluation_lock=rerun.bound(source / 'evaluation-lock.json'),
                                            reference_catalog=rerun.bound(catalog)))
@@ -103,7 +104,7 @@ def test_prepare_freezes_protocol_and_old_worker_count(selected, tmp_path, monke
     lock = rerun.prepare(source, output, 'cpu', timing)
     for field in ('objects', 'settings', 'solver_settings', 'classical_starts'):
         assert lock[field] == old[field]
-    workers = original_workers if timing == 'reuse' else 4
+    workers = original_workers
     assert lock['rerun']['solver_workers'] == workers
     assert rerun.read(output / 'scoring-lock.json')['solver_workers'] == workers
     assert lock['rerun']['classical_timing'] == timing
@@ -181,7 +182,7 @@ def test_v7_reuses_exact_old_periods_and_worker_choice(selected, tmp_path, monke
     assert v7.rerun_lock(args) == 0
     actual = rerun.read(args.output)
     assert actual['objects'] == original['objects']
-    assert actual['settings']['workers'] == (original_workers if timing == 'reuse' else 4)
+    assert actual['settings']['workers'] == original_workers
     assert v7.validate_rerun_lock(args.output) == actual
     actual['settings']['workers'] += 1
     dump(args.output, actual)
@@ -195,7 +196,7 @@ def test_v7_reuses_exact_old_periods_and_worker_choice(selected, tmp_path, monke
 @pytest.mark.parametrize('timing', ['reuse', 'retime'])
 def test_direct_worker_drift_and_explicit_mismatch_rejected(selected, tmp_path, monkeypatch, timing):
     source, _ = make_source(tmp_path, monkeypatch)
-    expected = 6 if timing == 'reuse' else 4
+    expected = 6
     with pytest.raises(ValueError, match='workers differ'):
         rerun.prepare(source, tmp_path / 'bad', 'cpu', timing, workers=expected + 1)
     output = tmp_path / 'new'
@@ -218,7 +219,7 @@ def test_v7_explicit_cpu_validation_keeps_four_workers(selected, tmp_path, monke
     v7.rerun_lock(args)
     actual = v7.validate_rerun_lock(args.output)
     assert actual['settings']['workers'] == 4
-    assert actual['rerun']['untimed_validation'] == (timing == 'reuse')
+    assert actual['rerun']['untimed_validation'] is True
     args.device, args.workers = 'cuda', 3
     with pytest.raises(ValueError, match='timing protocol'):
         v7.rerun_lock(args)
@@ -243,7 +244,7 @@ def test_refine_lock_and_fit_plan_use_original_plan_workers(selected, tmp_path, 
     args = SimpleNamespace(output_dir=tmp_path / 'output', benchmark_dir=benchmark, protocol=protocol,
                            cpus=cpus, workers=None, classical_timing=timing)
     lock = post.lock_outputs(args)[args.output_dir / 'evaluation-lock-refined.json']
-    expected = original_workers if timing == 'reuse' else 4
+    expected = original_workers
     assert lock['rerun']['solver_workers'] == expected
     assert post.verify(lock['rerun']['source_worker_plan']) == original_plan
     assert parent['rerun']['solver_workers'] == 6
@@ -255,7 +256,7 @@ def test_refine_lock_and_fit_plan_use_original_plan_workers(selected, tmp_path, 
     monkeypatch.setattr(post, '_fit_completion', lambda *args: {})
     assert post.command_fits(args) == 0
     plan = post.read(args.output_dir / 'fits/fit-plan.json')
-    assert plan['workers'] == expected
+    assert plan['workers'] == (expected if timing == 'reuse' else 4)
     if timing == 'reuse':
         args.workers = 4
         with pytest.raises(ValueError, match='original refine plan'):
@@ -347,3 +348,116 @@ def test_v6_retiming_ignores_only_time_and_provenance(key):
     new['result'][key] = 'different'
     with pytest.raises(ValueError, match='downstream fit differs'):
         rerun.equal_downstream(new, old)
+
+
+@pytest.mark.parametrize('timing', ['reuse', 'retime'])
+@pytest.mark.parametrize('workers', [1, 4, 6, 12])
+def test_timed_workers_keeps_original_concurrency(timing, workers):
+    assert rerun.timed_workers(workers, timing) == workers
+
+
+@pytest.mark.parametrize('workers', [0, -1, True, 6.0, '6', None])
+def test_timed_workers_rejects_invalid_original_count(workers):
+    with pytest.raises(ValueError, match='positive integer'):
+        rerun.timed_workers(workers, 'retime')
+
+
+def test_timed_workers_rejects_unknown_mode():
+    with pytest.raises(ValueError, match='unknown classical timing'):
+        rerun.timed_workers(6, 'both')
+
+
+def write_execution(output, lock, mode):
+    folder = {'cold': 'evaluation', 'loaded': 'evaluation-loaded',
+              'exploratory': 'exploratory-loaded-ladder'}[mode]
+    directory = output / folder
+    rows = []
+    for job in rerun.jobs(lock, mode):
+        path = directory / 'cases' / f"{job['object_id']}-r{job['repeat_index']}-{job['arm']}" / 'timed-result.json'
+        dump(path, {**job, 'start_records': [], 'retiming_cpu_seconds': 2,
+                    **network.json_metadata()})
+        rows.append(dict(path=str(path.relative_to(directory)), sha256=network.sha256(path)))
+    dump(directory / 'execution.json', dict(mode=mode, rows=rows,
+         lock_sha256=network.sha256(output / 'evaluation-lock.json'), **network.json_metadata()))
+    return directory / 'execution.json'
+
+
+@pytest.fixture
+def exploratory_reuse(selected, tmp_path, monkeypatch):
+    source, _ = make_source(tmp_path, monkeypatch)
+    reuse, target = tmp_path / 'reuse', tmp_path / 'retime'
+    old = rerun.prepare(source, reuse, 'cpu', 'reuse')
+    lock = rerun.prepare(source, target, 'cpu', 'retime')
+    execution = write_execution(reuse, old, 'exploratory')
+    saved = reuse / 'classical-ladder-exploratory.json'
+    dump(saved, dict(object_rows=[], **network.json_metadata()))
+    dump(reuse / 'exploratory-loaded-ladder/score.json', dict(
+        execution_sha256=network.sha256(execution), saved_fit_sha256=network.sha256(saved),
+        arm_summaries=[dict(arm='classical18', mean_wall_seconds=18)],
+        solver_workers=6, **network.json_metadata()))
+    return source, reuse, target, lock
+
+
+def test_exploratory_reuse_audits_original_lock_and_records_mixed_hardware(exploratory_reuse):
+    _, reuse, _, lock = exploratory_reuse
+    score, metadata = rerun.reused_exploratory(reuse, lock)
+    assert score == rerun.read(reuse / 'exploratory-loaded-ladder/score.json')
+    assert metadata['status'] == 'reused_not_retimed'
+    assert metadata['classical_environment']['cpu_models'] == ['old CPU']
+    assert metadata['delphi_environment']['gpu'] == ['new GPU']
+    assert 'old machine' in metadata['note']
+
+
+@pytest.mark.parametrize('change', ['case', 'score_binding', 'saved_fits', 'network', 'period', 'mode'])
+def test_exploratory_reuse_rejects_changed_or_mixed_evidence(exploratory_reuse, change):
+    _, reuse, _, lock = exploratory_reuse
+    if change == 'case':
+        path = next((reuse / 'exploratory-loaded-ladder/cases').rglob('timed-result.json'))
+        dump(path, {})
+    elif change in ('score_binding', 'network'):
+        path = reuse / 'exploratory-loaded-ladder/score.json'
+        doc = rerun.read(path)
+        doc['execution_sha256' if change == 'score_binding' else 'network_binding_sha256'] = 'wrong'
+        dump(path, doc)
+    elif change == 'saved_fits':
+        path = reuse / 'classical-ladder-exploratory.json'
+        dump(path, {**rerun.read(path), 'changed': True})
+    elif change == 'period':
+        lock['objects'][0]['period_hours'] += 1
+    else:
+        lock['rerun']['classical_timing'] = 'reuse'
+    with pytest.raises(ValueError):
+        rerun.reused_exploratory(reuse, lock)
+
+
+def test_statistics_reuses_ladder_without_retiming_or_changing_source(exploratory_reuse, monkeypatch):
+    source, reuse, target, lock = exploratory_reuse
+    for mode in ('cold', 'loaded'):
+        write_execution(target, lock, mode)
+    archive = source / 'full-grid'
+    for arm, count in [('standard6', 6), ('classical20', 146)]:
+        for index in range(count):
+            dump(archive / arm / f'start-{index:03d}/record.json', {'files': {}})
+    monkeypatch.setattr(rerun.prior, '_archived_case', lambda root, oid, repeat, arm: root / arm)
+    monkeypatch.setattr(rerun, 'modules', lambda: (SimpleNamespace(
+        score=lambda lock, scoring, execution, output: dump(output, {'unchanged_statistic': 7})), None))
+    called = []
+    def fake_producer(name, **overrides):
+        called.append(name)
+        assert name != 'score_exploratory_timing.py'
+        return SimpleNamespace(main=lambda: dump(overrides['OUTPUT'], {'unchanged_statistic': 9}))
+    monkeypatch.setattr(rerun, 'producer', fake_producer)
+    before = {p: p.read_bytes() for p in reuse.rglob('*') if p.is_file()}
+    rerun.analyses(target, reuse)
+    assert before == {p: p.read_bytes() for p in reuse.rglob('*') if p.is_file()}
+    assert not (target / 'exploratory-loaded-ladder/execution.json').exists()
+    for filename in ('score.json', 'score-loaded.json', 'timing-cost.json'):
+        doc = rerun.read(target / filename)
+        assert doc['environment']['cpu_models'] == ['new CPU']
+        assert doc['environment']['gpu'] == ['new GPU']
+        assert doc['exploratory_timing']['classical_environment']['cpu_models'] == ['old CPU']
+    assert rerun.read(target / 'timing-cost.json')['classical_retiming_cpu_seconds'] == 12
+    copied = rerun.read(target / 'exploratory-loaded-ladder/score.json')
+    assert copied['arm_summaries'] == rerun.read(reuse / 'exploratory-loaded-ladder/score.json')['arm_summaries']
+    assert rerun.read(target / 'score.json')['unchanged_statistic'] == 7
+    assert len(called) == 4
