@@ -117,6 +117,15 @@ def check(path):
                 rows = (
                     [value["payload"]] if isinstance(value["payload"], dict) else value["payload"]
                 )
+        if (path.suffix == ".json" and isinstance(value, dict) and "network_binding_sha256" not in value
+                and value.get("schema") == "delphi.v67.grid-execution.v1"):
+            # The native V7 execution index has no metadata field. Verify its bound lock; each
+            # case record it lists carries the binding and is checked when it is read.
+            lock = path.parent.with_name(path.parent.name + "-lock.json")
+            check(lock)
+            if network.sha256(lock) != value["lock_sha256"]:
+                raise ValueError(f"V7 execution does not match its lock: {path}")
+            return
         expected = network.json_metadata()["network_binding_sha256"]
         if not rows or any(row.get("network_binding_sha256") != expected for row in rows):
             raise ValueError(f"network binding hash mismatch in reporting input: {path}")

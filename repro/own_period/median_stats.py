@@ -274,6 +274,13 @@ def source_path(comment: str) -> Path | None:
     return None
 
 
+def own_scores_path(cohort: str) -> Path:
+    # The rerun scores ZTF and ALCDEF into separate files; the published run kept both in one.
+    if cohort == "alcdef" and network.switched():
+        return Path(network.NetworkPath("results", "alcdef", "own-period-scores.json"))
+    return OWN / "own-period-scores.json"
+
+
 class Evidence:
     def __init__(self):
         self.cache = {}
@@ -431,7 +438,7 @@ class Evidence:
         main = name.startswith("KThree")
         cohort = "main_sample" if main else "ztf" if "Ztf" in name else "alcdef"
         comp = "random" if "Random" in name else "fitted_axes" if "Atlas" in name else "standard"
-        path = OWN / ("own-period-scores-main.json" if main else "own-period-scores.json")
+        path = OWN / "own-period-scores-main.json" if main else own_scores_path(cohort)
         block = self.json(path)[cohort]
         rows = block["objects"]
         # The negative ALCDEF StandardDifference is standard-own; Positive and
@@ -1044,7 +1051,7 @@ class Evidence:
                 order="numpy_replicate_major", mean_interval=mean_interval)
         if name.startswith(("FollowZtf", "FollowAlcdef")):
             cohort = "ztf" if name.startswith("FollowZtf") else "alcdef"
-            path = OWN / "own-period-scores.json"
+            path = own_scores_path(cohort)
             rows = self.json(path)[cohort]["objects"]
             comparator = next((v for label, v in (("Standard", "standard"), ("Random", "random"),
                                                   ("Atlas", "fitted_axes")) if label in name), "delphi")
