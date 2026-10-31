@@ -42,7 +42,7 @@ def selected(tmp_path, monkeypatch):
     [
         (
             "maps/own-period/evaluations/real-oof-ensemble.npz",
-            "headline/maps/own/evaluations/real-oof-ensemble.npz",
+            "headline/maps/own-period/evaluations/real-oof-ensemble.npz",
         ),
         ("benchmark/score.json", "delphi-inversions/own/score.json"),
         ("../direct-workflow-benchmark/score.json", "delphi-inversions/damit/score.json"),

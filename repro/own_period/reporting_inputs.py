@@ -26,8 +26,8 @@ def substitutions():
         own / "paired-gains.json": results / "paired-gains.json",
         own / "v67/v7-validation-guided-gpu/validation-vs-published.json": results
         / "reporting/v7-validation.json",
-        own / "maps/own-period": results / "headline/maps/own",
-        own / "maps/damit-period": results / "headline/maps/damit",
+        own / "maps/own-period": results / "headline/maps/own-period",
+        own / "maps/damit-period": results / "headline/maps/damit-period",
         own / "own-period-scores-main.json": results / "headline/own-period-scores-main.json",
         own / "own-period-scores.json": results / "ztf/own-period-scores.json",
         own / "benchmark": results / "delphi-inversions/own",
@@ -58,7 +58,7 @@ def substitutions():
         followup / "data/reliability-20260915/run-1/reliability-report.csv": results
         / "period-sensitivity/run-1/sampling-table.csv",
         followup / "data/interpretation-20260926/mirror-symmetry.json": results
-        / "headline/maps/damit/analyses/mirror-symmetry.json",
+        / "headline/maps/damit-period/analyses/mirror-symmetry.json",
         followup / "data/interpretation-20260930/label-shuffle-spread.json": results
         / "controls-label-shuffle/label-shuffle-spread.json",
         followup / "data/publication-revision-20260917-r2/lowq-analysis.json": results
