@@ -30,11 +30,13 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import time
 from pathlib import Path
 
 import numpy as np
 
+from lc_pipeline import grid_benchmark as grid
 from lc_pipeline.k3.downstream import (
     DAMIT_STANDARD_STARTS_DEG,
     DownstreamStart,
@@ -67,6 +69,29 @@ SPLITS_SHA256 = "1c5b15b6577805326a0c36605c174277a1d6653a60c2ac26b717373fe8d61df
 PERIOD_SEARCH = FOLLOWUP / "experiments/period-refinement-20260921/warm170-first.jsonl"
 TIMEOUT = 3600.0
 SOLVER_WORKERS = 1  # Original downstream setting: starts run serially.
+
+
+def retime_inference(oid, fold, models, example, expected_axes):
+    """Repeat the published ensemble's timed core; never replace the fixed fit starts."""
+    import torch
+    from repro.own_period import predict_oof_full as inference
+
+    torch.cuda.synchronize()
+    started = time.perf_counter()
+    raw = inference.collate_examples((example,))
+    inputs = {key: value.to("cuda") for key, value in raw.items() if key in inference.INPUT_KEYS}
+    maps = np.stack([np.asarray(inference.score_axial_grid(model, inputs, chunk_size=1024), dtype=np.float64)
+                     for model in models])
+    mean = inference.ensemble_score_grids(maps[:, None, :])[0]
+    modes = inference.modes_from_score_grid(mean)
+    axes, _ = inference.refine_ensemble_axes(models, inputs, np.asarray([mode.axis_xyz for mode in modes]))
+    torch.cuda.synchronize()
+    elapsed = time.perf_counter() - started
+    if not np.allclose(axes, expected_axes, rtol=0, atol=1e-6):
+        raise ValueError("retimed V6 inference differs from the chosen ensemble")
+    return {"object_id": oid, "fold": fold, "wall_seconds": elapsed,
+        "period_policy": "DAMIT-period inference for both period cases, as published",
+        "max_axis_difference": float(np.max(np.abs(axes - expected_axes))), **network.json_metadata()}
 
 
 def digest(path: Path) -> str:
@@ -178,6 +203,10 @@ def run(args: argparse.Namespace) -> int:
                       arm_order={oid: list(arms[oid]) for oid in order},
                       period_values={oid: float(periods[oid]) for oid in ids},
                       inference={"path": str(PUBLISHED_ENSEMBLE), "sha256": digest(PUBLISHED_ENSEMBLE)})
+        if header["classical_timing"] == "retime":
+            header["environment"] = {**grid._environment("cuda"),
+                                     "neural_torch_threads": int(os.environ.get("OMP_NUM_THREADS", "4"))}
+            header["inference_timing"] = "fresh; original DAMIT-period inference core, fixed saved starts"
     header_path = out / "run-header.json"
     if header_path.exists():
         if json.loads(header_path.read_text()) != header:
@@ -185,6 +214,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         write_once(header_path, header)
     started = time.perf_counter()
+    inference_models, active_fold = None, None
     for number, oid in enumerate(ids, start=1):
         if (out / "runs" / oid / "object-done.json").exists():
             if network.switched():
@@ -215,6 +245,26 @@ def run(args: argparse.Namespace) -> int:
                         raise ValueError("classical source start or period changed")
                 valid[arm] = sum(_valid_result(r) for r in records)
                 continue
+            if network.switched() and arm == "candidate" and header["classical_timing"] == "retime":
+                from repro.own_period import predict_oof_full as inference
+                import torch
+                torch.set_num_threads(header["environment"]["neural_torch_threads"])
+                fold = next(int(row["fold"]) for row in inference.fold_rows() if oid in row["test_ids"])
+                if active_fold != fold:
+                    inference_models = [inference.load_model(fold, seed, "cuda")[0] for seed in network.SEEDS]
+                    active_fold = fold
+                # Read the original supplied period from a saved start, without opening reference poles.
+                period_source = Path(PUBLISHED_RUN) / "runs" / oid / "baseline/start-0/result.json"
+                inference_period = json.loads(period_source.read_text())["identity"]["period_hours"]
+                example = inference.build_examples([oid], {oid: inference_period},
+                                                   "frozen-DAMIT-primary-solution-fixed-period")[0]
+                with np.load(PUBLISHED_ENSEMBLE, allow_pickle=False) as artifact:
+                    index = list(artifact["object_ids"].astype(str)).index(oid)
+                    expected_axes = artifact["refined_axes"][index]
+                receipt = retime_inference(oid, fold, inference_models, example, expected_axes)
+                from repro.direct_workflow_benchmark.rerun import bound
+                receipt["period_source"] = bound(period_source)
+                write_once(out / "runs" / oid / "inference-timing.json", receipt)
             records = [
                 _run_record(
                     executable=EXECUTABLE,
@@ -245,6 +295,9 @@ def run(args: argparse.Namespace) -> int:
         done = {"object_id": oid, "period_hours": period, "arm_order": list(arms[oid]), "valid_starts": valid}
         if network.switched():
             done.update(records=object_records(out, oid), **network.json_metadata())
+            if header["classical_timing"] == "retime":
+                from repro.direct_workflow_benchmark.rerun import bound
+                done["inference_timing"] = bound(out / "runs" / oid / "inference-timing.json")
         write_once(out / "runs" / oid / "object-done.json", done)
         print(number, oid, f"{period:.6f}", arms[oid][0], valid, flush=True)
         # Guard against the silent-failure trap: the first objects must give valid fits.
@@ -295,6 +348,13 @@ def verify_object(base, oid):
     network.check_json(base / "runs" / oid / "object-done.json")
     if json.loads((base / "runs" / oid / "object-done.json").read_text())["records"] != object_records(base, oid):
         raise ValueError("downstream object records changed")
+    header = json.loads((base / "run-header.json").read_text())
+    if header.get("inference_timing"):
+        from repro.direct_workflow_benchmark.rerun import verify
+        done = json.loads((base / "runs" / oid / "object-done.json").read_text())
+        path = verify(done["inference_timing"])
+        network.check_json(path)
+        verify(json.loads(path.read_text())["period_source"])
 
 
 def angle_deg(a: np.ndarray, b: np.ndarray) -> float:
@@ -383,6 +443,9 @@ def score(args: argparse.Namespace) -> int:
         raise ValueError("chosen ensemble inference timing artifact changed")
     with np.load(inference_path, allow_pickle=False) as z:
         published_inference = dict(zip([str(v) for v in z["object_ids"]], np.asarray(z["inference_wall_seconds"], dtype=float)))
+    if header.get("inference_timing"):
+        published_inference = {oid: json.loads((out / "runs" / oid / "inference-timing.json").read_text())["wall_seconds"]
+                               for oid in ids}
     search = period_search_seconds()
     rows = []
     for oid in ids:
@@ -461,11 +524,15 @@ def score(args: argparse.Namespace) -> int:
     }
     if network.switched():
         result["classical_timing"] = header["classical_timing"]
+        if "environment" in header:
+            result["environment"] = header["environment"]
         result["solver_workers"] = header["solver_workers"]
         result["classical_retiming_cpu_seconds"] = (sum(
             _record(out, oid, "baseline", i)["result"]["process_cpu_time_seconds"]
             for oid in ids for i in range(6)) if header["classical_timing"] == "retime" else 0)
         result["convention"] = result["convention"].replace("published ensemble artifact", "chosen ensemble artifact (DAMIT-period inference for both period cases, as published)")
+        if header.get("inference_timing"):
+            result["convention"] = result["convention"].replace("stored in the chosen ensemble artifact", "retimed in this run using the chosen ensemble")
     write_once(args.result, result)
     print(json.dumps({k: result[k] for k in ("verdict_published_convention", "verdict_objects_with_valid_fits_in_both_arms", "verdict_with_period_search_time_added_to_both_arms")}, indent=1))
     return 0

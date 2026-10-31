@@ -28,6 +28,7 @@ from repro.own_period import DataPath
 REPO = Path(__file__).resolve().parents[2]
 SOURCES = DataPath("benchmark")
 PREVIOUS_SCRIPT_SHA256 = "c56f35aa8e602e395d909944835230b89ee9a93a2f4dbfdf8e6e191b004a0d2d"
+RT4_SCRIPT_SHA256 = "4355cdfa3ef6a4f0830aa39acce3a2c574beb48664577b0b5b37693a1af451fc"
 HASHES = {
     "run_direct_benchmark.py": "a3358ddeec1f17bed219282fab31ec576bb213a6ab5e5ce8845c057d07f51fe4",
     "run_loaded_benchmark.py": "0b3519b9685c6364ac584ad6cf5104592b6f008f091da72033cd0dec9eb82f29",
@@ -146,7 +147,10 @@ def validate(path, *, environment=True):
     verify(lock["rerun"]["source_scoring"])
     script = lock["rerun"]["script"]
     # Locks written before e15c5ad bind this file as it was then; that commit changed only verify().
-    if script != {"path": str(Path(__file__).resolve()), "sha256": PREVIOUS_SCRIPT_SHA256}:
+    # RT4 evidence may be read after RT5 changes this adapter; new executions bind the current file.
+    archived = (not environment and script == {
+        "path": str(Path(__file__).resolve()), "sha256": RT4_SCRIPT_SHA256})
+    if not archived and script != {"path": str(Path(__file__).resolve()), "sha256": PREVIOUS_SCRIPT_SHA256}:
         verify(script)
     if (lock["rerun"]["solver_workers"] != timed_workers(old["settings"]["workers"], lock["rerun"]["classical_timing"])
             or lock["rerun"]["old_solver_workers"] != old["settings"]["workers"]):
@@ -294,7 +298,9 @@ def execute(lock_path, output, mode):
         "lock_sha256": network.sha256(lock_path), "rows": sorted(bindings, key=lambda r: r["path"]),
         "references_opened": False, "mode": mode, **network.json_metadata(),
         "batch_timing": {"model_setup_seconds_by_fold": setups},
-        "model_setup_seconds_by_fold": setups, "script_sha256": HASHES["time_exploratory_budgets.py"]}
+        "model_setup_seconds_by_fold": setups, "script_sha256": HASHES["time_exploratory_budgets.py"],
+        "environment": lock["environment"], "solver_workers": lock["rerun"]["solver_workers"],
+        "classical_timing": lock["rerun"]["classical_timing"]}
     if mode == "exploratory":
         completion["phase"] = "exploratory_loaded_ladder_complete"
     save(output / "execution.json", completion)
@@ -434,9 +440,44 @@ def analyses(output, exploratory_source=None):
     save(output / "timing-cost.json", value)
 
 
+def ladder_analyses(output, exploratory_source):
+    """Rescore fresh ladder times against its own frozen quality evidence."""
+    output, exploratory_source = Path(output), Path(exploratory_source)
+    lock_path = output / "evaluation-lock.json"
+    lock = validate(lock_path, environment=False)
+    _, evidence = reused_exploratory(exploratory_source, lock)
+    execution_path = output / "exploratory-loaded-ladder/execution.json"
+    execution = verify_execution(lock_path, execution_path)
+    if execution["mode"] != "exploratory":
+        raise ValueError("fresh ladder has the wrong execution mode")
+    metadata = {**network.json_metadata(), "environment": lock["environment"],
+        "solver_workers": lock["rerun"]["solver_workers"], "classical_timing": "retime",
+        "exploratory_timing": {"status": "retimed_together", "source_execution": bound(execution_path),
+            "classical_environment": lock["environment"], "delphi_environment": lock["environment"]},
+        "saved_quality": {key: evidence[key] for key in
+            ("source_lock", "source_execution", "source_score", "source_saved_fits")}}
+    # The ladder has its own saved DeLPHI solutions; RT4's direct fits are a different run.
+    # Preserve all quality results, including the original loaded-score binding.
+    for filename in ("classical-ladder-exploratory.json", "classical-ladder-intervals.json", "budget-equivalence.json"):
+        source = exploratory_source / filename
+        network.check_json(source)
+        save(output / filename, {**read(source), **metadata, "quality_source": bound(source)})
+    modules()
+    path = output / "exploratory-loaded-ladder/score.json"
+    if path.exists():
+        raise FileExistsError(f"ladder scoring refuses to overwrite: {path}")
+    module = producer("score_exploratory_timing.py", ROOT=output,
+                      RUN=output / "exploratory-loaded-ladder", OUTPUT=path)
+    module.main()
+    path.write_text(json.dumps({**read(path), **metadata}, sort_keys=True) + "\n")
+    save(output / "timing-cost.json", {**metadata, "timing_option": "retime",
+        "classical_retiming_cpu_seconds": sum(read(execution_path.parent / row["path"])["retiming_cpu_seconds"]
+            for row in execution["rows"] if read(execution_path.parent / row["path"])["arm"] != "delphi")})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "execute", "score", "_worker"))
+    parser.add_argument("command", choices=("prepare", "execute", "score", "score-ladder", "_worker"))
     parser.add_argument("--source", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--lock", type=Path)
@@ -446,7 +487,7 @@ def main():
     parser.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
     parser.add_argument("--workers", type=int)
     parser.add_argument("--exploratory-source", type=Path,
-                        help="reuse-mode benchmark directory supplying the unchanged exploratory ladder")
+                        help="reuse-mode benchmark supplying saved ladder quality (score-ladder) or timings (score)")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.source, args.output, args.device, args.classical_timing, args.workers)
@@ -454,6 +495,10 @@ def main():
         execute(args.lock.resolve(), args.output.resolve(), args.mode)
     elif args.command == "score":
         analyses(args.output.resolve(), args.exploratory_source)
+    elif args.command == "score-ladder":
+        if args.exploratory_source is None:
+            parser.error("score-ladder requires --exploratory-source")
+        ladder_analyses(args.output.resolve(), args.exploratory_source.resolve())
     else:
         direct, _ = modules()
         direct.worker(args.lock, args.job)

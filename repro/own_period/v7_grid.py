@@ -136,6 +136,9 @@ def execute(args: argparse.Namespace) -> int:
     header = {"schema": "delphi.v67.grid-execution.v1", "lock_sha256": grid.digest(lock_path),
               "arms": list(args.arms), "timing_mode": MODE, "ids": args.ids, "repeats": args.repeats,
               "case_count": len(jobs), "python": sys.executable}
+    if network.switched():
+        header.update(environment=doc["environment"], solver_workers=doc["settings"]["workers"],
+                      classical_timing=doc["rerun"]["classical_timing"], **network.json_metadata())
     output.mkdir(parents=True, exist_ok=True)
     header_path = output / "execution-header.json"
     if header_path.exists():
@@ -461,6 +464,7 @@ def score(args: argparse.Namespace) -> int:
     }
     if network.switched():
         result["classical_timing"] = doc["rerun"]["classical_timing"]
+        result["environment"] = doc["environment"]
         result["solver_workers"] = doc["settings"]["workers"]
         result["classical_retiming_cpu_seconds"] = (sum(
             r["solver_cpu_seconds"] for key, r in records.items() if key[1] == "classical20")
