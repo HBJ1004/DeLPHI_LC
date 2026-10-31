@@ -105,6 +105,9 @@ class Values:
 
     def raw(self, macro):
         name, source, field = macro["name"], Path(macro["source_file"]), macro["source_field"]
+        if source.name == "own-period-scores.json" and field.startswith("alcdef/") and self.selected and network.switched():
+            # The rerun scores ALCDEF in its own file; the published run kept it beside ZTF.
+            source = Path(network.NetworkPath("results", "alcdef", "own-period-scores.json"))
         if name.startswith("TOne"):
             groups = self.json(FixedDataPath("paired-gains.json"))["groups"]
             match = re.fullmatch(r"(TOne.+?)(Mean|Median)(Low|High)?", name)
@@ -123,6 +126,9 @@ class Values:
                     1 - by["WorkflowDelphiError"]["median"] / by["WorkflowClassicalError"]["median"]
                 )
             return lookup({e["mean_macro"]: e for e in data["entries"]}, simple_key(field))
+        if name == "KThreeSwapGap" and self.selected and network.switched():
+            # The rerun summarizes the input-swap control as its own family, not with the removals.
+            return lookup(self.json(Path(network.NetworkPath("results", "controls-input-swap", "own-summary.json"))), field)
         if source.suffix == ".npz":
             self.extra_sources.add(self.path(source))
             with load_npz(self.path(source), allow_pickle=False) as data:
