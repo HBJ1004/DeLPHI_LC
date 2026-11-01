@@ -140,6 +140,12 @@ Median commands require explicit scratch destinations, for example:
   --figures candidate-count inversion-benchmark inversion-timing --out-dir /path/to/median-figures
 ```
 
+To redraw the printed figures, set the retrained-network environment variables
+`DELPHI_DATA`, `DELPHI_NETWORK_ROOT`, `DELPHI_MODEL_BINDING` and `DELPHI_BUNDLE_ROOT`
+as shown above. Pass the manuscript folder with `--paper-dir` for its page layout.
+Pole-fit times then come from `timing-retime/own/` under the selected results folder.
+The Fourier time comes from the accepted RT6 timing receipt beside that folder.
+
 ## 1. What to download
 
 Use the software release

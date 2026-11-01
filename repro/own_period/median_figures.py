@@ -556,6 +556,18 @@ def inversion_style():
                          "xtick.labelsize": 7, "ytick.labelsize": 7, "pdf.fonttype": 42})
 
 
+def inversion_timing_score(ctx, result, name):
+    """Use same-machine retimed pole fits for the selected networks."""
+    folder = (network.NetworkPath("results", "delphi-inversions", "timing-retime", "own")
+              if network.switched() else DATA / "benchmark")
+    path = folder / name
+    score = ctx.read(path)
+    if network.switched():
+        ctx.check(result, name + ": classical timing is retimed", score["classical_timing"] == "retime", True)
+        ctx.check(result, name + ": solver workers", score["solver_workers"], 6)
+    return path, score
+
+
 def inversion_benchmark(ctx):
     """Period accuracy, the saved start ladder, and the cost of period search."""
     import matplotlib.pyplot as plt
@@ -655,14 +667,33 @@ def inversion_benchmark(ctx):
     ctx.match(result, de, "BudgetDelphiError")
     result["points"].extend([*classical, de])
 
+    timing_path, timing = loaded_path, loaded
+    fourier_path, fourier_seconds, fourier_key = cost_path, cost["fourier_seconds"], "fourier_seconds"
+    if network.switched():
+        timing_path, timing = inversion_timing_score(ctx, result, "score-loaded.json")
+        for arm, macro in [("classical", "WorkflowClassicalLoadedSeconds"),
+                           ("delphi", "WorkflowDelphiLoadedSeconds")]:
+            values = [r["arms"][arm]["mean_wall_seconds"] for r in timing["object_rows"]]
+            ctx.check(result, arm + ": mean of per-asteroid three-run means",
+                      float(np.mean(values)), timing["point_estimates"][arm + "_mean_seconds"])
+            ctx.check(result, macro + ": retimed printed value",
+                      float(f"{np.mean(values):.2f}"), float(paper_numbers[macro]))
+        fourier_path = Path(network.NetworkPath("results")).parent / "runners/receipts-rt6/001.json"
+        fourier_receipt = ctx.read(fourier_path)
+        ctx.check(result, "Fourier timing accepted", fourier_receipt["accepted_for_timing"], True)
+        fourier_key = "comparison/new_timing/mean_seconds"
+        fourier_seconds = fourier_receipt["comparison"]["new_timing"]["mean_seconds"]
+        ctx.check(result, "Fourier printed mean", float(f"{fourier_seconds:.2f}"),
+                  float(paper_numbers["PeriodCostFourierSeconds"]))
+        ctx.sources_for(result, [timing_path, fourier_path])
     costs = []
     for label, seconds, series, source, key, macro in [
-        ("DeLPHI period search (Fourier, GPU)", cost["fourier_seconds"], "delphi", cost_path,
-         "fourier_seconds", "PeriodCostFourierSeconds"),
-        ("DeLPHI pole fit, 6 starts (6 CPU workers + GPU)", loaded["point_estimates"]["delphi_mean_seconds"],
-         "delphi", loaded_path, "point_estimates/delphi_mean_seconds", "WorkflowDelphiLoadedSeconds"),
-        ("Classical pole fit, 12 starts (6 CPU workers)", loaded["point_estimates"]["classical_mean_seconds"],
-         "classical", loaded_path, "point_estimates/classical_mean_seconds", "WorkflowClassicalLoadedSeconds")]:
+        ("DeLPHI period search (Fourier, GPU)", fourier_seconds, "delphi", fourier_path,
+         fourier_key, "PeriodCostFourierSeconds"),
+        ("DeLPHI pole fit, 6 starts (6 CPU workers + GPU)", timing["point_estimates"]["delphi_mean_seconds"],
+         "delphi", timing_path, "point_estimates/delphi_mean_seconds", "WorkflowDelphiLoadedSeconds"),
+        ("Classical pole fit, 12 starts (6 CPU workers)", timing["point_estimates"]["classical_mean_seconds"],
+         "classical", timing_path, "point_estimates/classical_mean_seconds", "WorkflowClassicalLoadedSeconds")]:
         point = dict(panel="c", label=label, seconds=seconds, series=series,
                      statistic="mean wall time", source_files=[str(source)], source_key=key)
         printed(point, macro, seconds)
@@ -804,8 +835,8 @@ def inversion_timing(ctx):
     from matplotlib.transforms import blended_transform_factory
 
     result = ctx.figure("inversion-timing", reference="inversion-benchmark")
-    folder = DATA / "benchmark"
-    scores = [ctx.read(folder / name) for name in ("score.json", "score-loaded.json")]
+    paths, scores = zip(*(inversion_timing_score(ctx, result, name)
+                          for name in ("score.json", "score-loaded.json")), strict=True)
     ctx.check(result, "Cold and loaded object identities",
               [r["object_id"] for r in scores[0]["object_rows"]] ==
               [r["object_id"] for r in scores[1]["object_rows"]], True)
@@ -820,7 +851,7 @@ def inversion_timing(ctx):
                                      histogram_edges=edges.tolist(), n_delphi_faster=int((ratio > 1).sum()),
                                      n=len(ratio), ratio_of_means=report["point_estimates"]["speed_ratio_classical_over_delphi"],
                                      interval=report["bootstrap_95_intervals"]["speed_ratio_classical_over_delphi"],
-                                     source_files=[str(folder / ("score.json" if panel == "a" else "score-loaded.json"))]))
+                                     source_files=[str(paths[0 if panel == "a" else 1])]))
         ctx.check(result, panel + ": histogram includes all asteroids", int(counts.sum()), len(ratio))
     source = function_source(INVERSION_RENDERER, "main")
     source = source[:source.index("    # (c)")]
@@ -832,13 +863,13 @@ def inversion_timing(ctx):
     source = replace_once(source, '"axes.titlesize": 11', '"axes.titlesize": 8')
     source = replace_once(source, '"xtick.labelsize": 9', '"xtick.labelsize": 7')
     source = replace_once(source, '"ytick.labelsize": 9', '"ytick.labelsize": 7')
-    source = replace_once(source, '"(a) Fresh process for each asteroid", "(b) Models kept loaded"',
-                          '"(a) Fresh process\\nfor each asteroid", "(b) Models kept loaded"')
+    source = replace_once(source, '"(a) Fresh process for each asteroid", "(b) Networks kept loaded"',
+                          '"(a) Fresh process\\nfor each asteroid", "(b) Networks kept loaded"')
     source = source.replace('fontsize=9', 'fontsize=7')
     source = source[:source.index('        ax.text(0.03, 0.97,')] + '''        ax.text(0.03, 0.97,
-                f"DeLPHI faster: {int(np.sum(ratio > 1))}/{len(ratio)}\\n"
+                f"DeLPHI faster for {int(np.sum(ratio > 1))}/{len(ratio)}\\n"
                 f"Ratio of means {point['speed_ratio_classical_over_delphi']:.2f}\\n"
-                f"95% interval {speed[0]:.2f}--{speed[1]:.2f}",
+                f"95% interval {speed[0]:.2f}–{speed[1]:.2f}",
                 transform=ax.transAxes, va="top", fontsize=7,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2})
     for ax in axes:
@@ -847,13 +878,13 @@ def inversion_timing(ctx):
             spine.set_linewidth(0.8)
     ctx.save(fig, "inversion-timing", dpi=150)
 '''
-    namespace = dict(np=np, plt=plt, json=json, SCORES=[folder / "score.json", folder / "score-loaded.json"],
+    namespace = dict(np=np, plt=plt, json=json, SCORES=paths,
                      MaxNLocator=MaxNLocator, NullFormatter=NullFormatter,
                      blended_transform_factory=blended_transform_factory, histogram_edges=histogram_edges, ctx=ctx)
     exec(compile(source, str(INVERSION_RENDERER), "exec"), namespace)
     namespace["main"]()
     result["page_size_pt"] = [345, 216]
-    ctx.sources_for(result, [INVERSION_RENDERER, folder / "score.json", folder / "score-loaded.json"])
+    ctx.sources_for(result, [INVERSION_RENDERER, *paths])
     result["means_retained"] = [
         "Per-asteroid times remain means of three runs; annotations retain the ratio of mean times and its source bootstrap interval."
     ]
@@ -1072,7 +1103,7 @@ def shapley(ctx):
     end = source.index('    y = np.arange', start)
     source = source[:start] + source[end:]
     source = replace_once(source, '[values.mean()] * 2', '[np.median(values)] * 2')
-    source = replace_once(source, 'Change of oracle error (degrees)', 'Change of oracle error (degrees); black = median')
+    source = replace_once(source, 'Change of oracle error (degrees)', 'Change of oracle error (degrees, black = median)')
     source = source[:source.index('    fig.tight_layout()')] + '''    axes[0].set_xlim(original_limits[0])
     axes[1].set_xlim(original_limits[1])
     ctx.save(fig, "shapley")

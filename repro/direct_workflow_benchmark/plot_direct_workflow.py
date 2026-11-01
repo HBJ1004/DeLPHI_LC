@@ -41,7 +41,7 @@ def main() -> None:
 
     edges = np.geomspace(0.1, 10.0, 41)
     for ax, report, title in zip(
-        axes[:2], reports, ("(a) Fresh process for each asteroid", "(b) Models kept loaded"), strict=True
+        axes[:2], reports, ("(a) Fresh process for each asteroid", "(b) Networks kept loaded"), strict=True
     ):
         rows = report["object_rows"]
         point = report["point_estimates"]
