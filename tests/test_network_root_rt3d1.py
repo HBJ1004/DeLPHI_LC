@@ -516,7 +516,8 @@ def test_fresh_ladder_keeps_order_workers_and_all_saved_fits(selected, tmp_path,
     assert before == {p: p.read_bytes() for p in source.rglob('*') if p.is_file()}
 
 
-def test_ladder_scores_use_new_times_without_rewriting_rt4(selected, tmp_path, monkeypatch):
+@pytest.mark.parametrize('matches', [False, True])
+def test_ladder_scores_use_new_times_without_rewriting_rt4(selected, tmp_path, monkeypatch, matches):
     source, _ = make_source(tmp_path, monkeypatch)
     direct = selected.parent / 'results/delphi-inversions/timing-retime/own'
     reuse = selected.parent / 'results/delphi-inversions/own'
@@ -538,8 +539,12 @@ def test_ladder_scores_use_new_times_without_rewriting_rt4(selected, tmp_path, m
     calls = []
     def producer(name, **overrides):
         calls.append(name)
-        return SimpleNamespace(main=lambda: dump(overrides['OUTPUT'], {'preserved_statistic': 7}))
+        return SimpleNamespace(main=lambda: dump(overrides['OUTPUT'], {'preserved_statistic': 7,
+            'object_rows': [{'object_id': 'a', 'arms': {'delphi': {'final_relative_rms': .1}}}]}))
     monkeypatch.setattr(rerun, 'producer', producer)
+    monkeypatch.setattr(rerun, 'retimed_ladder_check', lambda module: {'a': {
+        'inference_matches_saved': matches, 'axis_difference_degrees': 0. if matches else 2.,
+        'rms_difference': 0. if matches else .001}})
     rerun.ladder_analyses(output, reuse)
     assert before == {p: p.read_bytes() for p in direct.rglob('*') if p.is_file() and not p.is_relative_to(output)}
     assert calls == ['score_exploratory_timing.py']
@@ -547,6 +552,12 @@ def test_ladder_scores_use_new_times_without_rewriting_rt4(selected, tmp_path, m
     assert fresh['exploratory_timing']['status'] == 'retimed_together'
     assert fresh['exploratory_timing']['classical_environment'] == fresh['exploratory_timing']['delphi_environment']
     assert fresh['environment']['gpu'] == ['new GPU']
+    assert fresh['object_rows'][0]['arms']['delphi'] == dict(final_relative_rms=.1,
+        inference_matches_saved=matches, axis_difference_degrees=0. if matches else 2.,
+        rms_difference=0. if matches else .001)
+    assert fresh['delphi_inference_check'] == dict(mismatch_count=0 if matches else 1,
+        mismatch_ids=[] if matches else ['a'], max_axis_difference_degrees=0. if matches else 2.,
+        max_rms_difference=0. if matches else .001)
     assert rerun.read(output / 'classical-ladder-exploratory.json')['object_rows'] == [{'unchanged_fit': 42}]
     assert rerun.read(output / 'budget-equivalence.json')['unchanged_quality'] == 42
     assert not (output / 'score-loaded.json').exists()
@@ -698,11 +709,12 @@ def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp
     assert before == {p: p.read_bytes() for p in source.rglob('*') if p.is_file()}
 
 
-def test_rt4_script_receipt_is_only_allowed_for_reading_old_evidence(selected, tmp_path, monkeypatch):
+@pytest.mark.parametrize('digest', [rerun.RT4_SCRIPT_SHA256, rerun.RT5_SCRIPT_SHA256])
+def test_archived_script_receipt_is_only_allowed_for_reading_old_evidence(selected, tmp_path, monkeypatch, digest):
     source, _ = make_source(tmp_path, monkeypatch)
     output = tmp_path / 'rt4'
     lock = rerun.prepare(source, output, 'cpu', 'retime')
-    lock['rerun']['script']['sha256'] = rerun.RT4_SCRIPT_SHA256
+    lock['rerun']['script']['sha256'] = digest
     dump(output / 'evaluation-lock.json', lock)
     assert rerun.validate(output / 'evaluation-lock.json', environment=False) == lock
     with pytest.raises(ValueError, match='bound input changed'):
@@ -711,3 +723,85 @@ def test_rt4_script_receipt_is_only_allowed_for_reading_old_evidence(selected, t
     dump(output / 'evaluation-lock.json', lock)
     with pytest.raises(ValueError, match='bound input changed'):
         rerun.validate(output / 'evaluation-lock.json', environment=False)
+
+
+@pytest.fixture
+def ladder_timing_producer(tmp_path, monkeypatch):
+    source = rerun.REPO / 'repro/direct_workflow_benchmark'
+    name = 'score_exploratory_timing.py'
+    monkeypatch.setattr(rerun, 'SOURCES', source)
+    monkeypatch.setattr(rerun, 'HASHES', {name: network.sha256(source / name)})
+    root, run = tmp_path / 'ladder', tmp_path / 'ladder/exploratory-loaded-ladder'
+    dump(root / 'evaluation-lock.json', {})
+    (root / 'time_exploratory_budgets.py').write_text('frozen timing script')
+    saved, bindings = [], []
+    for index in range(140):
+        oid = f'asteroid_{index}'
+        fit = dict(axis=[1., 0., 0.], final_relative_rms=.1, reference_error_degrees=3.)
+        saved.append(dict(object_id=oid, fold=index // 28, delphi=fit, classical={'18': fit, '96': fit}))
+        for arm, wall in [('delphi', 1.), ('classical18', 2.), ('classical96', 3.)]:
+            path = run / f'{oid}-{arm}.json'
+            # Opposite poles must match: the comparison is axial, sign-free.
+            dump(path, dict(object_id=oid, arm=arm, repeat_index=0, completed=True,
+                selected_fit={**fit, 'axis': [-1., 0., 0.]}, wall_seconds=wall + index / 1000,
+                solver_wall_seconds=wall / 2))
+            bindings.append(dict(path=path.name, sha256=network.sha256(path)))
+    dump(root / 'classical-ladder-exploratory.json', {'object_rows': saved})
+    dump(run / 'execution.json', dict(phase='exploratory_loaded_ladder_complete', references_opened=False,
+        script_sha256=network.sha256(root / 'time_exploratory_budgets.py'),
+        lock_sha256=network.sha256(root / 'evaluation-lock.json'), rows=bindings,
+        model_setup_seconds_by_fold=[{'setup_seconds': .1}] * 5))
+    return rerun.producer(name, ROOT=root, RUN=run, OUTPUT=run / 'score.json')
+
+
+def test_ladder_all_match_preserves_every_producer_output_byte(ladder_timing_producer):
+    module = ladder_timing_producer
+    module.main()
+    original = module.OUTPUT.read_bytes()
+    module.OUTPUT.unlink()
+    differences = rerun.retimed_ladder_check(module)
+    assert len(differences) == 140
+    assert all(row == dict(inference_matches_saved=True, axis_difference_degrees=0., rms_difference=0.)
+               for row in differences.values())
+    module.main()
+    assert module.OUTPUT.read_bytes() == original
+
+
+@pytest.mark.parametrize('arm', ['classical18', 'classical96', 'delphi'])
+@pytest.mark.parametrize('field', ['axis', 'rms'])
+def test_ladder_only_delphi_drift_may_pass(ladder_timing_producer, arm, field):
+    module = ladder_timing_producer
+    path = module.RUN / f'asteroid_0-{arm}.json'
+    row = rerun.read(path)
+    row['selected_fit']['axis' if field == 'axis' else 'final_relative_rms'] = (
+        [0., 1., 0.] if field == 'axis' else .10000002)
+    dump(path, row)
+    execution = rerun.read(module.RUN / 'execution.json')
+    next(binding for binding in execution['rows'] if binding['path'] == path.name)['sha256'] = network.sha256(path)
+    dump(module.RUN / 'execution.json', execution)
+    with pytest.raises(ValueError, match='timed fits do not reproduce archived solutions'):
+        module.main()
+    differences = rerun.retimed_ladder_check(module)
+    if arm != 'delphi':
+        with pytest.raises(ValueError, match='timed fits do not reproduce archived solutions'):
+            module.main()
+        assert not module.OUTPUT.exists()
+    else:
+        module.main()
+        assert sum(not row['inference_matches_saved'] for row in differences.values()) == 1
+        check = differences['asteroid_0']
+        assert check['axis_difference_degrees'] == (90. if field == 'axis' else 0.)
+        assert check['rms_difference'] == pytest.approx(2e-8 if field == 'rms' else 0.)
+        # The producer must keep the actual timed fit's RMS and the saved reference accuracy.
+        actual = rerun.read(module.OUTPUT)['object_rows'][0]['arms']['delphi']
+        assert actual['final_relative_rms'] == row['selected_fit']['final_relative_rms']
+        assert actual['reference_error_degrees'] == 3.
+
+
+def test_ladder_rebinding_refuses_an_unrecognized_guard(ladder_timing_producer, tmp_path):
+    module = ladder_timing_producer
+    changed = tmp_path / 'changed.py'
+    changed.write_text(Path(module.__file__).read_text().replace('max_axis > 0.0001', 'max_axis > 1.'))
+    module.__file__ = str(changed)
+    with pytest.raises(ValueError, match='frozen ladder fit check changed'):
+        rerun.retimed_ladder_check(module)
