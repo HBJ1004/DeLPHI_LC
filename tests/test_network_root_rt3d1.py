@@ -581,8 +581,8 @@ def test_v7_retime_paths_leave_reuse_outputs_unchanged(selected, tmp_path, monke
     assert rerun.read(base / 'v7-damit-lock.json') == {'keep': 'reuse'}
 
 
-@pytest.mark.parametrize('changed_axes', [False, True])
-def test_v6_inference_retimes_core_and_checks_unchanged_axes(selected, monkeypatch, changed_axes):
+@pytest.mark.parametrize('change', ['identical', 'within_atol', 'small_angle', 'large_angle', 'swap', 'sign'])
+def test_v6_inference_retimes_core_and_records_axis_differences(selected, monkeypatch, change):
     import torch
     from repro.own_period import predict_oof_full as inference
     synchronizations = []
@@ -591,22 +591,34 @@ def test_v6_inference_retimes_core_and_checks_unchanged_axes(selected, monkeypat
     monkeypatch.setattr(inference, 'score_axial_grid', lambda model, inputs, chunk_size: np.zeros(3))
     monkeypatch.setattr(inference, 'ensemble_score_grids', lambda maps: np.zeros((1, 3)))
     monkeypatch.setattr(inference, 'modes_from_score_grid', lambda grid: [SimpleNamespace(axis_xyz=row) for row in np.eye(3)])
-    monkeypatch.setattr(inference, 'refine_ensemble_axes', lambda models, inputs, starts: (np.eye(3), np.zeros(3)))
-    expected = np.zeros((3, 3)) if changed_axes else np.eye(3)
-    if changed_axes:
-        with pytest.raises(ValueError, match='inference differs'):
-            v6.retime_inference('a', 0, [object()] * 5, object(), expected)
-    else:
-        receipt = v6.retime_inference('a', 0, [object()] * 5, object(), expected)
-        assert receipt['wall_seconds'] > 0
-        assert receipt['max_axis_difference'] == 0
-        assert receipt['network_binding_sha256'] == network.json_metadata()['network_binding_sha256']
+    expected, actual = np.eye(3), np.eye(3)
+    angle = {'within_atol': 1e-5, 'small_angle': .005, 'large_angle': 12.}.get(change, 0.)
+    if angle:
+        radians = np.deg2rad(angle)
+        actual[0] = [np.cos(radians), np.sin(radians), 0.]
+    elif change == 'swap':
+        actual = actual[[1, 0, 2]]
+    elif change == 'sign':
+        actual = -actual
+    before = expected.copy()
+    monkeypatch.setattr(inference, 'refine_ensemble_axes', lambda models, inputs, starts: (actual, np.zeros(3)))
+    receipt = v6.retime_inference('a', 0, [object()] * 5, object(), expected)
+    assert receipt['object_id'] == 'a' and receipt['fold'] == 0
+    assert receipt['wall_seconds'] > 0
+    assert receipt['inference_matches_saved'] is (change in ('identical', 'within_atol'))
+    assert receipt['max_axis_difference'] == pytest.approx(float(np.max(np.abs(actual - expected))))
+    assert receipt['matched_angle_deg'] == pytest.approx([angle, 0., 0.], abs=1e-12)
+    assert receipt['network_binding_sha256'] == network.json_metadata()['network_binding_sha256']
+    json.dumps(receipt, allow_nan=False)
+    np.testing.assert_array_equal(expected, before)
     assert len(synchronizations) == 2
 
 
-def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp_path, monkeypatch):
+@pytest.mark.parametrize('period_case', ['own', 'damit'])
+def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp_path, monkeypatch, period_case):
     from repro.own_period import predict_oof_full as inference
-    source, output = tmp_path / 'original-v6', selected.parent / 'results/delphi-inversions/timing-retime/v6-damit'
+    source = tmp_path / 'original-v6'
+    output = selected.parent / f'results/delphi-inversions/timing-retime/v6-{period_case}'
     monkeypatch.setattr(v6, 'PUBLISHED_RUN', source)
     ensemble = tmp_path / 'ensemble.npz'
     np.savez(ensemble, object_ids=['a'], refined_axes=np.eye(3)[None], inference_wall_seconds=[999.])
@@ -625,24 +637,33 @@ def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp
     monkeypatch.setattr(v6, 'object_order', lambda: ['a'])
     monkeypatch.setattr(v6, 'arm_order', lambda ids: {'a': ('candidate', 'baseline')})
     monkeypatch.setattr(v6, 'damit_periods', lambda: {'a': 10.})
-    monkeypatch.setattr(v6, 'load_axes', lambda *args: {'a': np.eye(3)})
+    fit_axes = np.asarray([[1., 1., 0.], [-1., 1., 0.], [0., 0., 1.]]) / np.sqrt([[2.], [2.], [1.]])
+    monkeypatch.setattr(v6, 'load_axes', lambda *args: {'a': fit_axes.copy()})
     monkeypatch.setattr(v6, 'lightcurve_paths', lambda: {'a': (curve, network.sha256(curve))})
     monkeypatch.setattr(v6, '_valid_result', lambda record: True)
     monkeypatch.setattr(network, 'check_npz', lambda *args: None)
     monkeypatch.setattr(grid, '_environment', lambda device: {'cpu_models': ['new CPU'], 'gpu': ['new GPU']})
     monkeypatch.setattr(inference, 'fold_rows', lambda: [{'fold': 0, 'test_ids': ['a']}])
     monkeypatch.setattr(inference, 'load_model', lambda *args: (object(), None, None))
-    monkeypatch.setattr(inference, 'build_examples', lambda *args: [object()])
+    def build_examples(ids, periods, policy):
+        assert ids == ['a'] and periods == {'a': 10.}
+        assert policy == 'frozen-DAMIT-primary-solution-fixed-period'
+        return [object()]
+    monkeypatch.setattr(inference, 'build_examples', build_examples)
     calls = []
-    def fresh_inference(*args):
+    def fresh_inference(oid, fold, models, example, expected):
         calls.append('inference')
-        return {'wall_seconds': .02, **network.json_metadata()}
+        np.testing.assert_array_equal(expected, np.eye(3))
+        return {'wall_seconds': .02, 'inference_matches_saved': False,
+                'max_axis_difference': .2, 'matched_angle_deg': [12., 11., 4.], **network.json_metadata()}
     monkeypatch.setattr(v6, 'retime_inference', fresh_inference)
     fit = dict(relative_rms_from_output=.1, final_lambda_deg=0, final_beta_deg=0, iterations=1,
                process_cpu_time_seconds=.01, provenance={'executable_sha256': v6.EXECUTABLE_SHA256})
     def run_record(**kwargs):
         arm, index, start = kwargs['arm'], kwargs['start_index'], kwargs['start']
         calls.append(arm)
+        if arm == 'candidate':
+            assert start == v6.signed_starts_from_axes(fit_axes, period_hours=10.)[index]
         record = dict(identity=dict(object_id='a', arm=arm, start_index=index,
             lambda_deg=start.lambda_deg, beta_deg=start.beta_deg, period_hours=10.),
             result={**fit, 'wall_time_seconds': .01})
@@ -654,12 +675,18 @@ def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp
             start_index=i, lambda_deg=lon, beta_deg=lat, period_hours=10.),
             result={**fit, 'wall_time_seconds': 999}))
     before = {p: p.read_bytes() for p in source.rglob('*') if p.is_file()}
-    args = SimpleNamespace(output=output, periods='damit', axes=ensemble, ids=None, max_seconds=0,
+    own_periods = tmp_path / 'own-periods.json'
+    dump(own_periods, {'periods_hours': {'a': 10.}, 'provenance': 'own periods'})
+    args = SimpleNamespace(output=output, periods='damit' if period_case == 'damit' else str(own_periods),
+                           axes=ensemble, ids=None, max_seconds=0,
                            workers=1, classical_timing='retime', classical_source=source)
     assert v6.run(args) == 0
     assert calls == ['inference', *['candidate'] * 6, *['baseline'] * 6]
+    receipt = rerun.read(output / 'runs/a/inference-timing.json')
+    assert receipt['inference_matches_saved'] is False
+    assert receipt['matched_angle_deg'] == [12., 11., 4.]
     v6.verify_object(output, 'a')
-    result = output.parent / 'v6-damit-score.json'
+    result = output.parent / f'v6-{period_case}-score.json'
     assert v6.score(SimpleNamespace(output=output, result=result)) == 0
     score = rerun.read(result)
     assert score['rows'][0]['neural_inference_wall_seconds'] == .02

@@ -46,7 +46,7 @@ from lc_pipeline.k3.downstream import (
     signed_starts_from_axes,
 )
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
-from lc_pipeline.physics.axial import axial_angular_error_deg
+from lc_pipeline.physics.axial import axial_angular_error_deg, nearest_source_axis_errors_deg
 
 from repro.own_period import DataPath
 from repro import network_root as network
@@ -87,11 +87,14 @@ def retime_inference(oid, fold, models, example, expected_axes):
     axes, _ = inference.refine_ensemble_axes(models, inputs, np.asarray([mode.axis_xyz for mode in modes]))
     torch.cuda.synchronize()
     elapsed = time.perf_counter() - started
-    if not np.allclose(axes, expected_axes, rtol=0, atol=1e-6):
-        raise ValueError("retimed V6 inference differs from the chosen ensemble")
+    # Batch composition can change the inferred modes. Fits still use the saved
+    # --axes starts; this comparison describes the fresh inference, not the fits.
     return {"object_id": oid, "fold": fold, "wall_seconds": elapsed,
         "period_policy": "DAMIT-period inference for both period cases, as published",
-        "max_axis_difference": float(np.max(np.abs(axes - expected_axes))), **network.json_metadata()}
+        "inference_matches_saved": bool(np.allclose(axes, expected_axes, rtol=0, atol=1e-6)),
+        "max_axis_difference": float(np.max(np.abs(axes - expected_axes))),
+        "matched_angle_deg": nearest_source_axis_errors_deg(expected_axes, axes).tolist(),
+        **network.json_metadata()}
 
 
 def digest(path: Path) -> str:
