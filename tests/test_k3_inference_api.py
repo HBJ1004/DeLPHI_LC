@@ -7,6 +7,7 @@ import math
 from copy import deepcopy
 
 import numpy as np
+import pytest
 import torch
 
 from lc_pipeline.k3.api import DeLPHIK3Predictor, K3ModelBundle
@@ -15,11 +16,12 @@ from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.grid import axial_healpix_grid, extract_axial_modes
 from lc_pipeline.k3.inference import (
     K3InferenceError,
+    gpu_numerics,
     refine_axes,
     refine_ensemble_axes,
     score_axial_grid,
 )
-from lc_pipeline.k3.model import CandidateConditionedScorer
+from lc_pipeline.k3.model import CandidateConditionedScorer, K3ModelError
 from lc_pipeline.k3.schema import K3PredictionStatus
 from lc_pipeline.k3.tokenizer import pad_tokenized_objects, tokenize_epochs
 from lc_pipeline.physics.axial import axial_angular_error_deg
@@ -48,6 +50,88 @@ def _model_inputs(device: str = "cpu"):
         key: torch.from_numpy(arrays[key]).to(device)
         for key in ("phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask")
     }
+
+
+def _inference_call(entry, models, inputs):
+    starts = axial_healpix_grid().vectors[:3].copy()
+    if entry == "grid":
+        return (score_axial_grid(models[0], inputs),)
+    if entry == "single":
+        return refine_axes(models[0], inputs, starts)
+    return refine_ensemble_axes(models, inputs, starts)
+
+
+@pytest.mark.parametrize("entry", ["grid", "single", "ensemble"])
+@pytest.mark.parametrize("bad", ["phase_shape", "phase_mask", "geometry_shape", "epoch_shape",
+    "epoch_mask", "nan", "inf", "integer", "empty", "padded", "scalar"])
+def test_inference_entry_points_validate_inputs(entry, bad):
+    config = K3ScoreModelConfig(hidden_dim=32, attention_heads=4, convolution_blocks=1,
+                                set_encoder_layers=1, dropout=0.0)
+    model = CandidateConditionedScorer(config).eval()
+    inputs = _model_inputs()
+    if bad == "phase_shape":
+        inputs["phase_features"] = inputs["phase_features"][..., :63, :]
+    elif bad == "phase_mask":
+        inputs["phase_mask"] = inputs["phase_mask"].float()
+    elif bad == "geometry_shape":
+        inputs["geometry_features"] = inputs["geometry_features"][..., :7]
+    elif bad == "epoch_shape":
+        inputs["epoch_features"] = inputs["epoch_features"][..., :1]
+    elif bad == "epoch_mask":
+        inputs["epoch_mask"] = inputs["epoch_mask"].float()
+    elif bad == "nan":
+        inputs["phase_features"][0, 0, 0, 0] = float("nan")
+    elif bad == "inf":
+        inputs["geometry_features"][0, 0, 0, 0] = float("inf")
+    elif bad == "integer":
+        inputs["epoch_features"] = inputs["epoch_features"].long()
+    elif bad == "empty":
+        inputs["epoch_mask"].zero_()
+        inputs["phase_mask"].zero_()
+    elif bad == "padded":
+        inputs["phase_mask"].zero_()
+    else:
+        inputs["phase_features"] = torch.tensor(0.)
+    with pytest.raises((K3ModelError, K3InferenceError)):
+        _inference_call(entry, (model, deepcopy(model)), inputs)
+
+
+@pytest.mark.parametrize("entry", ["grid", "single", "ensemble"])
+def test_input_validation_runs_once_and_preserves_every_output_bit(entry, monkeypatch):
+    torch.manual_seed(21)
+    config = K3ScoreModelConfig(hidden_dim=32, attention_heads=4, convolution_blocks=1,
+                                set_encoder_layers=1, dropout=0.0, score_chunk_size=1024)
+    models = (CandidateConditionedScorer(config).eval(), CandidateConditionedScorer(config).eval())
+    inputs = _model_inputs()
+    validate = models[0]._validate_inputs
+    calls = []
+    def tracked(**kwargs):
+        calls.append(True)
+        validate(**kwargs)
+    monkeypatch.setattr(models[0], "_validate_inputs", tracked)
+    checked = _inference_call(entry, models, inputs)
+    assert calls == [True]
+    monkeypatch.setattr(models[0], "_validate_inputs", lambda **kwargs: None)
+    unchecked = _inference_call(entry, models, inputs)
+    for actual, expected in zip(checked, unchecked, strict=True):
+        assert actual.dtype == expected.dtype and actual.shape == expected.shape
+        assert actual.tobytes() == expected.tobytes()
+
+
+def test_gpu_numerics_records_versions_device_and_flags_without_changing_them(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda device: "fixture GPU")
+    monkeypatch.setattr(torch.backends.cudnn, "version", lambda: 90102)
+    flags = {
+        "cudnn.allow_tf32": torch.backends.cudnn.allow_tf32,
+        "cuda.matmul.allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+        "cudnn.benchmark": torch.backends.cudnn.benchmark,
+        "cudnn.deterministic": torch.backends.cudnn.deterministic,
+    }
+    expected = {"torch_version": str(torch.__version__), "cuda_version": torch.version.cuda,
+                "cudnn_version": 90102, "gpu_name": "fixture GPU", **flags}
+    assert gpu_numerics("cuda:0") == expected
+    assert gpu_numerics("cpu") == {**expected, "gpu_name": None}
+    assert gpu_numerics("cuda:0") == expected
 
 
 def test_axial_grid_has_exactly_6144_unique_projective_points() -> None:

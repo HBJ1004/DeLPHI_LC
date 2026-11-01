@@ -571,6 +571,9 @@ def worker_case(lock: dict, job: dict, directory: Path, predictor=None) -> dict:
                    "iterations_sum": sum(r["iterations"] or 0 for r in records),
                    "cell_files": {f"start-{i:03d}/record.json": digest(directory / f"start-{i:03d}/record.json")
                                   for i in range(len(records))}})
+    if prediction is not None:
+        from .k3.inference import gpu_numerics
+        result["gpu_numerics"] = gpu_numerics(predictor.device)
     write_once(directory / "selected-result.json", result)
     result["worker_wall_seconds"] = time.perf_counter() - start
     return result

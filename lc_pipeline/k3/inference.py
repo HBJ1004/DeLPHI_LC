@@ -28,6 +28,21 @@ _INPUT_KEYS = (
 )
 
 
+def gpu_numerics(device=None) -> dict:
+    """Describe the active Torch GPU numerical settings without changing them."""
+    selected = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    return {
+        "torch_version": str(torch.__version__),
+        "cuda_version": torch.version.cuda,
+        "cudnn_version": torch.backends.cudnn.version(),
+        "gpu_name": torch.cuda.get_device_name(selected) if selected.type == "cuda" else None,
+        "cudnn.allow_tf32": torch.backends.cudnn.allow_tf32,
+        "cuda.matmul.allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+        "cudnn.benchmark": torch.backends.cudnn.benchmark,
+        "cudnn.deterministic": torch.backends.cudnn.deterministic,
+    }
+
+
 def _validated_inputs(inputs: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     missing = [key for key in _INPUT_KEYS if key not in inputs]
     if missing:
@@ -35,6 +50,8 @@ def _validated_inputs(inputs: Mapping[str, torch.Tensor]) -> dict[str, torch.Ten
     values = {key: inputs[key] for key in _INPUT_KEYS}
     if not all(isinstance(value, torch.Tensor) for value in values.values()):
         raise K3InferenceError("all scorer inputs must be Torch tensors")
+    if any(value.ndim == 0 for value in values.values()):
+        raise K3InferenceError("scorer inputs must have a batch dimension")
     batch_sizes = {value.shape[0] for value in values.values()}
     if len(batch_sizes) != 1:
         raise K3InferenceError("scorer input batch dimensions must align")
@@ -68,6 +85,7 @@ def score_axial_grid(
     grid_tensor = torch.as_tensor(
         np.array(selected_grid.vectors, copy=True), dtype=values["phase_features"].dtype, device=device
     )
+    model._validate_inputs(**values, candidates=grid_tensor[:1].unsqueeze(0).expand(batch_size, -1, -1))
     chunks: list[torch.Tensor] = []
     with torch.no_grad():
         phase_interactions, epoch_latent = model._encode_photometry(
@@ -127,6 +145,7 @@ def refine_axes(
     candidates = torch.as_tensor(starts, dtype=dtype, device=device)
     if candidates.shape != (selected_config.candidate_count, 3) or not bool(torch.isfinite(candidates).all()):
         raise K3InferenceError("refinement starts must contain three finite axes")
+    model._validate_inputs(**values, candidates=candidates.unsqueeze(0))
     starts_tensor = F.normalize(candidates, dim=-1)
     candidates = starts_tensor.clone()
     maximum = math.radians(selected_config.refinement_max_displacement_deg)
@@ -191,6 +210,7 @@ def refine_ensemble_axes(
     candidates = torch.as_tensor(starts, dtype=dtype, device=device)
     if candidates.shape != (config.candidate_count, 3) or not bool(torch.isfinite(candidates).all()):
         raise K3InferenceError("refinement starts must contain three finite axes")
+    models[0]._validate_inputs(**values, candidates=candidates.unsqueeze(0))
     starts_tensor = F.normalize(candidates, dim=-1)
     candidates = starts_tensor.clone()
     maximum = math.radians(config.refinement_max_displacement_deg)

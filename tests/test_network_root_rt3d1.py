@@ -13,6 +13,7 @@ from repro.direct_workflow_benchmark import rerun
 from repro.own_period import temporal, refine_chain_post as post, v6_fixed_period as v6, v7_grid as v7
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
+from lc_pipeline.k3.inference import gpu_numerics
 
 
 def dump(path, value):
@@ -471,6 +472,7 @@ def test_statistics_reuses_ladder_without_retiming_or_changing_source(explorator
 
 @pytest.mark.parametrize('changed_fit', [False, True])
 def test_fresh_ladder_keeps_order_workers_and_all_saved_fits(selected, tmp_path, monkeypatch, changed_fit):
+    import torch
     source, _ = make_source(tmp_path, monkeypatch)
     script = source / 'time_exploratory_budgets.py'
     script.write_text('historical timing script')
@@ -500,7 +502,7 @@ def test_fresh_ladder_keeps_order_workers_and_all_saved_fits(selected, tmp_path,
         return row
     direct = SimpleNamespace(SCHEMA='test', classical_starts=lambda: np.ones((146, 3)))
     monkeypatch.setattr(rerun, 'modules', lambda: (direct, SimpleNamespace(case=case)))
-    monkeypatch.setattr(grid, '_predictor', lambda lock, fold: SimpleNamespace(device=SimpleNamespace(type='cpu')))
+    monkeypatch.setattr(grid, '_predictor', lambda lock, fold: SimpleNamespace(device=torch.device('cpu')))
     if changed_fit:
         with pytest.raises(ValueError, match='retimed classical start differs'):
             rerun.execute(output / 'evaluation-lock.json', output / 'exploratory-loaded-ladder', 'exploratory')
@@ -513,6 +515,12 @@ def test_fresh_ladder_keeps_order_workers_and_all_saved_fits(selected, tmp_path,
         assert state['environment']['gpu'] == ['new GPU']
         assert state['classical_timing'] == 'retime'
         assert all(rerun.read(output / 'exploratory-loaded-ladder' / row['path'])['wall_seconds'] == .01 for row in state['rows'])
+        for binding in state['rows']:
+            row = rerun.read(output / 'exploratory-loaded-ladder' / binding['path'])
+            if row['arm'] == 'delphi':
+                assert row['gpu_numerics'] == gpu_numerics('cpu')
+            else:
+                assert 'gpu_numerics' not in row
     assert before == {p: p.read_bytes() for p in source.rglob('*') if p.is_file()}
 
 
@@ -540,14 +548,16 @@ def test_ladder_scores_use_new_times_without_rewriting_rt4(selected, tmp_path, m
     def producer(name, **overrides):
         calls.append(name)
         return SimpleNamespace(main=lambda: dump(overrides['OUTPUT'], {'preserved_statistic': 7,
-            'object_rows': [{'object_id': 'a', 'arms': {'delphi': {'final_relative_rms': .1}}}]}))
+            'object_rows': [{'object_id': 'a', 'arms': {'delphi': {'final_relative_rms': .1,
+                'inference_matches_saved': matches, 'axis_difference_degrees': 0. if matches else 2.,
+                'rms_difference': 0. if matches else .001}}}],
+            'delphi_inference_check': dict(mismatch_count=0 if matches else 1,
+                mismatch_ids=[] if matches else ['a'], max_axis_difference_degrees=0. if matches else 2.,
+                max_rms_difference=0. if matches else .001)}))
     monkeypatch.setattr(rerun, 'producer', producer)
-    monkeypatch.setattr(rerun, 'retimed_ladder_check', lambda module: {'a': {
-        'inference_matches_saved': matches, 'axis_difference_degrees': 0. if matches else 2.,
-        'rms_difference': 0. if matches else .001}})
     rerun.ladder_analyses(output, reuse)
     assert before == {p: p.read_bytes() for p in direct.rglob('*') if p.is_file() and not p.is_relative_to(output)}
-    assert calls == ['score_exploratory_timing.py']
+    assert calls == ['score_exploratory_timing_rt5.py']
     fresh = rerun.read(output / 'exploratory-loaded-ladder/score.json')
     assert fresh['exploratory_timing']['status'] == 'retimed_together'
     assert fresh['exploratory_timing']['classical_environment'] == fresh['exploratory_timing']['delphi_environment']
@@ -614,6 +624,7 @@ def test_v6_inference_retimes_core_and_records_axis_differences(selected, monkey
     before = expected.copy()
     monkeypatch.setattr(inference, 'refine_ensemble_axes', lambda models, inputs, starts: (actual, np.zeros(3)))
     receipt = v6.retime_inference('a', 0, [object()] * 5, object(), expected)
+    assert receipt['gpu_numerics'] == gpu_numerics()
     assert receipt['object_id'] == 'a' and receipt['fold'] == 0
     assert receipt['wall_seconds'] > 0
     assert receipt['inference_matches_saved'] is (change in ('identical', 'within_atol'))
@@ -626,7 +637,8 @@ def test_v6_inference_retimes_core_and_records_axis_differences(selected, monkey
 
 
 @pytest.mark.parametrize('period_case', ['own', 'damit'])
-def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp_path, monkeypatch, period_case):
+@pytest.mark.parametrize('crash', [False, True])
+def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp_path, monkeypatch, period_case, crash):
     from repro.own_period import predict_oof_full as inference
     source = tmp_path / 'original-v6'
     output = selected.parent / f'results/delphi-inversions/timing-retime/v6-{period_case}'
@@ -691,12 +703,29 @@ def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp
     args = SimpleNamespace(output=output, periods='damit' if period_case == 'damit' else str(own_periods),
                            axes=ensemble, ids=None, max_seconds=0,
                            workers=1, classical_timing='retime', classical_source=source)
+    if crash:
+        with monkeypatch.context() as interrupted:
+            def fail(**kwargs):
+                raise RuntimeError('simulated crash after inference receipt')
+            interrupted.setattr(v6, '_run_record', fail)
+            with pytest.raises(RuntimeError, match='simulated crash'):
+                v6.run(args)
+        assert not (output / 'runs/a/object-done.json').exists()
+        receipt_path = output / 'runs/a/inference-timing.json'
+        incomplete = rerun.read(receipt_path)
+        incomplete['wall_seconds'] = .99
+        dump(receipt_path, incomplete)
+        calls.clear()
     assert v6.run(args) == 0
     assert calls == ['inference', *['candidate'] * 6, *['baseline'] * 6]
     receipt = rerun.read(output / 'runs/a/inference-timing.json')
     assert receipt['inference_matches_saved'] is False
     assert receipt['matched_angle_deg'] == [12., 11., 4.]
     v6.verify_object(output, 'a')
+    finished = {p: p.read_bytes() for p in output.rglob('*.json')}
+    calls.clear()
+    assert v6.run(args) == 0 and calls == []
+    assert finished == {p: p.read_bytes() for p in output.rglob('*.json')}
     result = output.parent / f'v6-{period_case}-score.json'
     assert v6.score(SimpleNamespace(output=output, result=result)) == 0
     score = rerun.read(result)
@@ -754,54 +783,112 @@ def ladder_timing_producer(tmp_path, monkeypatch):
     return rerun.producer(name, ROOT=root, RUN=run, OUTPUT=run / 'score.json')
 
 
+def rt5_producer(original):
+    return rerun.producer('score_exploratory_timing_rt5.py',
+        ROOT=original.ROOT, RUN=original.RUN, OUTPUT=original.OUTPUT)
+
+
 def test_ladder_all_match_preserves_every_producer_output_byte(ladder_timing_producer):
-    module = ladder_timing_producer
-    module.main()
-    original = module.OUTPUT.read_bytes()
-    module.OUTPUT.unlink()
-    differences = rerun.retimed_ladder_check(module)
-    assert len(differences) == 140
-    assert all(row == dict(inference_matches_saved=True, axis_difference_degrees=0., rms_difference=0.)
-               for row in differences.values())
-    module.main()
-    assert module.OUTPUT.read_bytes() == original
+    original = ladder_timing_producer
+    original.main()
+    expected = rerun.read(original.OUTPUT)
+    original.OUTPUT.unlink()
+    for row in expected['object_rows']:
+        row['arms']['delphi'].update(inference_matches_saved=True,
+            axis_difference_degrees=0., rms_difference=0.)
+    expected['delphi_inference_check'] = dict(mismatch_count=0, mismatch_ids=[],
+        max_axis_difference_degrees=0., max_rms_difference=0.)
+    rt5_producer(original).main()
+    assert original.OUTPUT.read_bytes() == (json.dumps(expected, sort_keys=True,
+        separators=(',', ':'), allow_nan=False) + '\n').encode()
 
 
 @pytest.mark.parametrize('arm', ['classical18', 'classical96', 'delphi'])
 @pytest.mark.parametrize('field', ['axis', 'rms'])
 def test_ladder_only_delphi_drift_may_pass(ladder_timing_producer, arm, field):
-    module = ladder_timing_producer
-    path = module.RUN / f'asteroid_0-{arm}.json'
+    original = ladder_timing_producer
+    path = original.RUN / f'asteroid_0-{arm}.json'
     row = rerun.read(path)
     row['selected_fit']['axis' if field == 'axis' else 'final_relative_rms'] = (
         [0., 1., 0.] if field == 'axis' else .10000002)
     dump(path, row)
-    execution = rerun.read(module.RUN / 'execution.json')
+    execution = rerun.read(original.RUN / 'execution.json')
     next(binding for binding in execution['rows'] if binding['path'] == path.name)['sha256'] = network.sha256(path)
-    dump(module.RUN / 'execution.json', execution)
+    dump(original.RUN / 'execution.json', execution)
     with pytest.raises(ValueError, match='timed fits do not reproduce archived solutions'):
-        module.main()
-    differences = rerun.retimed_ladder_check(module)
+        original.main()
+    module = rt5_producer(original)
     if arm != 'delphi':
         with pytest.raises(ValueError, match='timed fits do not reproduce archived solutions'):
             module.main()
         assert not module.OUTPUT.exists()
     else:
         module.main()
-        assert sum(not row['inference_matches_saved'] for row in differences.values()) == 1
-        check = differences['asteroid_0']
-        assert check['axis_difference_degrees'] == (90. if field == 'axis' else 0.)
-        assert check['rms_difference'] == pytest.approx(2e-8 if field == 'rms' else 0.)
-        # The producer must keep the actual timed fit's RMS and the saved reference accuracy.
-        actual = rerun.read(module.OUTPUT)['object_rows'][0]['arms']['delphi']
+        result = rerun.read(module.OUTPUT)
+        actual = result['object_rows'][0]['arms']['delphi']
+        assert not actual['inference_matches_saved']
+        assert actual['axis_difference_degrees'] == (90. if field == 'axis' else 0.)
+        assert actual['rms_difference'] == pytest.approx(2e-8 if field == 'rms' else 0.)
+        assert result['delphi_inference_check']['mismatch_ids'] == ['asteroid_0']
+        assert result['delphi_inference_check']['mismatch_count'] == 1
         assert actual['final_relative_rms'] == row['selected_fit']['final_relative_rms']
         assert actual['reference_error_degrees'] == 3.
 
 
-def test_ladder_rebinding_refuses_an_unrecognized_guard(ladder_timing_producer, tmp_path):
-    module = ladder_timing_producer
-    changed = tmp_path / 'changed.py'
-    changed.write_text(Path(module.__file__).read_text().replace('max_axis > 0.0001', 'max_axis > 1.'))
-    module.__file__ = str(changed)
-    with pytest.raises(ValueError, match='frozen ladder fit check changed'):
-        rerun.retimed_ladder_check(module)
+def test_ladder_rt5_producer_hash_is_pinned(ladder_timing_producer, monkeypatch):
+    monkeypatch.setattr(rerun, 'RT5_PRODUCER_SHA256', 'unknown')
+    with pytest.raises(ValueError, match='historical producer changed'):
+        rt5_producer(ladder_timing_producer)
+
+
+@pytest.mark.parametrize('arm', ['guided6', 'classical20'])
+def test_v7_worker_records_gpu_numerics_for_inference_only(tmp_path, monkeypatch, arm):
+    import torch
+    from lc_pipeline.k3 import inference, damit
+    from lc_pipeline.v2 import convexinv
+    curve = tmp_path / 'lc.txt'
+    curve.write_text('photometry')
+    monkeypatch.setattr(convexinv, '_parse_lightcurve_brightness', lambda path: [])
+    monkeypatch.setattr(damit, '_read_lc', lambda path: [])
+    monkeypatch.setattr(grid, 'starts_for_arm', lambda arm, axes: [[1., 0., 0.]])
+    def native(job, index, vector, observed, solver, settings, directory):
+        record = dict(selected_fit=dict(axis=vector, final_relative_rms=.1, start_index=index),
+                      solver_wall_seconds=.01, iterations=1)
+        dump(directory / f'start-{index:03d}/record.json', record)
+        return record
+    monkeypatch.setattr(grid, '_native_start', native)
+    numerics = {'fixture': 'actual worker settings'}
+    calls = []
+    def snapshot(device):
+        calls.append(device)
+        return numerics
+    monkeypatch.setattr(inference, 'gpu_numerics', snapshot)
+    predictor = SimpleNamespace(device=torch.device('cpu'), predict=lambda *args, **kwargs:
+                                {'axes': [{'axis_xyz': [1., 0., 0.]}]})
+    job = dict(object_id='a', fold=0, repeat_index=0, arm=arm, timing_mode='cold',
+               lightcurve=rerun.bound(curve), period_hours=10.)
+    directory = tmp_path / 'case'
+    result = grid.worker_case(dict(settings={'workers': 1}, solver={}), job, directory, predictor)
+    if arm == 'guided6':
+        assert result['gpu_numerics'] == numerics
+        assert rerun.read(directory / 'selected-result.json')['gpu_numerics'] == numerics
+        assert calls == [torch.device('cpu')]
+    else:
+        assert 'gpu_numerics' not in result and not calls
+
+
+def test_cold_direct_worker_records_its_own_gpu_numerics(tmp_path, monkeypatch):
+    import sys
+    from lc_pipeline.k3 import inference
+    path = tmp_path / 'selected-result.json'
+    direct = SimpleNamespace(write_once=grid.write_once)
+    def worker(*args):
+        result = {'arm': 'delphi', 'inference_and_load_seconds': .01}
+        direct.write_once(path, result)
+        assert result['gpu_numerics'] == {'fixture': 'child settings'}
+    direct.worker = worker
+    monkeypatch.setattr(rerun, 'modules', lambda: (direct, None))
+    monkeypatch.setattr(inference, 'gpu_numerics', lambda: {'fixture': 'child settings'})
+    monkeypatch.setattr(sys, 'argv', ['rerun', '_worker', '--lock', 'unused', '--job', 'unused'])
+    rerun.main()
+    assert rerun.read(path)['gpu_numerics'] == {'fixture': 'child settings'}

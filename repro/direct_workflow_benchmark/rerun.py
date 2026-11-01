@@ -29,6 +29,7 @@ REPO = Path(__file__).resolve().parents[2]
 SOURCES = DataPath("benchmark")
 PREVIOUS_SCRIPT_SHA256 = "c56f35aa8e602e395d909944835230b89ee9a93a2f4dbfdf8e6e191b004a0d2d"
 RT4_SCRIPT_SHA256 = "4355cdfa3ef6a4f0830aa39acce3a2c574beb48664577b0b5b37693a1af451fc"
+RT5_PRODUCER_SHA256 = "a5fecf328a46f72370b16688b6a537d88c8c6387daf63a5ddfd04550ee3522a6"
 RT5_SCRIPT_SHA256 = "41930e3244ab8e4089415f8b956ed9af5450e8028801cf71b63986958a3860ea"
 HASHES = {
     "run_direct_benchmark.py": "a3358ddeec1f17bed219282fab31ec576bb213a6ab5e5ce8845c057d07f51fe4",
@@ -69,8 +70,9 @@ def save(path, value):
 
 def producer(name, **overrides):
     """Execute the exact saved functions; override only explicit path globals."""
-    path = SOURCES / name
-    if network.sha256(path) != HASHES[name]:
+    path = Path(__file__).with_name(name) if name == "score_exploratory_timing_rt5.py" else SOURCES / name
+    expected = RT5_PRODUCER_SHA256 if name == "score_exploratory_timing_rt5.py" else HASHES[name]
+    if network.sha256(path) != expected:
         raise ValueError(f"historical producer changed: {path}")
     module = types.ModuleType(name[:-3])
     module.__file__ = str(path)
@@ -282,6 +284,9 @@ def execute(lock_path, output, mode):
                     setups.append({"fold": active_fold, "models": 5, "setup_seconds": time.perf_counter() - start})
                 row = loaded.case(current, job, predictor, case)
                 timed.unlink()  # producer wrote this just now; add the binding receipt below.
+                if job["arm"] == "delphi":
+                    from lc_pipeline.k3.inference import gpu_numerics
+                    row["gpu_numerics"] = gpu_numerics(predictor.device)
             after = resource.getrusage(resource.RUSAGE_CHILDREN)
             row["retiming_cpu_seconds"] = after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime
             if job["arm"] != "delphi":
@@ -442,41 +447,6 @@ def analyses(output, exploratory_source=None):
     save(output / "timing-cost.json", value)
 
 
-def retimed_ladder_check(module):
-    """Rebind only the frozen producer's inline guard, retaining classical tolerances."""
-    saved = {row["object_id"]: row for row in read(module.ROOT / "classical-ladder-exploratory.json")["object_rows"]}
-    differences = {}
-    classical_mismatch = False
-    for binding in read(module.RUN / "execution.json")["rows"]:
-        row = read(module.RUN / binding["path"])
-        arm, fit = row["arm"], row["selected_fit"]
-        reference = saved[row["object_id"]]
-        reference = reference["delphi"] if arm == "delphi" else reference["classical"][arm.removeprefix("classical")]
-        angle = module.angle_degrees(fit["axis"], reference["axis"])
-        rms = abs(fit["final_relative_rms"] - reference["final_relative_rms"])
-        matches = not (angle > 1e-4 or rms > 1e-8)
-        if arm == "delphi":
-            differences[row["object_id"]] = {"inference_matches_saved": matches,
-                "axis_difference_degrees": angle, "rms_difference": rms}
-        else:
-            classical_mismatch |= not matches
-
-    # Fail closed if the pinned producer no longer has exactly this guard. Recompile
-    # only main(), changing its predicate; all calculations and checks stay intact.
-    tree = ast.parse(Path(module.__file__).read_text(), filename=module.__file__)
-    main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
-    expected = ast.parse('if max_axis > 0.0001 or max_rms > 1e-8:\n'
-                         '    raise ValueError("timed fits do not reproduce archived solutions")').body[0]
-    checks = [node for node in ast.walk(main) if isinstance(node, ast.If)
-              and ast.dump(node) == ast.dump(expected)]
-    if len(checks) != 1:
-        raise ValueError("frozen ladder fit check changed")
-    checks[0].test = ast.copy_location(ast.Name(id="_classical_mismatch", ctx=ast.Load()), checks[0].test)
-    module._classical_mismatch = classical_mismatch
-    exec(compile(ast.Module(body=[main], type_ignores=[]), module.__file__, "exec"), module.__dict__)
-    return differences
-
-
 def ladder_analyses(output, exploratory_source):
     """Rescore fresh ladder times against its own frozen quality evidence."""
     output, exploratory_source = Path(output), Path(exploratory_source)
@@ -503,17 +473,10 @@ def ladder_analyses(output, exploratory_source):
     path = output / "exploratory-loaded-ladder/score.json"
     if path.exists():
         raise FileExistsError(f"ladder scoring refuses to overwrite: {path}")
-    module = producer("score_exploratory_timing.py", ROOT=output,
+    module = producer("score_exploratory_timing_rt5.py", ROOT=output,
                       RUN=output / "exploratory-loaded-ladder", OUTPUT=path)
-    differences = retimed_ladder_check(module)
     module.main()
     score = read(path)
-    for row in score["object_rows"]:
-        row["arms"]["delphi"].update(differences[row["object_id"]])
-    mismatches = sorted(oid for oid, row in differences.items() if not row["inference_matches_saved"])
-    score["delphi_inference_check"] = {"mismatch_count": len(mismatches), "mismatch_ids": mismatches,
-        "max_axis_difference_degrees": max((row["axis_difference_degrees"] for row in differences.values()), default=0.0),
-        "max_rms_difference": max((row["rms_difference"] for row in differences.values()), default=0.0)}
     path.write_text(json.dumps({**score, **metadata}, sort_keys=True) + "\n")
     save(output / "timing-cost.json", {**metadata, "timing_option": "retime",
         "classical_retiming_cpu_seconds": sum(read(execution_path.parent / row["path"])["retiming_cpu_seconds"]
@@ -546,6 +509,13 @@ def main():
         ladder_analyses(args.output.resolve(), args.exploratory_source.resolve())
     else:
         direct, _ = modules()
+        original_write_once = direct.write_once
+        def write_inference_receipt(path, value):
+            if value.get("arm") == "delphi":
+                from lc_pipeline.k3.inference import gpu_numerics
+                value["gpu_numerics"] = gpu_numerics()
+            original_write_once(path, value)
+        direct.write_once = write_inference_receipt
         direct.worker(args.lock, args.job)
 
 

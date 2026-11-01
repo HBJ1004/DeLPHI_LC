@@ -74,6 +74,7 @@ SOLVER_WORKERS = 1  # Original downstream setting: starts run serially.
 def retime_inference(oid, fold, models, example, expected_axes):
     """Repeat the published ensemble's timed core; never replace the fixed fit starts."""
     import torch
+    from lc_pipeline.k3.inference import gpu_numerics
     from repro.own_period import predict_oof_full as inference
 
     torch.cuda.synchronize()
@@ -87,13 +88,14 @@ def retime_inference(oid, fold, models, example, expected_axes):
     axes, _ = inference.refine_ensemble_axes(models, inputs, np.asarray([mode.axis_xyz for mode in modes]))
     torch.cuda.synchronize()
     elapsed = time.perf_counter() - started
-    # Batch composition can change the inferred modes. Fits still use the saved
-    # --axes starts; this comparison describes the fresh inference, not the fits.
+    # Run-to-run GPU numeric differences can swap near-tied modes; fits still
+    # use the saved --axes starts, independently of this fresh inference.
     return {"object_id": oid, "fold": fold, "wall_seconds": elapsed,
         "period_policy": "DAMIT-period inference for both period cases, as published",
         "inference_matches_saved": bool(np.allclose(axes, expected_axes, rtol=0, atol=1e-6)),
         "max_axis_difference": float(np.max(np.abs(axes - expected_axes))),
         "matched_angle_deg": nearest_source_axis_errors_deg(expected_axes, axes).tolist(),
+        "gpu_numerics": gpu_numerics(),
         **network.json_metadata()}
 
 
@@ -267,7 +269,13 @@ def run(args: argparse.Namespace) -> int:
                 receipt = retime_inference(oid, fold, inference_models, example, expected_axes)
                 from repro.direct_workflow_benchmark.rerun import bound
                 receipt["period_source"] = bound(period_source)
-                write_once(out / "runs" / oid / "inference-timing.json", receipt)
+                receipt_path = out / "runs" / oid / "inference-timing.json"
+                # An unfinished object may have a receipt left by a crashed run.
+                # Redo it with the fresh timing; a finished object's receipt is immutable.
+                if (receipt_path.parent / "object-done.json").exists():
+                    raise RuntimeError("object finished during inference; refusing to replace its receipt")
+                receipt_path.unlink(missing_ok=True)
+                write_once(receipt_path, receipt)
             records = [
                 _run_record(
                     executable=EXECUTABLE,

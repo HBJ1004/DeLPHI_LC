@@ -52,9 +52,9 @@ K3_INPUT_SWAP_SEED = 20260901
 K3_LABEL_SHUFFLE_SEED = 20260901
 K3_OOF_SEEDS = (17, 42, 137, 777, 2027)
 K3_LABEL_SHUFFLE_MODEL_SEED = 17
-# CUDA kernels may use different floating-point accumulation orders when the
-# same object is scored alone rather than in the four-object publication
-# batches.  Gate the candidate-dependent (mean-centered) landscape at 0.1% of
+# Run-to-run GPU numeric differences can change score grids even when both
+# paths score one object at a time; their exact source is unknown.
+# Gate the candidate-dependent (mean-centered) landscape at 0.1% of
 # max(cached standard deviation, one score unit).  Coarse-mode differences are
 # retained explicitly because near-tied local maxima can legitimately exchange
 # order even when the complete landscapes agree far more closely than this.
