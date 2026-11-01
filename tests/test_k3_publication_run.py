@@ -170,14 +170,19 @@ def test_label_shuffle_training_retains_exact_derangement_manifest(tmp_path, mon
     )
 
 
-def test_label_shuffle_evaluation_rejects_wrong_stage_and_uses_untouched_test(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("allow_legacy", [False, True])
+def test_label_shuffle_evaluation_rejects_wrong_stage_and_uses_untouched_test(
+    tmp_path, monkeypatch, allow_legacy
+) -> None:
     source = tmp_path / "synthetic-label-shuffle-seed-17.pt"
     output = tmp_path / "synthetic-label-shuffle-test-seed-17.npz"
     torch.save({"stage": "synthetic-label-shuffle", "config": {"seed": 17}}, source)
     examples = ("test-a", "test-b")
-    monkeypatch.setattr(
-        "lc_pipeline.k3.publication_run.load_synthetic_examples", lambda directory: examples
-    )
+    reads = []
+    def load(directory, *, allow_legacy=False):
+        reads.append(allow_legacy)
+        return examples
+    monkeypatch.setattr("lc_pipeline.k3.publication_run.load_synthetic_examples", load)
     monkeypatch.setattr(
         "lc_pipeline.k3.publication_run._evaluate_examples",
         lambda checkpoint, values, destination, **kwargs: {
@@ -186,8 +191,10 @@ def test_label_shuffle_evaluation_rejects_wrong_stage_and_uses_untouched_test(tm
         },
     )
     result = evaluate_synthetic_label_shuffle_checkpoint(
-        source, "test", output, seed=17, device="cpu"
+        source, "test", output, seed=17, device="cpu",
+        **({"allow_legacy": True} if allow_legacy else {}),
     )
+    assert reads == [allow_legacy]
     assert result["values"] == examples
     assert result["control"] == "label-shuffle-training"
 
@@ -305,8 +312,9 @@ def test_real_oof_input_swap_retains_auditable_fold_local_donors(tmp_path, monke
     assert result["derangement_seed"] == 20260904.0
 
 
+@pytest.mark.parametrize("allow_legacy", [False, True])
 def test_synthetic_input_swap_is_aligned_and_reports_paired_gap(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, allow_legacy
 ) -> None:
     checkpoint = tmp_path / "synthetic-seed-17.pt"
     torch.save({"stage": "synthetic", "config": {"seed": 17}}, checkpoint)
@@ -320,10 +328,11 @@ def test_synthetic_input_swap_is_aligned_and_reports_paired_gap(
         object_ids=np.asarray([value.object_id for value in examples]),
         oracle_errors_deg=np.asarray([10.0, 20.0, 30.0, 40.0]),
     )
-    monkeypatch.setattr(
-        "lc_pipeline.k3.publication_run.load_synthetic_examples",
-        lambda directory: examples,
-    )
+    reads = []
+    def load(directory, *, allow_legacy=False):
+        reads.append(allow_legacy)
+        return examples
+    monkeypatch.setattr("lc_pipeline.k3.publication_run.load_synthetic_examples", load)
     observed = {}
 
     def fake_evaluate(source, swapped, output, **kwargs):
@@ -340,7 +349,9 @@ def test_synthetic_input_swap_is_aligned_and_reports_paired_gap(
         tmp_path / "synthetic-test-seed-17-input-swap.npz",
         seed=17,
         device="cpu",
+        **({"allow_legacy": True} if allow_legacy else {}),
     )
+    assert reads == [allow_legacy]
     donor_ids = observed["arrays"]["input_donor_ids"].tolist()
     assert set(donor_ids) == {"a", "b", "c", "d"}
     assert all(

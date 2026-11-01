@@ -887,8 +887,28 @@ def test_cold_direct_worker_records_its_own_gpu_numerics(tmp_path, monkeypatch):
         direct.write_once(path, result)
         assert result['gpu_numerics'] == {'fixture': 'child settings'}
     direct.worker = worker
+    lock = tmp_path / 'lock.json'
+    dump(lock, {'device': 'cpu'})
     monkeypatch.setattr(rerun, 'modules', lambda: (direct, None))
-    monkeypatch.setattr(inference, 'gpu_numerics', lambda: {'fixture': 'child settings'})
-    monkeypatch.setattr(sys, 'argv', ['rerun', '_worker', '--lock', 'unused', '--job', 'unused'])
+    devices = []
+    def snapshot(device):
+        devices.append(device)
+        return {'fixture': 'child settings'}
+    monkeypatch.setattr(inference, 'gpu_numerics', snapshot)
+    monkeypatch.setattr(sys, 'argv', ['rerun', '_worker', '--lock', str(lock), '--job', 'unused'])
     rerun.main()
     assert rerun.read(path)['gpu_numerics'] == {'fixture': 'child settings'}
+    assert devices == ['cpu']
+
+
+def test_v7_switched_score_refuses_published_execution_layout(tmp_path, monkeypatch):
+    monkeypatch.setattr(network, 'guard_output', lambda path: None)
+    monkeypatch.setattr(network, 'switched', lambda: True)
+    monkeypatch.setattr(v7, 'validate_rerun_lock', lambda path: None)
+    lock = tmp_path / 'lock.json'
+    dump(lock, {})
+    published = tmp_path / 'published'
+    monkeypatch.setattr(v7, 'PUBLISHED_FULL', published)
+    args = SimpleNamespace(output=tmp_path / 'scores', lock=lock, execution=published)
+    with pytest.raises(ValueError, match='rerun execution directory; published layout refused'):
+        v7.score(args)

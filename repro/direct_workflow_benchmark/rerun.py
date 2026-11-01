@@ -513,7 +513,7 @@ def main():
         def write_inference_receipt(path, value):
             if value.get("arm") == "delphi":
                 from lc_pipeline.k3.inference import gpu_numerics
-                value["gpu_numerics"] = gpu_numerics()
+                value["gpu_numerics"] = gpu_numerics(read(args.lock)["device"])
             original_write_once(path, value)
         direct.write_once = write_inference_receipt
         direct.worker(args.lock, args.job)

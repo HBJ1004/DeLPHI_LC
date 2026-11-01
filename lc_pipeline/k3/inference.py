@@ -28,18 +28,32 @@ _INPUT_KEYS = (
 )
 
 
+def _score_chunk_max() -> int | None:
+    raw = os.environ.get("DELPHI_SCORE_CHUNK_MAX")
+    if raw is None:
+        return None
+    try:
+        if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
+            raise ValueError
+        return int(raw)
+    except ValueError as exc:
+        raise K3InferenceError("DELPHI_SCORE_CHUNK_MAX must be a positive integer") from exc
+
+
 def gpu_numerics(device=None) -> dict:
     """Describe the active Torch GPU numerical settings without changing them."""
     selected = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    cuda = selected.type == "cuda"
     return {
         "torch_version": str(torch.__version__),
-        "cuda_version": torch.version.cuda,
-        "cudnn_version": torch.backends.cudnn.version(),
-        "gpu_name": torch.cuda.get_device_name(selected) if selected.type == "cuda" else None,
-        "cudnn.allow_tf32": torch.backends.cudnn.allow_tf32,
-        "cuda.matmul.allow_tf32": torch.backends.cuda.matmul.allow_tf32,
-        "cudnn.benchmark": torch.backends.cudnn.benchmark,
-        "cudnn.deterministic": torch.backends.cudnn.deterministic,
+        "cuda_version": torch.version.cuda if cuda else None,
+        "cudnn_version": torch.backends.cudnn.version() if cuda else None,
+        "gpu_name": torch.cuda.get_device_name(selected) if cuda else None,
+        "cudnn.allow_tf32": torch.backends.cudnn.allow_tf32 if cuda else None,
+        "cuda.matmul.allow_tf32": torch.backends.cuda.matmul.allow_tf32 if cuda else None,
+        "cudnn.benchmark": torch.backends.cudnn.benchmark if cuda else None,
+        "cudnn.deterministic": torch.backends.cudnn.deterministic if cuda else None,
+        "score_chunk_max": _score_chunk_max(),
     }
 
 
@@ -76,9 +90,9 @@ def score_axial_grid(
         raise K3InferenceError("score chunk size must be a positive integer")
     # Grid points are scored independently: a smaller chunk lowers peak memory and changes
     # scores only by float32 rounding.
-    cap = os.environ.get("DELPHI_SCORE_CHUNK_MAX")
-    if cap:
-        size = min(size, int(cap))
+    cap = _score_chunk_max()
+    if cap is not None:
+        size = min(size, cap)
     device = next(model.parameters()).device
     if any(value.device != device for value in values.values()):
         raise K3InferenceError("model and scorer inputs must share one device")

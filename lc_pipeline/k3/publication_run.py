@@ -26,7 +26,7 @@ from .evaluation import (
 from .inference import refine_axes, refine_ensemble_axes, score_axial_grid
 from .model import CandidateConditionedScorer
 from .protocol import K3_PROTOCOL_SHA256
-from .synthetic import load_synthetic_shard, verify_synthetic_shard
+from .synthetic import SyntheticDataError, load_synthetic_shard, verify_synthetic_shard
 from .tokenizer import (
     K3_EPOCH_FEATURE_NAMES,
     K3_PHASE_FEATURE_NAMES,
@@ -218,8 +218,10 @@ def load_real_examples(
     return tuple(examples)
 
 
-def load_synthetic_examples(directory: str | Path) -> tuple[K3TrainingExample, ...]:
-    """Verify and tokenize current-version shards; training cannot opt into v1."""
+def load_synthetic_examples(
+    directory: str | Path, *, allow_legacy: bool = False
+) -> tuple[K3TrainingExample, ...]:
+    """Verify and tokenize shards; v1 is available only for explicit evaluation reads."""
     root = Path(directory)
     shards = sorted(root.glob("*.npz"))
     if not shards:
@@ -227,8 +229,15 @@ def load_synthetic_examples(directory: str | Path) -> tuple[K3TrainingExample, .
     examples: list[K3TrainingExample] = []
     identifiers: set[str] = set()
     for shard in shards:
-        summary = verify_synthetic_shard(shard)
-        records = load_synthetic_shard(shard, verify_manifest=False)
+        try:
+            summary = verify_synthetic_shard(shard, allow_legacy=allow_legacy)
+        except SyntheticDataError as exc:
+            if not allow_legacy and str(exc).startswith("legacy synthetic shard "):
+                raise SyntheticDataError(
+                    f"{exc}; evaluation of v1 shards needs allow_legacy=True"
+                ) from exc
+            raise
+        records = load_synthetic_shard(shard, verify_manifest=False, allow_legacy=allow_legacy)
         if len(records) != summary["objects"]:
             raise K3PublicationRunError(f"verified object count changed while loading {shard}")
         values = examples_from_synthetic_records(records)
@@ -326,9 +335,10 @@ def evaluate_synthetic_checkpoint(
     *,
     device: str = "cuda",
     batch_size: int = 4,
+    allow_legacy: bool = False,
 ) -> dict[str, float | str]:
     """Retain complete score maps and refined oracle-at-3 errors."""
-    examples = load_synthetic_examples(test_directory)
+    examples = load_synthetic_examples(test_directory, allow_legacy=allow_legacy)
     return _evaluate_examples(
         checkpoint_path, examples, output_path, device=device, batch_size=batch_size
     )
@@ -343,6 +353,7 @@ def evaluate_synthetic_input_swap_checkpoint(
     seed: int,
     device: str = "cuda",
     batch_size: int = 4,
+    allow_legacy: bool = False,
 ) -> dict[str, float | str]:
     """Evaluate the synthetic test set with complete inputs deranged across labels."""
     checkpoint_source = Path(checkpoint_path)
@@ -377,7 +388,7 @@ def evaluate_synthetic_input_swap_checkpoint(
         raise K3PublicationRunError(
             "synthetic input-swap checkpoint stage/training seed is invalid"
         )
-    examples = load_synthetic_examples(test_directory)
+    examples = load_synthetic_examples(test_directory, allow_legacy=allow_legacy)
     object_ids = np.asarray([example.object_id for example in examples])
     if (
         len(examples) < 2
@@ -527,6 +538,7 @@ def evaluate_synthetic_label_shuffle_checkpoint(
     seed: int,
     device: str = "cuda",
     batch_size: int = 4,
+    allow_legacy: bool = False,
 ) -> dict[str, float | str]:
     """Evaluate a label-shuffle checkpoint on the untouched synthetic test set."""
     source = Path(checkpoint_path)
@@ -544,7 +556,7 @@ def evaluate_synthetic_label_shuffle_checkpoint(
         checkpoint.get("config", {}).get("seed", -1)
     ) != seed:
         raise K3PublicationRunError("label-shuffle checkpoint stage/training seed is invalid")
-    examples = load_synthetic_examples(test_directory)
+    examples = load_synthetic_examples(test_directory, allow_legacy=allow_legacy)
     summary = _evaluate_examples(
         source, examples, output_path, device=device, batch_size=batch_size
     )

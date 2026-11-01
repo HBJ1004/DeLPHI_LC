@@ -71,6 +71,52 @@ def own_file(args, periods=None):
         "periods_hours": periods or dict(zip(t.OBJECT_IDS, (8.0, None, 12.5))), "details": {}})
 
 
+@pytest.mark.parametrize("baseline_status", [None, "failed", "ineligible"])
+def test_rerun_preserves_baseline_status_and_reuses_successful_predictions(
+    inputs, monkeypatch, baseline_status
+):
+    from repro.own_period import predict_external
+
+    inputs.device = "cpu"
+    own = own_file(inputs)
+    first = inputs.published_dir / f"{t.OBJECT_IDS[0]}.json"
+    if baseline_status is not None:
+        baseline = t.read(first)
+        baseline["status"] = baseline_status
+        write(first, baseline)
+    monkeypatch.setattr(t, "DataPath", lambda path: own)
+    monkeypatch.setattr(t, "rerun_context", lambda args: {"fixture": "same inputs"})
+    monkeypatch.setattr(t.network, "guard_output", lambda path: None)
+    monkeypatch.setattr(t.network, "json_metadata", lambda: {})
+    monkeypatch.setattr(t.network, "check_json", lambda path: None)
+    monkeypatch.setattr(t.network, "load_models", lambda *args: ([object()] * 25, None))
+    calls = []
+
+    def predict(models, epochs, period, device, cohort):
+        calls.append(period.hours)
+        return np.eye(3), np.array([0.25, 0.5, 0.75])
+
+    monkeypatch.setattr(predict_external, "predict", predict)
+    assert t.predict_rerun(inputs) == 0
+    rows = {oid: t.read(inputs.output_dir / "predictions" / f"{oid}.json") for oid in t.OBJECT_IDS}
+    assert rows[t.OBJECT_IDS[0]]["status"] == (baseline_status or "ok")
+    assert rows[t.OBJECT_IDS[1]]["status"] == "no_period"
+    assert rows[t.OBJECT_IDS[2]]["status"] == "ok"
+    assert calls == ([8.0, 12.5] if baseline_status is None else [12.5])
+    for oid in (t.OBJECT_IDS[0], t.OBJECT_IDS[2]):
+        if rows[oid]["status"] == "ok":
+            assert rows[oid]["axes"] == [
+                {"axis_xyz": axis, "score": score}
+                for axis, score in zip(np.eye(3).tolist(), (0.25, 0.5, 0.75), strict=True)
+            ]
+        else:
+            assert "axes" not in rows[oid]
+    before = {p: p.read_bytes() for p in (inputs.output_dir / "predictions").glob("*.json")}
+    assert t.predict_rerun(inputs) == 0
+    assert {p: p.read_bytes() for p in before} == before
+    assert len(calls) == (2 if baseline_status is None else 1)
+
+
 @pytest.fixture
 def fake_predictor(monkeypatch):
     from lc_pipeline.k3 import ztf_prediction

@@ -1,6 +1,7 @@
 """Regenerate the frozen K3 simulations with independent v2 random streams.
 
-Run as ``python -B -m repro.generate_k3_synthetic --check`` before generation.
+Run ``python -B -m repro.generate_k3_synthetic --check --frozen-dir <v1-synthetic>
+--dump-root <DAMIT-snapshot> --noise-bank <original-noise-bank.npz>`` before generation.
 Only the recipe schema changes; global object indices, seeds, donor pairing,
 and the original residual bank are retained. Initial phase is not stored by
 the shard writer, so summaries never infer it from a seed or from photometry.
@@ -41,10 +42,6 @@ from lc_pipeline.k3.synthetic import (
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-NOTEBOOKS = Path("/mnt/d/Downloads/Colab Notebooks")
-FROZEN = NOTEBOOKS / "DeLPHI-followup/inputs/frozen-artifacts/k3-2408c563/synthetic"
-DUMP = NOTEBOOKS / "damit-20250610T000301Z"
-NOISE_BANK = NOTEBOOKS / "data/synth/_cache/noise_bank_seed0_n250.npz"
 OLD_SCHEMA = "delphi.k3-synthetic-recipe.v1"
 OLD_HASHES = {
     "train": "8d673d04fa25772aed316681d1f7683b37fbbf4f3f8644175bfad6d32342df28",
@@ -316,10 +313,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--check", action="store_true", help="verify all frozen splits without writing or rendering")
     parser.add_argument("--max-shards", type=int, help="generate only this many leading shards per split for a quick check")
-    parser.add_argument("--dump-root", type=Path, default=DUMP)
-    parser.add_argument("--frozen-dir", type=Path, default=FROZEN)
+    parser.add_argument("--dump-root", type=Path, required=True)
+    parser.add_argument("--frozen-dir", type=Path, required=True)
     parser.add_argument("--catalog", type=Path, default=REPOSITORY / "repro/data/damit-20250610T000301Z/catalog.jsonl")
-    parser.add_argument("--noise-bank", type=Path, default=NOISE_BANK)
+    parser.add_argument("--noise-bank", type=Path, required=True)
     parser.add_argument("--noise-provenance", default=NOISE_PROVENANCE,
                         help="exact historical recipe string; v1 hash verification is mandatory")
     args = parser.parse_args(argv)

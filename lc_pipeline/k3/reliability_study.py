@@ -520,8 +520,13 @@ def prediction_cell(root, row, config, repeat, predictor, *, network_metadata=No
         axes = predict_curve(predictor, curve, row["object_id"])
         value.update(status="ok", axes=axes)
     except (ValueError, RuntimeError) as exc:
-        value.update(status="failed", axes=None, failure_code=f"{type(exc).__name__}: {exc}")
         import torch
+        # Resource and CUDA runtime failures must remain retryable on resume.
+        if isinstance(exc, torch.OutOfMemoryError) or (
+                isinstance(exc, RuntimeError) and any(marker in str(exc).lower() for marker in (
+                    "cuda", "cublas", "cudnn", "cusolver", "cusparse", "cufft", "curand"))):
+            raise
+        value.update(status="failed", axes=None, failure_code=f"{type(exc).__name__}: {exc}")
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     value["runtime_s"] = time.monotonic() - started
@@ -661,6 +666,8 @@ def fit_cell(root, row, sampling, arm, lock, predictor, budget, *, workers=6):
         if prediction is None:
             axes = predict_curve(predictor, curve, row["object_id"])
             prediction = {"axes": axes, "input_sha256": input_hash(curve), "fold": row["fold"]}
+            if lock.get("network_binding_sha256") is not None:
+                prediction["network_binding_sha256"] = lock["network_binding_sha256"]
             seal(prediction_file, prediction)
         if lock.get('network_binding_sha256') is not None and prediction.get(
                 'network_binding_sha256') != lock['network_binding_sha256']:

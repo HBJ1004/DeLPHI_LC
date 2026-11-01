@@ -27,18 +27,17 @@ inversion should start from all six.
 ## 2. Download and check one network set
 
 Use the code at tag `v1.1.0`. The retrained networks are in the
-[Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}) as five
+[Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881) as five
 small archives, `k3-oof-fold-0-v1.1.0.tar.gz` to
 `k3-oof-fold-4-v1.1.0.tar.gz`, about 12 MB each. Each holds the five networks
 of one cross-validation run (the `fold` in the name) and extracts to
 `k3-oof-fold-N/`. They are not in the Git source tree. For Astraea, download
-only run 0 and the checksum file. DOI and record placeholders will be filled
-before publication.
+only run 0 and the checksum file.
 
 ```bash
 mkdir -p networks && cd networks
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-0-v1.1.0.tar.gz
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS
+curl --fail -LO https://zenodo.org/records/23857881/files/k3-oof-fold-0-v1.1.0.tar.gz
+curl --fail -LO https://zenodo.org/records/23857881/files/SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0-v1.1.0.tar.gz: OK"
 tar -xzf k3-oof-fold-0-v1.1.0.tar.gz
 cd ..
@@ -197,9 +196,10 @@ cand end  lambda(deg)  beta(deg)
    2  -       139.3      -70.7
    3  +        91.8      +58.7
    3  -       271.8      -58.7
-largest axis difference 0.0000 deg: matches examples/astraea/expected_prediction.json
+largest axis difference 0.0003 deg: matches examples/astraea/expected_prediction.json
 ```
 
+The number varies slightly by computer and must be below 0.1°.
 Small differences are normal between computers and between a CPU and a GPU.
 The comparison reports "matches" up to 0.1° by default
 (`--tolerance-deg` changes this).

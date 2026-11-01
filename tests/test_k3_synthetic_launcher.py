@@ -96,5 +96,20 @@ def test_check_cli_does_not_generate_or_create_output(monkeypatch, tmp_path):
 
     monkeypatch.setattr(launcher, "generate", forbidden_generation)
     output = tmp_path / "absent"
-    assert launcher.main(["--check", "--output-dir", str(output)]) == 0
+    assert launcher.main(["--check", "--output-dir", str(output),
+                          "--dump-root", str(tmp_path / "dump"),
+                          "--frozen-dir", str(tmp_path / "frozen"),
+                          "--noise-bank", str(tmp_path / "noise.npz")]) == 0
     assert not output.exists()
+
+
+@pytest.mark.parametrize("missing", ["--dump-root", "--frozen-dir", "--noise-bank"])
+def test_cli_requires_portable_input_paths(missing, tmp_path, capsys):
+    args = ["--check"]
+    for flag in ("--dump-root", "--frozen-dir", "--noise-bank"):
+        if flag != missing:
+            args.extend((flag, str(tmp_path / flag[2:])))
+    with pytest.raises(SystemExit) as exc:
+        launcher.main(args)
+    assert exc.value.code == 2
+    assert f"the following arguments are required: {missing}" in capsys.readouterr().err

@@ -8,7 +8,7 @@ which file and script lie behind each result, and how to arrange the files to
 rerun the analyses.
 
 **Shortest route.** Use this repository at tag `v1.1.0` and the
-[Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}).
+[Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
 Download the retrained results and `SHA256SUMS` using the
 [minimal download](#minimal-download-for-check-a), then follow
 [Install](#install) and [Check A](#check-a-paper-i-own-period-results).
@@ -30,7 +30,7 @@ A few terms are used throughout.
 The code at tag `v1.1.0` provides the revised Paper I analyses with our own
 rotation periods and the 25 networks retrained on corrected simulations.
 Data, predictions and fits are in the
-[Zenodo data record v1.1.0](https://doi.org/{DATA_DOI}). The corrected simulations
+[Zenodo data record v1.1.0](https://doi.org/10.5281/zenodo.23857881). The corrected simulations
 use independent random streams for the pole, period, initial phase and noise.
 `retrain-20261030/PROTOCOL.md` and `RUNLOG.md` record the retraining, reruns and
 same-PC retimes. The unchanged `own-period-20261021/PROTOCOL.md` and protocols in `census7/`,
@@ -137,29 +137,28 @@ Median commands require explicit scratch destinations, for example:
 
 Use the software release
 [`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0),
-software DOI `{CODE_DOI}`, with the
-[Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}).
+software DOI `10.5281/zenodo.23787947`, with the
+[Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
 Download URLs have the form
-`https://zenodo.org/records/{DATA_RECORD}/files/<name>`.
-The DOI and record placeholders will be filled before publication.
+`https://zenodo.org/records/23857881/files/<name>`.
 
 | File | Contents and extraction layout |
 |---|---|
-| [`k3-oof-fold-0-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-0-v1.1.0.tar.gz) | Five retrained networks for run 0, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-0/` for the Astraea example or a new asteroid. |
-| [`k3-oof-fold-1-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-1-v1.1.0.tar.gz) | Five retrained networks for run 1, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-1/`. |
-| [`k3-oof-fold-2-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-2-v1.1.0.tar.gz) | Five retrained networks for run 2, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-2/`. |
-| [`k3-oof-fold-3-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-3-v1.1.0.tar.gz) | Five retrained networks for run 3, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-3/`. |
-| [`k3-oof-fold-4-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-4-v1.1.0.tar.gz) | Five retrained networks for run 4, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-4/`. |
-| [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz) | Full archive for reproduction (648 MB): retrained networks, training histories, fold bundles, model binding and evaluation arrays. Extract to the data directory; creates `retrain-20261030/artifact-root/`. `DELPHI_NETWORK_ROOT` points there, `DELPHI_MODEL_BINDING` to its `model-binding.json`, and `DELPHI_BUNDLE_ROOT` to its `bundles/`. |
-| [`delphi-k3-synthetic-data-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-synthetic-data-v1.1.0.tar.gz) | Corrected simulated training, validation and test sets, recipe metadata and generation checks. Extract to the data directory; creates `retrain-20261030/synthetic/`. |
-| [`delphi-retrain-results-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-retrain-results-v1.1.0.tar.gz) | Rerun predictions, score maps, figures, summaries, locks, protocols, run logs, training times, runners and RT4–RT7 receipts. Extract to the data directory; creates `retrain-20261030/`, with results in `results/`, beside `artifact-root/`. Includes the failed V6 attempt's audit evidence. |
-| [`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-retrain-benchmark-fits-v1.1.0.tar.gz) | Newly written per-start solver parameters, solutions, modelled lightcurves and output records for direct, withheld, refinement, reporting-validation, RT4/RT5 and RT7 fits. Extract to the data directory; paths start with `retrain-20261030/results/`. |
-| [`delphi-own-period-results-v1.0.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-own-period-results-v1.0.0.tar.gz) | Retained unchanged: periods, protocols, classical baselines, sample definitions and historical summaries. Extract to the data directory; creates `own-period-20261021/`, selected by `DELPHI_DATA`. Its old network scores are historical. |
-| [`delphi-benchmark-fits-v1.0.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-benchmark-fits-v1.0.0.tar.gz) | Retained unchanged: classical and historical comparison fits. Extract to the data directory; paths start with `own-period-20261021/benchmark/`, `direct-workflow-benchmark/` or `pole-grid-benchmark/20260912-environment-relocked-v3/full/`. |
-| [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-supporting-results-v1.0.0.tar.gz) | Retained unchanged: cited supporting tables, derived DAMIT catalogue tables and historical scripts. Extract to the follow-up root, one level above the data directory; paths start with `data/`, `experiments/`, `inputs/`, `source/`, `source-own-period/` or `source-op-maps/`. |
-| [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-paper-v1-evidence.tar.gz) | Retained unchanged: historical evidence and classical analyses. Extract in a separate `legacy/` directory; creates `delphi-paper-v1-evidence/part-a-validation/` and `part-b-analyses/`. |
-| [`README.md`](https://zenodo.org/records/{DATA_RECORD}/files/README.md) | Data record inventory, extraction instructions, paper map, input sources and licence. |
-| [`SHA256SUMS`](https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS) | Checksums for the other fourteen deposited files. |
+| [`k3-oof-fold-0-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-0-v1.1.0.tar.gz) | Five retrained networks for run 0, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-0/` for the Astraea example or a new asteroid. |
+| [`k3-oof-fold-1-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-1-v1.1.0.tar.gz) | Five retrained networks for run 1, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-1/`. |
+| [`k3-oof-fold-2-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-2-v1.1.0.tar.gz) | Five retrained networks for run 2, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-2/`. |
+| [`k3-oof-fold-3-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-3-v1.1.0.tar.gz) | Five retrained networks for run 3, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-3/`. |
+| [`k3-oof-fold-4-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-4-v1.1.0.tar.gz) | Five retrained networks for run 4, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-4/`. |
+| [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-artifacts-v1.1.0.tar.gz) | Full archive for reproduction (648 MB): retrained networks, training histories, fold bundles, model binding and evaluation arrays. Extract to the data directory; creates `retrain-20261030/artifact-root/`. `DELPHI_NETWORK_ROOT` points there, `DELPHI_MODEL_BINDING` to its `model-binding.json`, and `DELPHI_BUNDLE_ROOT` to its `bundles/`. |
+| [`delphi-k3-synthetic-data-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-synthetic-data-v1.1.0.tar.gz) | Corrected simulated training, validation and test sets, recipe metadata and generation checks. Extract to the data directory; creates `retrain-20261030/synthetic/`. |
+| [`delphi-retrain-results-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz) | Rerun predictions, score maps, figures, summaries, locks, protocols, run logs, training times, runners and RT4–RT7 receipts. Extract to the data directory; creates `retrain-20261030/`, with results in `results/`, beside `artifact-root/`. Includes the failed V6 attempt's audit evidence. |
+| [`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-benchmark-fits-v1.1.0.tar.gz) | Newly written per-start solver parameters, solutions, modelled lightcurves and output records for direct, withheld, refinement, reporting-validation, RT4/RT5 and RT7 fits. Extract to the data directory; paths start with `retrain-20261030/results/`. |
+| [`delphi-own-period-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-own-period-results-v1.0.0.tar.gz) | Retained unchanged: periods, protocols, classical baselines, sample definitions and historical summaries. Extract to the data directory; creates `own-period-20261021/`, selected by `DELPHI_DATA`. Its old network scores are historical. |
+| [`delphi-benchmark-fits-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-benchmark-fits-v1.0.0.tar.gz) | Retained unchanged: classical and historical comparison fits. Extract to the data directory; paths start with `own-period-20261021/benchmark/`, `direct-workflow-benchmark/` or `pole-grid-benchmark/20260912-environment-relocked-v3/full/`. |
+| [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-supporting-results-v1.0.0.tar.gz) | Retained unchanged: cited supporting tables, derived DAMIT catalogue tables and historical scripts. Extract to the follow-up root, one level above the data directory; paths start with `data/`, `experiments/`, `inputs/`, `source/`, `source-own-period/` or `source-op-maps/`. |
+| [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23857881/files/delphi-paper-v1-evidence.tar.gz) | Retained unchanged: historical evidence and classical analyses. Extract in a separate `legacy/` directory; creates `delphi-paper-v1-evidence/part-a-validation/` and `part-b-analyses/`. |
+| [`README.md`](https://zenodo.org/records/23857881/files/README.md) | Data record inventory, extraction instructions, paper map, input sources and licence. |
+| [`SHA256SUMS`](https://zenodo.org/records/23857881/files/SHA256SUMS) | Checksums for the other fourteen deposited files. |
 
 For prediction, download only the appropriate small bundle and `SHA256SUMS`;
 see the [prediction guide](usage.md#2-download-and-check-one-network-set).
@@ -179,7 +178,7 @@ mkdir delphi-check && cd delphi-check
 git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
 mkdir downloads
 cd downloads
-URL=https://zenodo.org/records/{DATA_RECORD}/files
+URL=https://zenodo.org/records/23857881/files
 for f in delphi-k3-artifacts-v1.1.0.tar.gz delphi-k3-synthetic-data-v1.1.0.tar.gz \
     k3-oof-fold-0-v1.1.0.tar.gz k3-oof-fold-1-v1.1.0.tar.gz \
     k3-oof-fold-2-v1.1.0.tar.gz k3-oof-fold-3-v1.1.0.tar.gz k3-oof-fold-4-v1.1.0.tar.gz \
@@ -228,8 +227,8 @@ mkdir delphi-check && cd delphi-check
 git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
 mkdir -p downloads extracted/data
 cd downloads
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/delphi-retrain-results-v1.1.0.tar.gz
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS
+curl --fail -LO https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz
+curl --fail -LO https://zenodo.org/records/23857881/files/SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 cd ..
 tar xzf downloads/delphi-retrain-results-v1.1.0.tar.gz -C extracted/data
@@ -612,6 +611,13 @@ source of the run-to-run difference is unknown. Saved starts were used for
 the retimed fits. Every DeLPHI timing receipt now records the GPU numerics
 settings (`gpu_numerics`); keep these receipts when comparing runs.
 
+The paper's reruns set `DELPHI_SCORE_CHUNK_MAX=256`, as recorded in
+`retrain-20261030/runners/rerun_all.sh` and Protocol Addendum 3 (revised).
+This positive integer caps the number of grid points scored at once, lowering
+peak GPU memory. It changes scores only by float32 rounding. The default
+prediction commands do not set it. Each receipt records `score_chunk_max`
+as an integer, or null when the variable is unset; GPU fields are null on CPU runs.
+
 ### Scripts that cannot run from the released files alone
 
 - The run scripts of the inversion comparison (steps 1 to 7 and 9 in its
@@ -658,6 +664,21 @@ once on the NVIDIA RTX 5070 Ti with Python 3.12.15 and PyTorch 2.12.1
 (CUDA 13.0). Training wall times are recorded in `retrain-20261030/train-times.tsv`
 and the attempts in `RUNLOG.md`; per-epoch histories are in
 `retrain-20261030/artifact-root/models/*.jsonl`.
+
+To regenerate the corrected simulations, first run the input checks:
+
+```bash
+python -B -m repro.generate_k3_synthetic --check \
+  --frozen-dir /path/to/original-v1/synthetic \
+  --dump-root /path/to/damit-20250610T000301Z \
+  --noise-bank /path/to/noise_bank_seed0_n250.npz
+```
+
+All three paths are required. Use the original frozen simulations and residual
+noise bank: the recipe hashes, seeds and donor pairs are checked before generation.
+For generation, use the same arguments with `--output-dir <new-directory>`
+in place of `--check`. The synthetic evaluation Python entry points accept
+`allow_legacy=True` to read v1 shards explicitly; training requires v2 shards.
 
 ## 6. What cannot be reproduced exactly
 

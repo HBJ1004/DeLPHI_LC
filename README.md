@@ -76,19 +76,22 @@ Tests that need stored research data or a solver are skipped when those inputs
 are unavailable; the count depends on the local data. Set `DELPHI_DATA` to the
 extracted `own-period-20261021/` folder to enable the stored-data checks (see the
 [reproduction guide](docs/reproduction.md#paper-i-results)). The training smoke
-test records the current Git commit and needs a Git checkout; a source archive
-without Git metadata cannot pass that provenance check. To install the exact
+test and the two local-binding provenance tests,
+`test_local_binding_audits_graph_without_inventing_publication_evidence` and
+`test_local_binding_accepts_native_training_cli_receipts` in `tests/test_network_root.py`,
+record the current Git commit and need a Git checkout; a source archive
+without Git metadata cannot pass those provenance checks. To install the exact
 package versions of our test environment, add `-c constraints/ci.txt` to the install command.
 
 ## 2. Make your first prediction
 
 Download the retrained run-0 networks (about 12 MB) from the
-[v1.1.0 data record](https://doi.org/{DATA_DOI}) and check their checksum:
+[v1.1.0 data record](https://doi.org/10.5281/zenodo.23857881) and check their checksum:
 
 ```bash
 mkdir -p networks && cd networks
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-0-v1.1.0.tar.gz
-curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS
+curl --fail -LO https://zenodo.org/records/23857881/files/k3-oof-fold-0-v1.1.0.tar.gz
+curl --fail -LO https://zenodo.org/records/23857881/files/SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0-v1.1.0.tar.gz: OK"
 tar -xzf k3-oof-fold-0-v1.1.0.tar.gz
 cd ..
@@ -123,11 +126,10 @@ from JPL Horizons.
 
 The code is this repository at tag
 [`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0), software
-DOI `{CODE_DOI}`. The revised paper uses 25 networks retrained on corrected
+DOI `10.5281/zenodo.23787947`. The revised paper uses 25 networks retrained on corrected
 simulations and timings measured on one PC. Data are in the
-[v1.1.0 data record, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}); downloads use
-`https://zenodo.org/records/{DATA_RECORD}/files/<name>`.
-These DOI and record placeholders will be filled before publication.
+[v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881); downloads use
+`https://zenodo.org/records/23857881/files/<name>`.
 
 | To… | Use from the data record |
 |---|---|
@@ -205,8 +207,8 @@ solution quality. The result files and saved fits are mapped in the
 
 ## Citation
 
-Please cite the paper, software v1.1.0 using DOI `{CODE_DOI}`,
-and the [v1.1.0 data DOI {DATA_DOI}](https://doi.org/{DATA_DOI}).
+Please cite the paper, software v1.1.0 using DOI `10.5281/zenodo.23787947`,
+and the [v1.1.0 data DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
 See [CITATION.cff](CITATION.cff) and the [release notes](CHANGELOG.md).
 
 ## Use of AI assistants

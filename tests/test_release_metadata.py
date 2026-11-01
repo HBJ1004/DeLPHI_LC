@@ -16,9 +16,12 @@ def test_release_identity_is_consistent():
     assert str(citation["date-released"]) == "2026-11-01"
     assert any(identifier["type"] == "doi" and identifier["value"] == "10.5281/zenodo.23757942"
                for identifier in citation["identifiers"])
-    for placeholder in ("{CODE_DOI}", "{DATA_DOI}"):
-        assert any(identifier["type"] == "doi" and identifier["value"] == placeholder
+    for doi in ("10.5281/zenodo.23787947", "10.5281/zenodo.23857881"):
+        assert any(identifier["type"] == "doi" and identifier["value"] == doi
                    for identifier in citation["identifiers"])
+    code = next(identifier for identifier in citation["identifiers"]
+                if identifier["value"] == "10.5281/zenodo.23787947")
+    assert "all versions (concept DOI)" in code["description"]
     for authors in (citation["authors"], citation["preferred-citation"]["authors"]):
         lee = next(author for author in authors if author["family-names"] == "Lee")
         assert lee["orcid"] == "https://orcid.org/0000-0002-6839-075X"

@@ -9,14 +9,14 @@ repository-code: "https://github.com/HBJ1004/DeLPHI_LC"
 url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0"
 identifiers:
   - type: doi
-    value: "{CODE_DOI}"
-    description: "Software release v1.1.0 (DOI placeholder)"
+    value: "10.5281/zenodo.23787947"
+    description: "Software, all versions (concept DOI)"
   - type: doi
     value: "10.5281/zenodo.23757942"
     description: "Paper I data record, version 1.0.0 (superseded networks and results)"
   - type: doi
-    value: "{DATA_DOI}"
-    description: "Paper I data record, version 1.1.0 (DOI placeholder)"
+    value: "10.5281/zenodo.23857881"
+    description: "Paper I data record, version 1.1.0"
 keywords:
   - asteroids
   - asteroid rotation

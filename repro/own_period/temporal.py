@@ -456,6 +456,7 @@ def predict_rerun(args):
     network.guard_output(args.output_dir)
     request = rerun_context(args)
     _, paths = source_objects(args.prepared_dir)
+    baseline = published_predictions(args.published_dir)
     period_path = DataPath("temporal/own-periods-temporal.json")
     own = load_own_periods(period_path, args.prepared_dir)
     periods = ({oid: read(paths[oid])["known_period_hours"] for oid in OBJECT_IDS}
@@ -474,8 +475,9 @@ def predict_rerun(args):
             continue
         row = {"schema": PREDICTION_SCHEMA, "object_id": oid,
                "period_hours": periods[oid], "request": request, **network.json_metadata()}
-        if periods[oid] is None:
-            row["status"] = "no_period"
+        status = baseline[oid].get("status", "ok")
+        if status != "ok" or periods[oid] is None:
+            row["status"] = status if status != "ok" else "no_period"
         else:
             if models is None:
                 models = network.load_models(args.models, args.model_manifest, tuple(range(5)), args.device)[0]

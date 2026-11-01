@@ -336,6 +336,8 @@ def score(args: argparse.Namespace) -> int:
         validate_rerun_lock(args.lock)
     execution = args.execution.resolve()
     published_layout = execution == PUBLISHED_FULL.resolve()
+    if network.switched() and published_layout:
+        raise ValueError("switched-network scoring requires a rerun execution directory; published layout refused")
     if not published_layout:
         state = grid.read_json(execution / "execution.json")
         if state.get("execution_complete") is not True or state["lock_sha256"] != grid.digest(args.lock):

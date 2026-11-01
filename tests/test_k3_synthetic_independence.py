@@ -11,6 +11,7 @@ import torch
 from scipy.stats import kstest, spearmanr
 
 from lc_pipeline.k3.publication_run import (
+    evaluate_synthetic_checkpoint,
     load_synthetic_examples,
     load_synthetic_subset,
     run_synthetic_label_shuffle_control,
@@ -206,6 +207,21 @@ def test_training_entry_points_refuse_old_version_before_fitting(shard, tmp_path
 def test_current_shards_are_accepted_by_both_training_loaders(shard):
     assert len(load_synthetic_examples(shard.parent)) == 1
     assert len(load_synthetic_subset(shard.parent, count=1, seed=17)) == 1
+
+
+def test_legacy_evaluation_requires_opt_in_and_still_verifies_hash(shard, tmp_path, monkeypatch):
+    _make_legacy(shard)
+    monkeypatch.setattr("lc_pipeline.k3.publication_run._evaluate_examples",
+                        lambda checkpoint, examples, output, **kwargs: {"count": len(examples)})
+    args = (tmp_path / "checkpoint.pt", shard.parent, tmp_path / "evaluation.npz")
+    with pytest.raises(SyntheticDataError, match="evaluation of v1 shards needs allow_legacy"):
+        evaluate_synthetic_checkpoint(*args, device="cpu")
+    assert evaluate_synthetic_checkpoint(*args, device="cpu", allow_legacy=True) == {"count": 1}
+    with shard.open("ab") as handle:
+        handle.write(b"tamper")
+    with pytest.raises(SyntheticDataError, match="hash mismatch") as error:
+        evaluate_synthetic_checkpoint(*args, device="cpu", allow_legacy=True)
+    assert "needs allow_legacy" not in str(error.value)
 
 
 def test_legacy_analysis_reads_still_verify_the_hash(shard):

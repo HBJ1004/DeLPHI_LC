@@ -119,6 +119,7 @@ def test_input_validation_runs_once_and_preserves_every_output_bit(entry, monkey
 
 
 def test_gpu_numerics_records_versions_device_and_flags_without_changing_them(monkeypatch):
+    monkeypatch.delenv("DELPHI_SCORE_CHUNK_MAX", raising=False)
     monkeypatch.setattr(torch.cuda, "get_device_name", lambda device: "fixture GPU")
     monkeypatch.setattr(torch.backends.cudnn, "version", lambda: 90102)
     flags = {
@@ -128,10 +129,43 @@ def test_gpu_numerics_records_versions_device_and_flags_without_changing_them(mo
         "cudnn.deterministic": torch.backends.cudnn.deterministic,
     }
     expected = {"torch_version": str(torch.__version__), "cuda_version": torch.version.cuda,
-                "cudnn_version": 90102, "gpu_name": "fixture GPU", **flags}
+                "cudnn_version": 90102, "gpu_name": "fixture GPU", "score_chunk_max": None, **flags}
     assert gpu_numerics("cuda:0") == expected
-    assert gpu_numerics("cpu") == {**expected, "gpu_name": None}
+    assert gpu_numerics("cpu") == {
+        key: value if key in {"torch_version", "score_chunk_max"} else None
+        for key, value in expected.items()
+    }
     assert gpu_numerics("cuda:0") == expected
+    monkeypatch.setenv("DELPHI_SCORE_CHUNK_MAX", "256")
+    assert gpu_numerics("cpu")["score_chunk_max"] == 256
+    assert gpu_numerics("cuda:0")["score_chunk_max"] == 256
+
+
+@pytest.mark.parametrize("raw", ["", "0", "-1", "1.5", "abc", " 2", "+2", "1_000", "٢", "9" * 5000])
+def test_score_chunk_cap_refuses_invalid_values_in_scoring_and_receipts(monkeypatch, raw):
+    model = CandidateConditionedScorer(K3ScoreModelConfig(
+        hidden_dim=32, attention_heads=4, convolution_blocks=1, set_encoder_layers=1,
+    )).eval()
+    monkeypatch.setenv("DELPHI_SCORE_CHUNK_MAX", raw)
+    with pytest.raises(K3InferenceError, match="DELPHI_SCORE_CHUNK_MAX must be a positive integer"):
+        score_axial_grid(model, _model_inputs())
+    with pytest.raises(K3InferenceError, match="DELPHI_SCORE_CHUNK_MAX must be a positive integer"):
+        gpu_numerics("cpu")
+
+
+@pytest.mark.parametrize("cap", [256, 4096])
+def test_score_chunk_cap_preserves_explicit_chunk_output_bits(monkeypatch, cap):
+    torch.manual_seed(21)
+    model = CandidateConditionedScorer(K3ScoreModelConfig(
+        hidden_dim=32, attention_heads=4, convolution_blocks=1, set_encoder_layers=1,
+        dropout=0.0, score_chunk_size=1024,
+    )).eval()
+    inputs = _model_inputs()
+    monkeypatch.delenv("DELPHI_SCORE_CHUNK_MAX", raising=False)
+    expected = score_axial_grid(model, inputs, chunk_size=min(1024, cap))
+    monkeypatch.setenv("DELPHI_SCORE_CHUNK_MAX", str(cap))
+    actual = score_axial_grid(model, inputs)
+    assert actual.tobytes() == expected.tobytes()
 
 
 def test_axial_grid_has_exactly_6144_unique_projective_points() -> None:

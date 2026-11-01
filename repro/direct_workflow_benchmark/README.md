@@ -9,8 +9,8 @@ and keep the fit of lowest RMS residual. The revised paper uses our estimated
 period, with the DAMIT period as a comparison.
 
 The original-period results are in
-[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-paper-v1-evidence.tar.gz)
-in the [v1.1.0 data record, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}),
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23857881/files/delphi-paper-v1-evidence.tar.gz)
+in the [v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881),
 folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`. It holds
 the locks, execution summaries, scores and the three historical run notes kept
 here. The dated notes describe original-period comparisons, rather than the
@@ -35,8 +35,7 @@ export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 
 The [Paper I results map](../../docs/reproduction.md#3-where-each-result-comes-from)
 describes the corresponding scripts and frozen sources. The RT4/RT5 runners
-and receipts are under `retrain-20261030/runners/`. The DOI and record
-placeholders will be filled before publication.
+and receipts are under `retrain-20261030/runners/`.
 
 ## Prerequisites
 
@@ -47,7 +46,7 @@ placeholders will be filled before publication.
   to 26,612 observations and `POINTS_MAX` to 1,549 observations per
   lightcurve. The fitting algorithm is unchanged.
 - The retrained networks in
-  [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz),
+  [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-artifacts-v1.1.0.tar.gz),
   including the binding and fold bundles selected above, and a CUDA GPU for
   the DeLPHI arm.
 - The folder layout of [docs/reproduction.md](../../docs/reproduction.md), with

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from lc_pipeline import grid_benchmark
 from lc_pipeline.k3 import reliability_study as study
@@ -49,6 +50,70 @@ def _bound_curve(path: Path, curve: LightCurve) -> dict:
         "period_hours": curve.period_hours,
         "lightcurve": study.binding(path),
     }
+
+
+@pytest.mark.parametrize("binding_hash", [None, "a" * 64])
+def test_fit_self_prediction_seals_selected_network_binding(tmp_path, monkeypatch, binding_hash):
+    row = _bound_curve(tmp_path / "lc.txt", _curve())
+    monkeypatch.setattr(study, "predict_curve", lambda *args: np.eye(3).tolist())
+    monkeypatch.setattr(grid_benchmark, "guided_starts", lambda axes, count: [])
+    lock = {} if binding_hash is None else {"network_binding_sha256": binding_hash}
+    root = tmp_path / "run"
+    result = study.fit_cell(root, row, "full", "k3", lock, object(), object())
+    path = root / "fits" / row["object_id"] / "full" / "k3" / "prediction.json"
+    prediction = study.unseal(path)
+    assert prediction["axes"] == np.eye(3).tolist()
+    assert prediction.get("network_binding_sha256") == binding_hash
+    if binding_hash is None:
+        assert "network_binding_sha256" not in prediction
+    assert study.fit_cell(root, row, "full", "k3", lock, object(), object()) == result
+
+
+@pytest.mark.parametrize("error", [
+    torch.OutOfMemoryError("fixture allocation failure"),
+    RuntimeError("CUDA error: out of memory"),
+    RuntimeError("CUDA error: device-side assert triggered"),
+    RuntimeError("CUBLAS_STATUS_ALLOC_FAILED"),
+])
+def test_prediction_transient_failure_is_not_sealed_and_resume_retries(tmp_path, error):
+    row = _bound_curve(tmp_path / "lc.txt", _curve())
+    config = {"condition": "full", "family": "full", "sampling": {"kind": "full"},
+              "period_multiplier": 1.0}
+
+    class Predictor:
+        calls = 0
+
+        def predict(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise error
+            return {"axes": [{"axis_xyz": axis} for axis in np.eye(3).tolist()]}
+
+    predictor = Predictor()
+    root = tmp_path / "run"
+    with pytest.raises(type(error), match=str(error)):
+        study.prediction_cell(root, row, config, 0, predictor)
+    target = root / "predictions" / row["object_id"] / "full" / "repeat-0.json"
+    assert not target.exists()
+    result = study.prediction_cell(root, row, config, 0, predictor)
+    assert result["status"] == "ok" and predictor.calls == 2
+    assert study.prediction_cell(root, row, config, 0, predictor) == result
+    assert predictor.calls == 2
+
+
+@pytest.mark.parametrize("error", [ValueError("invalid curve"), RuntimeError("invalid model output")])
+def test_prediction_permanent_failure_still_seals_a_failure(tmp_path, error):
+    row = _bound_curve(tmp_path / "lc.txt", _curve())
+    config = {"condition": "full", "family": "full", "sampling": {"kind": "full"},
+              "period_multiplier": 1.0}
+
+    class Predictor:
+        def predict(self, *args, **kwargs):
+            raise error
+
+    result = study.prediction_cell(tmp_path / "run", row, config, 0, Predictor())
+    assert result["status"] == "failed"
+    assert result["failure_code"] == f"{type(error).__name__}: {error}"
 
 
 def test_budget_deadline_and_elapsed_time_survive_resume(tmp_path: Path, monkeypatch):

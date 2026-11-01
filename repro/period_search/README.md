@@ -10,8 +10,8 @@ score-based checks and uncertainty intervals here remain supporting
 comparisons; they do not select the main own-period results.
 
 Use this repository at tag `v1.1.0`. The retained historical results are in
-[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-paper-v1-evidence.tar.gz)
-in the [Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}),
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23857881/files/delphi-paper-v1-evidence.tar.gz)
+in the [Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881),
 folder `delphi-paper-v1-evidence/part-b-analyses/period-search/results/`. The same archive keeps a copy of
 these scripts in `part-b-analyses/period-search/code/`.
 
@@ -21,7 +21,7 @@ The revised network-dependent checks and all same-PC timings are in
 runners, checker scripts and receipts are under `retrain-20261030/runners/`.
 New per-start physical-screen fits are in
 `delphi-retrain-benchmark-fits-v1.1.0.tar.gz`. Use the retrained networks from
-[`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz)
+[`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-artifacts-v1.1.0.tar.gz)
 and set `DELPHI_NETWORK_ROOT` to `retrain-20261030/artifact-root`,
 `DELPHI_MODEL_BINDING` to its `model-binding.json`, and `DELPHI_BUNDLE_ROOT`
 to its `bundles/` folder as in the reproduction guide. The historical layout

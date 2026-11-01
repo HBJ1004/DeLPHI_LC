@@ -83,7 +83,8 @@ exclude = ["tests*", "repro.tests*", "experiments*", "artifacts*", "results*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"repro" = ["*.yaml", "*.sha256", "schemas/*.json", "data/damit-20250610T000301Z/*.json", "data/damit-20250610T000301Z/*.jsonl", "data/damit-20250610T000301Z/SHA256SUMS"]
+"repro" = ["*.yaml", "*.sha256", "schemas/*.json", "data/*.csv", "data/*/*.json", "data/*/*.jsonl", "data/*/SHA256SUMS", "baselines_out/*.json", "baselines_out/*.npz"]
+"*" = ["*.md", "*.sh"]
 
 [tool.pytest.ini_options]
 minversion = "8.2"

@@ -29,12 +29,13 @@ python examples/prediction_to_poles.py prediction.json \
   --compare examples/astraea/expected_prediction.json
 ```
 
-The last line of the second command should read:
+The last line of the second command should look like:
 
 ```text
-largest axis difference 0.0000 deg: matches examples/astraea/expected_prediction.json
+largest axis difference 0.0003 deg: matches examples/astraea/expected_prediction.json
 ```
 
+The number varies slightly by computer and must be below 0.1°.
 Small differences are normal between computers and between a CPU and a GPU.
 On our GPU the axes differed from the CPU result by at most 0.0087° and the
 scores by about 0.0015. The comparison accepts up to 0.1°.
