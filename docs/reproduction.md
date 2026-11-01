@@ -71,17 +71,24 @@ export PYTHON=/path/to/venv/bin/python
 
 Python data paths are resolved from the current `DELPHI_DATA` at use time,
 including paths imported from another runner and command-line defaults.
-The checkout can live independently of the data tree. Keep the data record's
-relative layout: earlier data folders are siblings of the own-period folder;
+For historical reruns, put the checkout at the follow-up root's `source/`
+folder before extracting the supporting and historical sources archives.
+The quick checks of current results also work with a separate checkout.
+Keep the data record's relative layout: earlier data folders are siblings of
+the own-period folder;
 `inputs/` and `experiments/` are two levels above it, and the DAMIT snapshot
 is three levels above it. Source-file paths used to import or hash this
 checkout still come from the source location.
 
 Frozen evidence also refers to historical code folders (`source-op-maps`,
 `source-op-lowq`, `source-op-reliability`, `source-op-nettests`, `source-op-v67`
-and `source-bench-8a67c52`) alongside `inputs/` and `data/`. Preserve the
-source files and hashes named in the record: inversion reruns verify their
-runtime sources and environment, and median tools hash or extract functions
+and `source-bench-8a67c52`) alongside `inputs/` and `data/`.
+`delphi-historical-sources-v1.1.0.tar.gz` supplies the selected files from
+these folders; the supporting archive supplies the historical maps renderer.
+The [historical input list](#historical-inputs-and-sources) describes the files
+and commands that read them. Preserve the source files and hashes named in
+the record. Inversion reruns verify their runtime sources and environment,
+and median tools hash or extract functions
 from the historical renderers. Setting `DELPHI_DATA` to the recorded
 `data/own-period-20261021/` folder preserves that input layout.
 
@@ -142,6 +149,10 @@ software DOI `10.5281/zenodo.23787947`, with the
 Download URLs have the form
 `https://zenodo.org/records/23857881/files/<name>`.
 
+The record has 16 uploads: five new archives, five small network sets,
+four retained archives, `README.md` and `SHA256SUMS`. The checksum file covers
+the other 15 uploads.
+
 | File | Contents and extraction layout |
 |---|---|
 | [`k3-oof-fold-0-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-0-v1.1.0.tar.gz) | Five retrained networks for run 0, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-0/` for the Astraea example or a new asteroid. |
@@ -153,12 +164,13 @@ Download URLs have the form
 | [`delphi-k3-synthetic-data-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-synthetic-data-v1.1.0.tar.gz) | Corrected simulated training, validation and test sets, recipe metadata and generation checks. Extract to the data directory; creates `retrain-20261030/synthetic/`. |
 | [`delphi-retrain-results-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz) | Rerun predictions, score maps, figures, summaries, locks, protocols, run logs, training times, runners and RT4–RT7 receipts. Extract to the data directory; creates `retrain-20261030/`, with results in `results/`, beside `artifact-root/`. Includes the failed V6 attempt's audit evidence. |
 | [`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-benchmark-fits-v1.1.0.tar.gz) | Newly written per-start solver parameters, solutions, modelled lightcurves and output records for direct, withheld, refinement, reporting-validation, RT4/RT5 and RT7 fits. Extract to the data directory; paths start with `retrain-20261030/results/`. |
+| [`delphi-historical-sources-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-historical-sources-v1.1.0.tar.gz) | Historical sources and input locks (6.4 MB, 128 files), including census validation inputs and the historical model binding. Extract at the follow-up root, one level above `data/`, after placing the checkout at `source/`. Paths begin with `source-op-.../`, `source-bench-8a67c52/`, `source-own-period/`, `source/`, `data/` and `inputs/`. The source folders contain selected files only. |
 | [`delphi-own-period-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-own-period-results-v1.0.0.tar.gz) | Retained unchanged: periods, protocols, classical baselines, sample definitions and historical summaries. Extract to the data directory; creates `own-period-20261021/`, selected by `DELPHI_DATA`. Its old network scores are historical. |
 | [`delphi-benchmark-fits-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-benchmark-fits-v1.0.0.tar.gz) | Retained unchanged: classical and historical comparison fits. Extract to the data directory; paths start with `own-period-20261021/benchmark/`, `direct-workflow-benchmark/` or `pole-grid-benchmark/20260912-environment-relocked-v3/full/`. |
 | [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-supporting-results-v1.0.0.tar.gz) | Retained unchanged: cited supporting tables, derived DAMIT catalogue tables and historical scripts. Extract to the follow-up root, one level above the data directory; paths start with `data/`, `experiments/`, `inputs/`, `source/`, `source-own-period/` or `source-op-maps/`. |
 | [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23857881/files/delphi-paper-v1-evidence.tar.gz) | Retained unchanged: historical evidence and classical analyses. Extract in a separate `legacy/` directory; creates `delphi-paper-v1-evidence/part-a-validation/` and `part-b-analyses/`. |
 | [`README.md`](https://zenodo.org/records/23857881/files/README.md) | Data record inventory, extraction instructions, paper map, input sources and licence. |
-| [`SHA256SUMS`](https://zenodo.org/records/23857881/files/SHA256SUMS) | Checksums for the other fourteen deposited files. |
+| [`SHA256SUMS`](https://zenodo.org/records/23857881/files/SHA256SUMS) | Checksums for the other 15 deposited files. |
 
 For prediction, download only the appropriate small bundle and `SHA256SUMS`;
 see the [prediction guide](usage.md#2-download-and-check-one-network-set).
@@ -175,14 +187,15 @@ For the complete set, start in an empty folder:
 
 ```bash
 mkdir delphi-check && cd delphi-check
-git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
-mkdir downloads
+mkdir -p downloads extracted
+git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git extracted/source
 cd downloads
 URL=https://zenodo.org/records/23857881/files
 for f in delphi-k3-artifacts-v1.1.0.tar.gz delphi-k3-synthetic-data-v1.1.0.tar.gz \
     k3-oof-fold-0-v1.1.0.tar.gz k3-oof-fold-1-v1.1.0.tar.gz \
     k3-oof-fold-2-v1.1.0.tar.gz k3-oof-fold-3-v1.1.0.tar.gz k3-oof-fold-4-v1.1.0.tar.gz \
     delphi-retrain-results-v1.1.0.tar.gz delphi-retrain-benchmark-fits-v1.1.0.tar.gz \
+    delphi-historical-sources-v1.1.0.tar.gz \
     delphi-own-period-results-v1.0.0.tar.gz delphi-benchmark-fits-v1.0.0.tar.gz \
     delphi-supporting-results-v1.0.0.tar.gz delphi-paper-v1-evidence.tar.gz \
     README.md SHA256SUMS; do
@@ -204,6 +217,7 @@ for f in delphi-own-period-results-v1.0.0.tar.gz delphi-benchmark-fits-v1.0.0.ta
   tar xzf "downloads/$f" -C extracted/data
 done
 tar xzf downloads/delphi-supporting-results-v1.0.0.tar.gz -C extracted
+tar xzf downloads/delphi-historical-sources-v1.1.0.tar.gz -C extracted
 tar xzf downloads/delphi-paper-v1-evidence.tar.gz -C extracted/legacy
 export DELPHI_DATA="$PWD/extracted/data/own-period-20261021"
 export DELPHI_NETWORK_ROOT="$PWD/extracted/data/retrain-20261030/artifact-root"
@@ -224,7 +238,7 @@ for this check.
 
 ```bash
 mkdir delphi-check && cd delphi-check
-git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git DeLPHI_LC
+git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git extracted/source
 mkdir -p downloads extracted/data
 cd downloads
 curl --fail -LO https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz
@@ -241,7 +255,7 @@ Python 3.11 or 3.12 is needed. From `delphi-check/`:
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate     # or python3.11
-python -m pip install -e './DeLPHI_LC[test,plot]'
+python -m pip install -e './extracted/source[test,plot]'
 delphi-k3 validate-protocol
 ```
 
@@ -317,7 +331,7 @@ import numpy as np
 
 root = Path(os.environ["DELPHI_NETWORK_ROOT"])
 ensemble = np.load(root / "evaluations/real-oof-ensemble.npz")
-catalog = "DeLPHI_LC/repro/data/damit-20250610T000301Z/catalog.jsonl"
+catalog = "extracted/source/repro/data/damit-20250610T000301Z/catalog.jsonl"
 poles = {row["object_id"]: np.array([s["vector"] for s in row["solutions"]])
          for row in map(json.loads, open(catalog))}
 
@@ -435,9 +449,19 @@ legacy evidence archive's `part-a-validation/` and `part-b-analyses/` folders.
   paper/figures/                           output folder of Figure 13 (create it)
   DeLPHI-followup/
     source/                                this repository at tag v1.1.0
+      experiments/lowq_damit_census_20260917/
+        input-index.json                   from historical sources archive
+        predictions-fold0-five-seed/predictions.jsonl
+                                           original census validation predictions
+    source-op-maps/, source-op-lowq/, source-op-reliability/
+    source-op-nettests/, source-op-v67/     selected historical files (below)
+    source-own-period/                     selected sources from the supporting and historical archives
+    source-bench-8a67c52/                   92 Python files and licence, not a full checkout
     inputs/
       frozen-artifacts/k3-definitive-7874092/   Zenodo artifact-root/
       frozen-artifacts/k3-2408c563/synthetic/   Zenodo synthetic-data/ (census only)
+      frozen-artifacts/k3-2408c563/comparators/v1-comparators.npz
+                                           from historical sources archive
       training-run/repro/data/damit-20250610T000301Z/
                                            copy of source/repro/data/damit-20250610T000301Z
     data/
@@ -447,6 +471,9 @@ legacy evidence archive's `part-a-validation/` and `part-b-analyses/` folders.
         results/                           revised results and same-PC retimes
         PROTOCOL.md, RUNLOG.md, runners/    retraining and rerun records
       own-period-20261021/                own-period results and benchmark-fits archives
+      reliability-20260915/run-1/         original study/schedule and scoring inputs
+      internal-validation-20260916/run-1/study.json
+                                           from historical sources archive
       ...                                sibling folders from supporting-results archive
       interpretation-20260926/             from B/interpretation/
       interpretation-20260930/             from B/interpretation/
@@ -454,7 +481,7 @@ legacy evidence archive's `part-a-validation/` and `part-b-analyses/` folders.
       damit-postsnapshot-check/            B/damit-census/
       publication-revision-20260917-r2/    A/k3-followup/revision/
       generalization-20260910/             ALCDEF result and Gaia DR3 spin table
-      external-models-final.json           historical binding (v1.0.0)
+      external-models-final.json           historical binding from historical sources archive
       solver-internal-capacity-corrected/20260911/expanded-solver/convexinv/
                                            patched convexinv (below)
     experiments/period-refinement-20260921/
@@ -467,20 +494,26 @@ For current results, use the extraction instructions in Section 1, with
 `extracted/` serving as the follow-up root. For the retained historical
 comparisons, work in an empty folder `<parent>` and separately extract the
 v1.0.0 artifacts and synthetic-data archives there, creating `artifact-root/`
-and `synthetic-data/`. Set `E` to the legacy evidence folder. Put the current
-archives under `DeLPHI-followup/data/` and extract supporting results at
-`DeLPHI-followup/`. The commands below arrange historical inputs; if
-supporting results already supply a destination, use that copy rather than
-nesting a second copy inside it. They do not replace the new network selection.
+and `synthetic-data/`. Set `E` to the legacy evidence folder and `D` to the
+download folder. Put the current retraining archives under
+`DeLPHI-followup/data/`. Clone the checkout first, then extract the supporting
+results and historical sources archives at `DeLPHI-followup/`, as below.
+Copy directory contents into the existing destinations so that the archives
+do not create nested copies. Keep the new network variables set for current results.
 
 ```bash
 E=/path/to/delphi-paper-v1-evidence
+D=/path/to/downloads
 T=DeLPHI-followup
 git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git $T/source
+tar xzf "$D/delphi-supporting-results-v1.0.0.tar.gz" -C "$T"
+tar xzf "$D/delphi-historical-sources-v1.1.0.tar.gz" -C "$T"
 mkdir -p $T/inputs/frozen-artifacts/k3-2408c563 $T/inputs/training-run/repro/data \
          $T/data/interpretation-20260926 $T/data/interpretation-20260930 \
          $T/data/generalization-20260910/locked-cohort \
          $T/data/generalization-20260910/sources/gaia-dr3-spins-20260911 \
+         $T/data/direct-workflow-benchmark $T/data/damit-postsnapshot-check \
+         $T/data/publication-revision-20260917-r2 \
          $T/experiments/period-refinement-20260921/end-to-end paper/figures
 mv artifact-root $T/inputs/frozen-artifacts/k3-definitive-7874092
 mv synthetic-data $T/inputs/frozen-artifacts/k3-2408c563/synthetic
@@ -491,9 +524,9 @@ cp -r $I/primary-intervals.json $I/random-axes-cdf.npz $I/mirror-symmetry.json \
       $I/candidate-count.json $I/shapley $I/shapley-summary.json $T/data/interpretation-20260926/
 cp $I/amplitude-aspect.json $I/amplitude-aspect.npz $I/amplitude-aspect-paired.json \
    $I/label-shuffle-spread.json $I/sampling-baselines.json $T/data/interpretation-20260930/
-cp -r $E/part-b-analyses/workflow-benchmark $T/data/direct-workflow-benchmark
-cp -r $E/part-b-analyses/damit-census $T/data/damit-postsnapshot-check
-cp -r $E/part-a-validation/k3-followup/revision $T/data/publication-revision-20260917-r2
+cp -r "$E/part-b-analyses/workflow-benchmark/." "$T/data/direct-workflow-benchmark/"
+cp -r "$E/part-b-analyses/damit-census/." "$T/data/damit-postsnapshot-check/"
+cp -r "$E/part-a-validation/k3-followup/revision/." "$T/data/publication-revision-20260917-r2/"
 cp $E/part-a-validation/evidence/source-records/alcdef-gaia-analysis.json \
    $T/data/generalization-20260910/locked-cohort/alcdef-gaia-transfer-analysis-30-20260911.json
 curl -L -o $T/data/generalization-20260910/sources/gaia-dr3-spins-20260911/table3.dat \
@@ -523,6 +556,61 @@ and run the scripts from `$T/source`, for example
 `direct_workflow_benchmark/score_classical_ladder.py` in this layout
 reproduced the released files exactly or to the last digits of floating-point
 round-off.
+
+### Historical inputs and sources
+
+Extract `delphi-historical-sources-v1.1.0.tar.gz` at the follow-up root,
+alongside `data/` and `inputs/`. For the complete download above that root is
+`extracted/`; for the historical layout it is `DeLPHI-followup/`.
+The archive adds the two original census files directly under
+`source/experiments/lowq_damit_census_20260917/`:
+
+- `input-index.json`, read by `lowq_search.py`, `lowq_predict.py` and
+  `census7.py prepare`.
+- `predictions-fold0-five-seed/predictions.jsonl`, read by the historical
+  `lowq_validate.py` and `census7.py` validation steps.
+
+These are the paths the runners read. Copying the legacy census export to
+`data/damit-postsnapshot-check/` alone does not put them there. The new archive
+places both files correctly, without a copy or rename. Their SHA-256 values are:
+
+| Census file | SHA-256 |
+|---|---|
+| `input-index.json` | `392d2dda3336bee1c4639b93f90fc1db4225aff57bb30c78d5435bbb0625a4be` |
+| `predictions-fold0-five-seed/predictions.jsonl` | `b3adff514191f4f72f325587c64342859224a75333aa9b7ade18bf2e6ae8f861` |
+
+The archive also puts the original `study.json` and `schedule.json` in
+`data/reliability-20260915/run-1/`, with `scored-rows.json`,
+`sampling-table.csv` and `report.json`. `reliability.py` uses these locks
+for reduced-data, noise and withheld-lightcurve sampling;
+`reliability_score.py` uses the original scored rows for validation. Keep
+their sealed contents unchanged. Their recorded file paths still describe
+the original installation; see the [rerun limits](#scripts-that-cannot-run-from-the-released-files-alone).
+The archive supplies `data/internal-validation-20260916/run-1/study.json`
+for `train_vs_test.py` as well.
+
+`median_stats.py` and `median_figures.py` read or hash selected historical
+producer files. The archive supplies the following files, with their licences.
+Paths in the second column are relative to the folder in the first column.
+
+| Historical folder | Selected files |
+|---|---|
+| `source-op-maps/` | `repro/own_period/maps/analyses.py`. The matching `repro/own_period/maps/render_figures.py` comes from the supporting results archive. |
+| `source-op-lowq/` | `repro/own_period/lowq_score.py` and `repro/own_period/lowq_figures/render_main_figures.py`. |
+| `source-op-reliability/` | `repro/own_period/reliability_score.py` and `repro/baselines_out/reference-baselines-per-object.npz`, also read by reliability scoring and `derived_comparators.py`. |
+| `source-op-nettests/` | `repro/own_period/external_variants.py`, `repro/own_period/summarize_controls.py` and `repro/own_period/train_vs_test.py`. |
+| `source-op-v67/` | `repro/own_period/v7_grid.py`. |
+| `source-own-period/` | `repro/amplitude_aspect_paired.py` and `repro/compute_reference_baselines.py`, in addition to the files in the supporting results archive. |
+| `source-bench-8a67c52/` | All 91 `lc_pipeline` Python files and `repro/run_delphi_workflow_benchmark.py`, the 92 Python files checked by the benchmark runtime locks. This is a subset of the original tree. |
+
+The benchmark subset is needed by `benchmark_lock.py` and the historical
+`run_direct_benchmark.py` and `run_loaded_benchmark.py` commands. The source
+folders above contain selected files only. They are not complete Git checkouts.
+Other small inputs in the archive include the original benchmark locks and
+reporting references, plus
+`inputs/frozen-artifacts/k3-2408c563/comparators/v1-comparators.npz` for the
+median and comparison tools. Current networks and results remain under
+`data/retrain-20261030/`.
 
 ### DAMIT data
 
@@ -599,8 +687,13 @@ export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 ```
 
 Keep the supplied binding and receipts: they verify the selected models and
-results by hash. The historical `external-models-final.json` shown in the
-layout belongs to the v1.0.0 inputs and does not select the retrained models.
+results by hash. The historical sources archive supplies
+`data/external-models-final.json` for the v1.0.0 networks. Its SHA-256 is
+`6d041bcbedd9e7ecacc9c4768d0eeb81827065f016dd4db9e982373db3ebfefa`.
+Historical `predict_external.py` and period-search `end_to_end.py score-periods`
+use it when the network variables are unset. Those runs also need the old
+model checkpoints from the superseded v1.0.0 archives. The historical binding
+does not select the retrained models.
 
 ### Run-to-run GPU differences
 
@@ -622,13 +715,28 @@ as an integer, or null when the variable is unset; GPU fields are null on CPU ru
 
 - The run scripts of the inversion comparison (steps 1 to 7 and 9 in its
   [README](../repro/direct_workflow_benchmark/README.md)) check lock files that
-  store the authors' paths and computer, and need the corresponding saved
-  fits and frozen source files. The new fits archive supplies the own-period
-  benchmark tree, rather than every historical original-period run.
+  store the authors' paths and computer. The selected runtime sources and
+  input locks are now supplied, but these commands still need locks prepared
+  for the local installation and the corresponding saved fits. The archives
+  do not include every historical original-period workspace or the targets of
+  omitted absolute fit symlinks. Historical reliability and withheld-fit
+  commands also need the DAMIT observations and a locally built `convexinv`.
   `candidate_accuracy_cost.py` and `score_exploratory_timing.py` also read the raw per-search records.
 - The reruns of the lower-quality, ZTF and ALCDEF predictions need the
-  external photometry (Fink, ALCDEF, Gaia DR3) and Horizons geometry, which are
-  not redistributed.
+  DAMIT or external photometry (Fink, ALCDEF, Gaia DR3) and Horizons geometry.
+  The full observations and prepared external photometry are not redistributed.
+  External-variant reruns also need the original prepared variant inputs and indices.
+- Historical predictions with the network variables unset need the old
+  checkpoints and, for the census, the full old synthetic data. Download the
+  superseded v1.0.0 archives separately; the new historical sources archive
+  contains only the small input and source subset described above.
+- `median_stats.py` and `median_figures.py` still need the manuscript and macro
+  input list; figure generation also needs the original reference figure PDFs.
+  The manuscript and reference PDFs are not supplied by the data record.
+- The seven-method period search cannot be repeated from these files alone.
+  Its `legacy4` method imports `fourier4.py` and `period_pilot.py`, which are
+  not supplied. The documented Fourier and phase-dispersion searches use
+  the included code.
 
 ## 5. Retraining the networks
 
@@ -695,15 +803,22 @@ in place of `--check`. The synthetic evaluation Python entry points accept
   timing receipts are in `delphi-retrain-results-v1.1.0.tar.gz`. The retained
   `delphi-benchmark-fits-v1.0.0.tar.gz` and
   `delphi-own-period-results-v1.0.0.tar.gz` preserve classical and historical
-  evidence. They do not replace the retrained results.
+  evidence. They do not replace the retrained results. Some historical
+  workspaces and reused fit symlink targets are absent; the selected historical
+  sources and input locks do not make every old fit rerunnable. See the
+  [commands with extra prerequisites](#scripts-that-cannot-run-from-the-released-files-alone).
 - **DAMIT data** are not redistributed. The DAMIT export of 1 June 2025 matches
   the files used (Section 4), but later DAMIT versions differ.
 - **External photometry** (ZTF through Fink, ALCDEF, Gaia DR3) and Horizons
   geometry are not redistributed. The data record holds the prepared inputs'
-  checksums, the predictions and the scores.
+  checksums, the predictions and the scores. Prepared external variant inputs
+  and their indices must also be obtained separately for those reruns.
 - **Figures.** The current figures are in the new results archive, with
   runners and receipts. `repro/own_period/median_figures.py` and the rerun
-  runners draw the revised network-dependent figures. Historical versions
+  runners draw the revised network-dependent figures. The median tools still
+  require the manuscript and macro input list, and figure generation needs
+  the original reference figure PDFs. The manuscript and reference PDFs are
+  not included in the data record. Historical versions
   of Figures 13 and 18 were drawn by
   `repro/direct_workflow_benchmark/plot_direct_workflow.py` and
   `repro/period_search/benchmark_end_to_end.py`. The other historical figures were drawn

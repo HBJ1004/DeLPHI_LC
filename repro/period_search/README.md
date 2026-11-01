@@ -58,7 +58,7 @@ they must be copied there to run again:
                                        copy of source/repro/data/damit-20250610T000301Z
     inputs/frozen-artifacts/k3-definitive-7874092/
                                        Zenodo artifact-root/ (score-periods only)
-    data/external-models-final.json    model binding file (score-periods only)
+    data/external-models-final.json    historical binding from historical sources archive
     data/solver-internal-capacity-corrected/20260911/expanded-solver/convexinv/
                                        convexinv with enlarged storage limits (screen only)
     experiments/period-refinement-20260921/
@@ -77,7 +77,10 @@ Requirements by step:
 - `end_to_end.py score-periods` needs CUDA and the retrained models and binding
   selected by the network variables above. The `data/external-models-final.json`
   in the layout is the historical binding, used only when the network variables
-  are unset (see [docs/reproduction.md](../../docs/reproduction.md)).
+  are unset. Extract `delphi-historical-sources-v1.1.0.tar.gz` at
+  `DeLPHI-followup/` to place that binding in `data/`; obtain the old checkpoints
+  from the superseded v1.0.0 archives for that historical route
+  (see [docs/reproduction.md](../../docs/reproduction.md#model-binding-file)).
 - `benchmark_end_to_end.py`, `period_uncertainty.py` and
   `period_uncertainty_summary.py` need only the result files, the catalog and
   the DAMIT lightcurves.

@@ -131,6 +131,10 @@ simulations and timings measured on one PC. Data are in the
 [v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881); downloads use
 `https://zenodo.org/records/23857881/files/<name>`.
 
+The data record has 16 uploads: five new archives, five small network sets,
+four retained archives, `README.md` and `SHA256SUMS`. The checksum file covers
+the other 15 uploads.
+
 | To… | Use from the data record |
 |---|---|
 | Predict Astraea or use test run 0 | `k3-oof-fold-0-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-0/` |
@@ -141,7 +145,14 @@ simulations and timings measured on one PC. Data are in the
 | Reproduce network evaluations | `delphi-k3-artifacts-v1.1.0.tar.gz` (648 MB): retrained checkpoints, evaluations, model binding and five-network fold bundles in `retrain-20261030/artifact-root/` |
 | Check Paper I results | `delphi-retrain-results-v1.1.0.tar.gz`: revised results, protocols and same-PC timing receipts under `retrain-20261030/`; newly written solver fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz` |
 | Use retained inputs and comparisons | Unchanged `delphi-own-period-results-v1.0.0.tar.gz`, `delphi-benchmark-fits-v1.0.0.tar.gz`, `delphi-supporting-results-v1.0.0.tar.gz` and `delphi-paper-v1-evidence.tar.gz`; their older network scores are historical |
+| Run analyses that read historical sources or input locks | `delphi-historical-sources-v1.1.0.tar.gz` (6.4 MB, 128 files): selected source files, reliability locks, census validation inputs and the historical model binding. Extract at the follow-up root, beside `data/` and `inputs/`. |
 | Retrain the networks | `delphi-k3-synthetic-data-v1.1.0.tar.gz`, which extracts to `retrain-20261030/synthetic/`, plus the DAMIT inputs and retraining protocol |
+
+The historical sources are needed by the median statistics and figures,
+reliability and training/test checks, lower-quality census checks, and
+historical benchmark and model-selection commands. The
+[reproduction guide](docs/reproduction.md#historical-inputs-and-sources)
+gives their paths and the remaining inputs needed to rerun those commands.
 
 The [download and verification instructions](docs/reproduction.md#1-what-to-download)
 list every file, including `README.md` and
