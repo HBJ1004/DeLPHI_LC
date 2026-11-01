@@ -1,7 +1,10 @@
 # Worked example: (5) Astraea
 
-This folder holds a complete DeLPHI input and the output you should get from
-it. Use it to check your installation before you prepare your own data.
+This folder holds a complete DeLPHI input and its archived v1.0.0 output.
+The retrained v1.1.0 networks give different candidates and scores; use the
+[prediction guide](../../docs/usage.md) for current downloads and commands.
+Compare with `expected_prediction.json` only when using the original v1.0.0
+networks.
 
 | | |
 |---|---|
@@ -13,8 +16,8 @@ it. Use it to check your installation before you prepare your own data.
 
 ## Run it
 
-From the repository root, with the run-0 networks extracted to
-`networks/k3-oof-fold-0` as in the [prediction guide](../../docs/usage.md):
+To check the historical output, run from the repository root with the
+archived v1.0.0 run-0 networks extracted to `networks/k3-oof-fold-0`:
 
 ```bash
 delphi-k3-predict \
@@ -68,7 +71,7 @@ Other fields of `expected_prediction.json`: `fold` 0 and `bundle_id`
 `k3-oof-fold-0`; `calibration.cone90_deg` 46.6 and `cone95_deg` 90.0, which
 apply to the run-0 benchmark asteroids as a group and are not uncertainties of
 these candidates; `risk_deg` `null`. All fields are explained in the
-[prediction guide](../../docs/usage.md#5-read-the-output).
+[prediction guide](../../docs/usage.md#6-read-the-output).
 
 ## Timing
 

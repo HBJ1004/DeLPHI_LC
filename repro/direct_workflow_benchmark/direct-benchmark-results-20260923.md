@@ -1,13 +1,13 @@
-> **Archive location (2026-10-29).** The dated text below records the
-> original-period comparison. Its scores and execution summaries are in
+> **Release note (2026-11-01).** The dated text below describes the old
+> v1.0.0 networks, original-period comparisons and earlier manuscript.
+> Its numbers, hashes and historical paper references are preserved.
+> The historical scores and summaries remain in
 > [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz),
-> folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`, in
-> [Zenodo data record 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
-> The revised own-period results and saved fits are separate archives in that
-> record, as described in [the reproduction guide](../../docs/reproduction.md#paper-i-results).
-> The new fits archive covers the own-period tree; the original-period raw
-> fits mentioned below are a different set. Recorded hashes and numerical
-> results below are preserved.
+> folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`, in the
+> [v1.0.0 data record](https://doi.org/10.5281/zenodo.23757942).
+> That unchanged archive is also retained in v1.1.0. Revised retrained results,
+> same-PC timings and newly written fits are in the v1.1.0 archives mapped in
+> [the reproduction guide](../../docs/reproduction.md#3-where-each-result-comes-from).
 
 > **Note added 2026-10-01.** This is a record written at the time of the run
 > and keeps its numerical results; archive locations were updated above. Its results are

@@ -9,11 +9,23 @@ any reference-pole scoring, through `repro/own_period/manifest.py`. The pilot,
 score-based checks and uncertainty intervals here remain supporting
 comparisons; they do not select the main own-period results.
 
-Use this repository at tag `v1.0.0`. The supporting results are in
-[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz)
-in the [Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942),
+Use this repository at tag `v1.1.0`. The retained historical results are in
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-paper-v1-evidence.tar.gz)
+in the [Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}),
 folder `delphi-paper-v1-evidence/part-b-analyses/period-search/results/`. The same archive keeps a copy of
 these scripts in `part-b-analyses/period-search/code/`.
+
+The revised network-dependent checks and all same-PC timings are in
+`delphi-retrain-results-v1.1.0.tar.gz`, under
+`retrain-20261030/results/{period-peak-pilot,period-retime}/`; the RT6/RT7
+runners, checker scripts and receipts are under `retrain-20261030/runners/`.
+New per-start physical-screen fits are in
+`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`. Use the retrained networks from
+[`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz)
+and set `DELPHI_NETWORK_ROOT` to `retrain-20261030/artifact-root`,
+`DELPHI_MODEL_BINDING` to its `model-binding.json`, and `DELPHI_BUNDLE_ROOT`
+to its `bundles/` folder as in the reproduction guide. The historical layout
+and commands below describe the retained supporting runs.
 
 ## Scripts
 
@@ -62,10 +74,10 @@ Requirements by step:
 - `end_to_end.py screen` needs `convexinv` compiled from DAMIT's
   `version_0.2.1.tar.gz` with the three storage limits raised as described in
   [docs/reproduction.md](../../docs/reproduction.md).
-- `end_to_end.py score-periods` needs CUDA, the trained networks in the Zenodo data record
-  (`artifact-root/models/`), and `data/external-models-final.json`,
-  which `python -m repro.prepare_k3_followup_inputs bind-models` writes (see
-  [docs/reproduction.md](../../docs/reproduction.md)).
+- `end_to_end.py score-periods` needs CUDA and the retrained models and binding
+  selected by the network variables above. The `data/external-models-final.json`
+  in the layout is the historical binding, used only when the network variables
+  are unset (see [docs/reproduction.md](../../docs/reproduction.md)).
 - `benchmark_end_to_end.py`, `period_uncertainty.py` and
   `period_uncertainty_summary.py` need only the result files, the catalog and
   the DAMIT lightcurves.

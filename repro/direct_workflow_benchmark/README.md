@@ -2,26 +2,41 @@
 
 These scripts produced the comparison of a pole search started from the six
 signed poles of the three DeLPHI axes with a classical search started from a
-fixed list of 12 poles, the cold and loaded timings (Table 3, Figure 13), and
-the exploratory comparison with 18 and 96 classical starts (Tables 4, 10 and
-11). Both searches fit the lightcurves with `convexinv` at the published DAMIT
-period and keep the fit of lowest RMS residual.
+fixed list of 12 poles, the cold and loaded timings (Table 4, Figures 13 and
+19), and the exploratory comparison with 18 and 96 classical starts
+(Tables 5, 12 and 13). Both searches fit the lightcurves with `convexinv`
+and keep the fit of lowest RMS residual. The revised paper uses our estimated
+period, with the DAMIT period as a comparison.
 
 The original-period results are in
-[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23757942/files/delphi-paper-v1-evidence.tar.gz)
-in the [Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942),
+[`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-paper-v1-evidence.tar.gz)
+in the [v1.1.0 data record, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}),
 folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`. It holds
 the locks, execution summaries, scores and the three historical run notes kept
 here. The dated notes describe original-period comparisons, rather than the
 revised own-period medians.
 
-Use this repository at tag `v1.0.0` for Paper I as revised. Its own-period
-benchmark results are in `delphi-own-period-results-v1.0.0.tar.gz`, and saved
-fits are in `delphi-benchmark-fits-v1.0.0.tar.gz` in the same data record; both
-extract into `own-period-20261021/`. Set `DELPHI_DATA` to that extracted folder.
-The [Paper I results map](../../docs/reproduction.md#paper-i-results) describes
-the corresponding scripts and frozen sources. The new fits archive covers
-that tree; the historical notes' original-period raw fits are a separate set.
+Use this repository at tag `v1.1.0` for Paper I as revised. The retrained
+benchmark results, locks, same-PC timing receipts and runner scripts are in
+`delphi-retrain-results-v1.1.0.tar.gz`. Direct scores are under
+`retrain-20261030/results/delphi-inversions/timing-retime/{own,damit}/`;
+the same tree contains ladder retimes and V6/V7 retimes. Newly written
+per-start fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz`.
+The unchanged `delphi-own-period-results-v1.0.0.tar.gz` and
+`delphi-benchmark-fits-v1.0.0.tar.gz` retain classical and historical evidence;
+their older network scores are not the revised results. Set `DELPHI_DATA`
+to the extracted `own-period-20261021/` folder and select the retrained networks:
+
+```bash
+export DELPHI_NETWORK_ROOT=/path/to/data/retrain-20261030/artifact-root
+export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
+export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
+```
+
+The [Paper I results map](../../docs/reproduction.md#3-where-each-result-comes-from)
+describes the corresponding scripts and frozen sources. The RT4/RT5 runners
+and receipts are under `retrain-20261030/runners/`. The DOI and record
+placeholders will be filled before publication.
 
 ## Prerequisites
 
@@ -31,18 +46,30 @@ that tree; the historical notes' original-period raw fits are a separate set.
   limits in `convexinv/constants.h`: `MAX_LC` to 210 lightcurves, `MAX_N_OBS`
   to 26,612 observations and `POINTS_MAX` to 1,549 observations per
   lightcurve. The fitting algorithm is unchanged.
-- The trained networks in the Zenodo data record (`k3-oof-fold-0.tar.gz` to
-  `k3-oof-fold-4.tar.gz`) and a CUDA GPU for the DeLPHI arm.
+- The retrained networks in
+  [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz),
+  including the binding and fold bundles selected above, and a CUDA GPU for
+  the DeLPHI arm.
 - The folder layout of [docs/reproduction.md](../../docs/reproduction.md), with
   the released `workflow-benchmark/` folder copied to
   `DeLPHI-followup/data/direct-workflow-benchmark/`.
 
-All runs of the paper used one workstation with an Intel Core i5-13600KF CPU
-under WSL2 and an NVIDIA RTX 4070 GPU, six single-threaded solver workers, and
-the solver settings of Appendix E. The measured times are those of the paper
-and of the scored files. They apply to that computer only.
+All timings printed in the revised paper were measured on one PC with an
+Intel Core Ultra 7 270K Plus CPU and an NVIDIA RTX 5070 Ti GPU. The direct
+comparison uses six single-threaded solver workers and the settings of
+Appendix E. The dated run notes retain old-PC timings from the Core
+i5-13600KF and RTX 4070. Timing intervals apply to the measured asteroids on
+the stated computer only.
 
-## Scripts and order
+## Historical scripts and order
+
+The sequence below describes the original DAMIT-period comparison. The
+retrained comparisons use `rerun.py`, the RT4/RT5 runners and their receipts.
+RT5 ladder scoring uses the committed `score_exploratory_timing_rt5.py`:
+it records DeLPHI inference drift while retaining the strict classical-fit
+check. DeLPHI timing receipts record GPU numerics settings; see
+[Run-to-run GPU differences](../../docs/reproduction.md#run-to-run-gpu-differences).
+Table and figure numbers below refer to the current manuscript.
 
 | Step | Script | Writes | Role |
 |---|---|---|---|
@@ -56,8 +83,8 @@ and of the scored files. They apply to that computer only.
 | 8 | `score_classical_ladder.py` | `classical-ladder-intervals.json` | Paired bootstrap intervals for every classical budget |
 | 9 | `time_exploratory_budgets.py` | `exploratory-loaded-ladder/` | Loaded timing of DeLPHI and of 18 and 96 classical starts, one repeat |
 | 10 | `score_exploratory_timing.py` | `exploratory-loaded-ladder/score.json` | Checks that the timed fits equal the saved fits and summarizes the times |
-| 11 | `budget_equivalence.py` | `budget-equivalence.json` | Table 10 |
-| 12 | `candidate_accuracy_cost.py` | `candidate-accuracy-cost.json` | Table 11, the 140 asteroids grouped by the oracle error of their DeLPHI candidates |
+| 11 | `budget_equivalence.py` | `budget-equivalence.json` | Table 12 |
+| 12 | `candidate_accuracy_cost.py` | `candidate-accuracy-cost.json` | Table 13, the 140 asteroids grouped by the oracle error of their DeLPHI candidates |
 | 13 | `plot_direct_workflow.py` | `inversion-benchmark.pdf` | Figure 13 |
 
 Steps 7 to 12 were decided after the scores of step 4 were known and are

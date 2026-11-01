@@ -2,15 +2,21 @@ cff-version: 1.2.0
 message: "If you use DeLPHI, please cite the paper below and this software release."
 title: "DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion"
 type: software
-version: "1.0.0"
-date-released: 2026-10-29
+version: "1.1.0"
+date-released: 2026-11-01
 license: MIT
 repository-code: "https://github.com/HBJ1004/DeLPHI_LC"
-url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0"
+url: "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0"
 identifiers:
   - type: doi
+    value: "{CODE_DOI}"
+    description: "Software release v1.1.0 (DOI placeholder)"
+  - type: doi
     value: "10.5281/zenodo.23757942"
-    description: "Paper I data, trained networks, predictions and results"
+    description: "Paper I data record, version 1.0.0 (superseded networks and results)"
+  - type: doi
+    value: "{DATA_DOI}"
+    description: "Paper I data record, version 1.1.0 (DOI placeholder)"
 keywords:
   - asteroids
   - asteroid rotation

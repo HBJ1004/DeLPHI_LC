@@ -22,14 +22,17 @@ means "three candidates".
 DeLPHI was trained and tested on asteroids with high-quality models in the
 Database of Asteroid Models from Inversion Techniques (DAMIT). On those 170
 asteroids, using periods estimated from their lightcurves, the closest of the
-three candidates has a median disagreement of 13.58° with a published pole
-(71.8% within 20°), against 24.13° for the six standard starting poles of a
+three candidates has a median disagreement of 10.70° with a published pole
+(77.1% within 20°), against 24.13° for the six standard starting poles of a
 classical search.
 
 It works best for **dense lightcurves from several well-separated observing
-geometries, with a well-constrained period**. For sparse survey photometry, a
-single short observing period, or a few hundred observations, it did worse than
-the standard starting poles in the paper; see
+geometries, with a well-constrained period**. It did worse than the standard
+starting poles for the tested ZTF and ALCDEF photometry and for a single
+30-day group of lightcurves. The observation-cap tests do not define a strict
+minimum. On asteroids with a period, no median difference was detected at
+caps of 50 or 100 observations, while DeLPHI did better at caps of 200 and
+500. See
 [when not to use DeLPHI](docs/usage.md#when-not-to-use-delphi) before you start.
 
 ## 1. Install
@@ -39,7 +42,7 @@ dependencies, and a few minutes. A GPU is optional; predictions also run on a
 CPU.
 
 ```bash
-git clone --branch v1.0.0 https://github.com/HBJ1004/DeLPHI_LC.git
+git clone --branch v1.1.0 https://github.com/HBJ1004/DeLPHI_LC.git
 cd DeLPHI_LC
 python3.12 -m venv .venv          # or python3.11
 source .venv/bin/activate          # on Windows: .venv\Scripts\activate
@@ -79,14 +82,15 @@ package versions of our test environment, add `-c constraints/ci.txt` to the ins
 
 ## 2. Make your first prediction
 
-Follow the [prediction guide](docs/usage.md). In a few minutes it downloads one
-set of trained networks (12 MB, from the
-[Zenodo data record](https://doi.org/10.5281/zenodo.23757942)), estimates the
-rotation period, and predicts three candidate axes for (5) Astraea. It also
-checks a supplied-period example against its expected output, explains
+Follow the [prediction guide](docs/usage.md). It downloads the retrained
+networks from the [v1.1.0 data record](https://doi.org/{DATA_DOI}), estimates
+the rotation period, and predicts three candidate axes for (5) Astraea. It also
+shows a supplied-period example, explains
 every field of the result, and turns the candidate axes into the six starting
 poles for an inversion. It also explains which network set to use, which
 matters for the 170 asteroids of the paper.
+The archived v1.0.0 expected output is kept as historical evidence; the
+retrained networks give different candidates and scores.
 
 To prepare your own asteroid, see the [data-format guide](docs/data-format.md):
 it converts DAMIT lightcurve files, or takes your own photometry with geometry
@@ -106,20 +110,25 @@ from JPL Horizons.
 ## Code and data
 
 The code is this repository at tag
-[`v1.0.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.0.0), software
-version 1.0.0. All data are in one [Zenodo data record,
-DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
+[`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0), software
+DOI `{CODE_DOI}`. The revised paper uses 25 networks retrained on corrected
+simulations and timings measured on one PC. Data are in the
+[v1.1.0 data record, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}); downloads use
+`https://zenodo.org/records/{DATA_RECORD}/files/<name>`.
+These DOI and record placeholders will be filled before publication.
 
 | To… | Use from the data record |
 |---|---|
-| Predict from your lightcurves | `k3-oof-fold-0.tar.gz` through `k3-oof-fold-4.tar.gz`: one five-network bundle per test fold |
-| Check Paper I results | `delphi-own-period-results-v1.0.0.tar.gz`, with `delphi-benchmark-fits-v1.0.0.tar.gz` for the saved inversion fits; both extract into `own-period-20261021/` |
-| Check the supporting comparisons | `delphi-paper-v1-evidence.tar.gz` (validation and analysis records), `delphi-supporting-results-v1.0.0.tar.gz` (sibling data folders), and `delphi-k3-artifacts-v1.0.0.tar.gz` (`artifact-root/`, with checkpoints and predictions) |
-| Retrain the networks | `delphi-k3-synthetic-data-v1.0.0.tar.gz`, which extracts to `synthetic-data/`, plus the DAMIT inputs |
+| Predict from your lightcurves | `delphi-k3-artifacts-v1.1.0.tar.gz`: retrained checkpoints, evaluations, model binding and five-network fold bundles in `retrain-20261030/artifact-root/` |
+| Check Paper I results | `delphi-retrain-results-v1.1.0.tar.gz`: revised results, protocols and same-PC timing receipts under `retrain-20261030/`; newly written solver fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz` |
+| Use retained inputs and comparisons | Unchanged `delphi-own-period-results-v1.0.0.tar.gz`, `delphi-benchmark-fits-v1.0.0.tar.gz`, `delphi-supporting-results-v1.0.0.tar.gz` and `delphi-paper-v1-evidence.tar.gz`; their older network scores are historical |
+| Retrain the networks | `delphi-k3-synthetic-data-v1.1.0.tar.gz`, which extracts to `retrain-20261030/synthetic/`, plus the DAMIT inputs and retraining protocol |
 
 The [download and verification instructions](docs/reproduction.md#1-what-to-download)
-list every file, including the verification JSON files, `README.md` and
+list every file, including `README.md` and
 `SHA256SUMS`, and describe their extraction layout.
+Superseded network archives remain in the
+[v1.0.0 data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
 
 ## Paper I results
 
@@ -127,50 +136,60 @@ The code includes the own-period analyses, inversion benchmarks, reliability
 and network tests, and median statistics and figures. See
 [Paper I results](docs/reproduction.md#paper-i-results) for the settings,
 section-to-file maps and data layout. Set `DELPHI_DATA` to the extracted
-`own-period-20261021/` folder.
+`own-period-20261021/` folder for unchanged inputs, and select the retrained
+networks and results with:
+
+```bash
+export DELPHI_NETWORK_ROOT=/path/to/data/retrain-20261030/artifact-root
+export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
+export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
+```
 
 ## Results in the paper
 
-All numbers are for the 170 DAMIT asteroids, each analyzed by the networks of
+The candidate results below are for the 170 DAMIT asteroids, each analyzed by the networks of
 the cross-validation run in which it was not used for training. The **oracle
 error** of an asteroid is the smallest angle between any of its three candidate
 axes and any of its published DAMIT poles. It measures how well the candidates
 cover the published solutions; it uses the published poles after the
 prediction and is not the error of a single pole chosen by DeLPHI.
 
-The revised analysis uses periods estimated from the lightcurves, with frozen
-networks and no choice between P/2, P and 2P after scoring. The saved
-`own-period-scores.json`, `median-stats.json` and
+The revised analysis uses periods estimated from the lightcurves, with the
+retrained networks held fixed and no choice between P/2, P and 2P after scoring.
+The saved `retrain-20261030/results/headline/own-period-scores-main.json`,
+`retrain-20261030/results/median-stats.json` and
 `repro/baselines_out/reference-baselines.json` give:
 
 | Directions | Median oracle error | Within 20° |
 |---|---:|---:|
-| DeLPHI, three candidate axes | 13.58° | 71.8% |
+| DeLPHI, three candidate axes | 10.70° | 77.1% |
 | Six standard starting poles | 24.13° | 39.4% |
 | Three random axes | 32.33° | 23.3% |
 
 The random-axis median is averaged over randomization draws, rather than
 computed from each asteroid's mean over draws. With published DAMIT periods,
-DeLPHI's median is 12.09°; those predictions remain available as comparison
-evidence in `artifact-root/`.
+DeLPHI's median is 10.48°; those predictions are in
+`retrain-20261030/artifact-root/evaluations/`.
 
 In complete pole searches with `convexinv` on 140 evaluation asteroids,
 six inversions started from the candidates at our rough period have a median
-disagreement of 27.44° with DAMIT poles, against 45.58° for 12 classical starts.
+disagreement of 23.55° with DAMIT poles, against 45.58° for 12 classical starts.
 Even 146 classical starts did not reach DeLPHI's accuracy at this period.
-With a refined period, both reached about 8° in an exploratory test of 20
-asteroids: 7.87° for DeLPHI and 8.37° for the classical search. A precise pole
-still needs a refined period from a classical scan before inversion. With the
-networks kept loaded for a batch, the classical-to-DeLPHI pole-fit time ratio is 1.29;
-with networks loaded anew for each asteroid it is 0.40. The classical search
+With a refined period, the medians in an exploratory test of 20 asteroids
+were 12.05° for DeLPHI and 8.37° for the classical search, with no detected
+gain for DeLPHI. A precise pole still needs a refined period from a classical
+scan before inversion. With the networks kept loaded for a batch, the
+classical-to-DeLPHI pole-fit time ratio is 1.39; with networks loaded anew for
+each asteroid it is 0.81. These times were measured on one Intel Core Ultra 7
+270K Plus PC with an NVIDIA RTX 5070 Ti. The classical search
 reaches lower residuals, so these timings do not establish a saving at equal
 solution quality. The result files and saved fits are mapped in the
 [reproduction guide](docs/reproduction.md).
 
 ## Citation
 
-Please cite the paper, the software using the Zenodo DOI shown on the v1.0.0 release page,
-and the [data DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
+Please cite the paper, software v1.1.0 using DOI `{CODE_DOI}`,
+and the [v1.1.0 data DOI {DATA_DOI}](https://doi.org/{DATA_DOI}).
 See [CITATION.cff](CITATION.cff) and the [release notes](CHANGELOG.md).
 
 ## Use of AI assistants

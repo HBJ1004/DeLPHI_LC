@@ -1,5 +1,14 @@
 # Release notes
 
+## 1.1.0 (2026-11-01)
+
+- Retrained all 25 ensemble networks after correcting reused simulation seeds
+  that linked the pole to the period and initial phase.
+- Reran all network results and retimed all reported comparisons on one PC.
+- Review fixes (d0f586a): record GPU numerics settings in timing receipts,
+  check V6 files before resuming, validate scorer inputs, and include the
+  RT5 timing scorer in the repository.
+
 ## 1.0.0 (2026-10-29)
 
 DeLPHI estimates the rotation period with its own Fourier search and proposes

@@ -2,8 +2,10 @@
 
 This guide takes you from an installed copy of DeLPHI to three candidate spin
 axes and the six starting poles they give for a lightcurve inversion. It first
-runs a worked example, (5) Astraea, whose expected result is in the
-repository, so you can check every step before you use your own data.
+runs a worked example, (5) Astraea, using the input in the repository.
+The printed example outputs below and `expected_prediction.json` retain
+the historical v1.0.0 predictions; the retrained v1.1.0 networks give
+different candidates and scores.
 
 DeLPHI needs the photometry of one asteroid, the directions from the asteroid
 to the Sun and to the observer at every observation, and a rotation period.
@@ -19,29 +21,33 @@ inversion should start from all six.
   commands below from the repository root. The prediction checks the network
   files against the frozen cross-validation split in `repro/data`, so it needs
   the checkout, not only an installed package.
-- Expected time: a few minutes for the installation, a 12 MB download, and
-  about 6 s for one prediction on a CPU (4 s with `--device cuda`).
+- Allow a few minutes for installation and download, then seconds for one
+  prediction. Times depend on your computer.
 - A GPU is optional.
 
 ## 2. Download and check one network set
 
-Use the code at tag `v1.0.0`. The trained networks are in the
-[Zenodo data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942), as five
-files `k3-oof-fold-0.tar.gz` to `k3-oof-fold-4.tar.gz`. Each holds the five
-networks trained in one of the five cross-validation runs of the paper
-(the `fold` in the name is the run). They are not in the Git source tree.
+Use the code at tag `v1.1.0`. The retrained networks are in the
+[Zenodo data record v1.1.0, DOI {DATA_DOI}](https://doi.org/{DATA_DOI}), in
+`delphi-k3-artifacts-v1.1.0.tar.gz`. Its `bundles/` folder contains five
+sets, `k3-oof-fold-0` to `k3-oof-fold-4`, each holding the five networks
+of one cross-validation run (the `fold` in the name). They are not in the
+Git source tree. DOI and record placeholders will be filled before publication.
 
 ```bash
 mkdir -p networks && cd networks
-curl -LO https://zenodo.org/records/23757942/files/k3-oof-fold-0.tar.gz
-curl -LO https://zenodo.org/records/23757942/files/SHA256SUMS
-sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0.tar.gz: OK"
-tar -xzf k3-oof-fold-0.tar.gz
+curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/delphi-k3-artifacts-v1.1.0.tar.gz
+curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS
+sha256sum --check SHA256SUMS --ignore-missing     # must print "delphi-k3-artifacts-v1.1.0.tar.gz: OK"
+tar -xzf delphi-k3-artifacts-v1.1.0.tar.gz
 cd ..
+export DELPHI_NETWORK_ROOT="$PWD/networks/retrain-20261030/artifact-root"
+export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
+export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 ```
 
 On macOS use `shasum -a 256 --check SHA256SUMS --ignore-missing`. The folder
-`networks/k3-oof-fold-0` now contains `bundle.json` and five
+`$DELPHI_BUNDLE_ROOT/k3-oof-fold-0` now contains `bundle.json` and five
 `seed-*.safetensors` files. DeLPHI checks the checksum of every network file
 again each time it loads the set.
 
@@ -102,7 +108,7 @@ For Astraea, the result includes these fields (numbers shortened):
 }
 ```
 
-The CPU command took 3.74 s on our Intel Core i5-13600KF, with one BLAS
+The historical CPU command took 3.74 s on our Intel Core i5-13600KF, with one BLAS
 thread. The saved Astraea run on our RTX 4070 took 2.71 s for the warm GPU
 search alone, excluding process startup. Times depend on your computer and
 its load. On CUDA, `method` is
@@ -129,7 +135,7 @@ Pass the saved estimate to the existing prediction command:
 
 ```bash
 delphi-k3-predict \
-  --bundle networks/k3-oof-fold-0 \
+  --bundle "$DELPHI_BUNDLE_ROOT/k3-oof-fold-0" \
   --input examples/astraea/observations.json \
   --period-json period.json \
   --output prediction-estimated-period.json
@@ -147,9 +153,11 @@ cand end  lambda(deg)  beta(deg)
    3  -       278.1      -57.9
 ```
 
-These are the candidate axes of the paper's own-period result for Astraea
-(`own-period-oof.npz` in the data record), and they differ slightly from the
-supplied-period example below because the period differs.
+These are the historical v1.0.0 candidate axes at the estimated period,
+retained for illustration. Current candidates are in
+`retrain-20261030/results/headline/maps/own-period/evaluations/` in the data
+record. The supplied-period historical example below also differs because
+its period differs.
 
 `--period-json` uses the saved `period_hours` and `provenance` in place of
 `known_period`. The file must contain a successful search for the same
@@ -159,12 +167,12 @@ supplied-period example below because the period differs.
 ## 5. If you already have a reliable period
 
 Keep it in `known_period` and omit `--period-json`. The supplied-period
-Astraea example uses the DAMIT period of 16.80059 hours and has an archived
-expected prediction. Use this alternative to check the networks:
+Astraea example uses the DAMIT period of 16.80059 hours. Run this alternative
+with the retrained networks:
 
 ```bash
 delphi-k3-predict \
-  --bundle networks/k3-oof-fold-0 \
+  --bundle "$DELPHI_BUNDLE_ROOT/k3-oof-fold-0" \
   --input examples/astraea/observations.json \
   --output prediction.json
 ```
@@ -172,12 +180,13 @@ delphi-k3-predict \
 Add `--device cuda` to use an NVIDIA GPU. The command prints nothing when it
 succeeds; check that `prediction.json` was written. The output file is never
 overwritten, so choose a new name for a rerun. Then list the six starting poles
-and compare with the expected output:
+with this command:
 
 ```bash
-python examples/prediction_to_poles.py prediction.json \
-  --compare examples/astraea/expected_prediction.json
+python examples/prediction_to_poles.py prediction.json
 ```
+
+For reference, the archived v1.0.0 output was:
 
 ```text
 object asteroid_103  bundle k3-oof-fold-0
@@ -188,12 +197,13 @@ cand end  lambda(deg)  beta(deg)
    2  -       140.4      -52.4
    3  +       106.6      +51.8
    3  -       286.6      -51.8
-largest axis difference 0.0012 deg: matches examples/astraea/expected_prediction.json
 ```
 
-Your difference may be slightly different. Differences of up to about 0.01°
-between computers, or between a CPU and a GPU, are normal; the script reports
-"matches" for differences up to 0.1° (change this with `--tolerance-deg`). The
+Do not compare the retrained networks against the old `expected_prediction.json`.
+For comparisons using the same networks, `--compare <saved-prediction.json>`
+reports "matches" up to 0.1° by default (`--tolerance-deg` changes this).
+Nearly tied candidates can change between GPU runs; see
+[Run-to-run GPU differences](reproduction.md#run-to-run-gpu-differences). The
 [example's README](../examples/astraea/README.md) gives
 the full expected result, the angle of each candidate to Astraea's DAMIT pole,
 and measured timings.
@@ -205,7 +215,8 @@ or use this alternative if you already have a reliable period.
 
 ## 6. Read the output
 
-`prediction.json` from the supplied-period Astraea example (numbers shortened):
+Historical v1.0.0 `prediction.json` from the supplied-period Astraea example
+(numbers shortened); v1.1.0 uses the same fields:
 
 ```json
 {
@@ -280,27 +291,30 @@ and is not available for a new asteroid.
 
 ## When not to use DeLPHI
 
-From the paper (Sections 6.1.2, 6.1.3 and 6.4.3), DeLPHI is best for dense
+From the paper (Sections 6.1.2, 6.1.4 and 6.4.3), DeLPHI is best for dense
 lightcurves from several well-separated epochs with a well-constrained
 rotation period. In the paper it was **worse than the six standard starting
 poles** of a classical search for
 
-- sparse survey photometry such as ZTF, and on the ALCDEF test, where it was
-  not distinguishable from random axes;
-- data from a single 30-day group of lightcurves, however many observations
-  that group contains;
-- 200 or fewer observations in total (with up to 500 it was not
-  distinguishable from the standard poles).
+- the tested ZTF and ALCDEF photometry. For ALCDEF,
+  standard poles gave detectably lower errors by both the median and the
+  pre-specified mean; no difference from random axes was detected;
+- data from a single 30-day group of lightcurves in the tested reductions.
 
-For such data, start the inversion from the standard poles instead. The six
-standard starting poles used in the paper (Appendix E) are, in ecliptic
+The observation-cap tests do not define a strict minimum. On asteroids with
+a period, caps of 50 or 100 observations gave no detectable median difference
+from standard poles; DeLPHI did better at caps of 200 and 500 observations.
+At smaller caps, failed period searches further limited the usable sample.
+
+For survey or single-group data, start the inversion from the standard poles.
+The six standard starting poles used in the paper (Appendix E) are, in ecliptic
 longitude and latitude, (0°, 0°), (180°, 0°), (90°, 60°), (240°, 60°),
 (90°, −60°) and (240°, −60°).
 
-The period must be well constrained. In the original published-period
-sensitivity check (Section 6.3.3), errors of up to 1% changed the mean
-oracle error by about 0.4° or less, but half or twice the period raised it from
-15.8° to 19.3° and 17.7° (still better than the standard poles on these
+The period must be well constrained. In the paper's DAMIT-period
+sensitivity check (Section 6.3.3), errors of up to 1% changed the median
+oracle error by about 1.02° or less, but half or twice the period raised it from
+10.48° to 15.31° and 15.21° (still below the 24.13° standard-pole median on these
 asteroids), and choosing between a period and its half or double is the main
 difficulty in practice. When alternative poles or the
 best attainable fit matter, for example in detailed shape modelling, a wider
@@ -310,12 +324,13 @@ sufficient.
 ## Python API
 
 ```python
+import os
 from pathlib import Path
 from lc_pipeline.k3.bundle import load_predictor
 from lc_pipeline.k3.predict import read_observations
 
 object_id, period, epochs = read_observations(Path("examples/astraea/observations.json"))
-model = load_predictor("networks/k3-oof-fold-0", device="cpu")   # load once
+model = load_predictor(Path(os.environ["DELPHI_BUNDLE_ROOT"]) / "k3-oof-fold-0", device="cpu")   # load once
 result = model.predict(epochs, known_period=period, object_id=object_id)
 for candidate in result["axes"]:
     print(candidate["axis_xyz"])
@@ -323,7 +338,9 @@ for candidate in result["axes"]:
 
 Loading the networks once and predicting many asteroids in one session is
 much faster than starting the command for each: with the networks loaded, the
-Astraea prediction takes about 4 s on our CPU and 0.7 s on our GPU.
+Astraea prediction historically took about 4 s on the Core i5-13600KF and
+0.7 s on the RTX 4070. These example timings are separate from the revised
+paper's same-PC retimes.
 
 For the scientific method and its interpretation, cite Jo, Ishiguro and Lee,
 "DeLPHI: Neural-Network Pole Candidates for Asteroid Lightcurve Inversion", submitted to

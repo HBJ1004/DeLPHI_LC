@@ -17,7 +17,7 @@ authors = [
 ]
 keywords = ["asteroids", "astronomy", "lightcurves", "spin-pole inference"]
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
