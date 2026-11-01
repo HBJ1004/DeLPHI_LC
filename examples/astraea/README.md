@@ -1,10 +1,8 @@
 # Worked example: (5) Astraea
 
-This folder holds a complete DeLPHI input and its archived v1.0.0 output.
-The retrained v1.1.0 networks give different candidates and scores; use the
-[prediction guide](../../docs/usage.md) for current downloads and commands.
-Compare with `expected_prediction.json` only when using the original v1.0.0
-networks.
+This folder holds a complete DeLPHI input and the output you should get with
+the retrained v1.1.0 networks. Use the
+[prediction guide](../../docs/usage.md) for downloads and commands.
 
 | | |
 |---|---|
@@ -16,8 +14,10 @@ networks.
 
 ## Run it
 
-To check the historical output, run from the repository root with the
-archived v1.0.0 run-0 networks extracted to `networks/k3-oof-fold-0`:
+Download `k3-oof-fold-0-v1.1.0.tar.gz` and check its checksum as described in
+the [prediction guide](../../docs/usage.md#2-download-and-check-one-network-set).
+Extract it into `networks/`, then run from the repository root with the
+retrained run-0 networks in `networks/k3-oof-fold-0`:
 
 ```bash
 delphi-k3-predict \
@@ -29,11 +29,17 @@ python examples/prediction_to_poles.py prediction.json \
   --compare examples/astraea/expected_prediction.json
 ```
 
-The last line of the second command should read
-`largest axis difference ... deg: matches examples/astraea/expected_prediction.json`.
+The last line of the second command should read:
+
+```text
+largest axis difference 0.0000 deg: matches examples/astraea/expected_prediction.json
+```
+
 Small differences are normal between computers and between a CPU and a GPU.
-On our GPU the axes differed from the CPU result by at most 0.007° and the
-scores by about 0.003. The comparison accepts up to 0.1°.
+On our GPU the axes differed from the CPU result by at most 0.0087° and the
+scores by about 0.0015. The comparison accepts up to 0.1°.
+Nearly tied candidates can change between GPU runs; see
+[Run-to-run GPU differences](../../docs/reproduction.md#run-to-run-gpu-differences).
 
 Do not run this example with another network set. Runs 1–4 trained on
 Astraea, and the program stops with an error saying that `asteroid_103` is a
@@ -46,21 +52,22 @@ Each candidate axis has two ends, which give six starting poles
 
 | Candidate | Axis (x, y, z) | End 1 (λ, β) | End 2 (λ, β) | Angle to the DAMIT pole |
 |---|---|---|---|---|
-| 1 | (−0.3558, 0.5205, 0.7762) | (124.4, +50.9) | (304.4, −50.9) | 11.9° |
-| 2 | (0.4701, −0.3886, 0.7925) | (320.4, +52.4) | (140.4, −52.4) | 87.5° |
-| 3 | (−0.1773, 0.5927, 0.7856) | (106.6, +51.8) | (286.6, −51.8) | 17.6° |
+| 1 | (−0.1505, 0.3621, 0.9199) | (112.6, +66.9) | (292.6, −66.9) | 28.6° |
+| 2 | (0.2504, −0.2152, 0.9439) | (319.3, +70.7) | (139.3, −70.7) | 69.7° |
+| 3 | (−0.0164, 0.5197, 0.8542) | (91.8, +58.7) | (271.8, −58.7) | 28.4° |
 
 The list order means nothing; the candidates are unranked.
 
 The last column is the angle between each axis and the reference pole of
 DAMIT model 1816, λ = 124°, β = +39°, counting an axis and its opposite end as
-the same. The smallest of the three, 11.9°, is the **oracle error** of
-Astraea. It agrees with the value recorded for Astraea in the paper's
-cross-validation run 0 (11.918°). The oracle error needs a known reference pole, so you cannot compute
-it for a new asteroid, and it does not tell how close any single candidate is
-to the true pole. In real use you would not know which candidate is the good
-one: start an inversion from all six poles and keep the fit with the lowest
-residual.
+the same. The smallest of the three, 28.42°, is the **oracle error** of
+Astraea. It agrees to two decimal places with the value recorded for Astraea
+in the paper's retrained cross-validation run 0 (28.4176°). Using the estimated
+period instead gives 24.91°. The oracle error needs a known reference pole,
+so you cannot compute it for a new asteroid, and it does not tell how close
+any single candidate is to the true pole. In real use you would not know
+which candidate is the good one: start an inversion from all six poles and
+keep the fit with the lowest residual.
 
 The example also shows the mirror ambiguity (paper Section 6.2.1).
 Candidate 2 lies about 10° from the mirror of candidate 1, the pole at
@@ -68,20 +75,21 @@ Candidate 2 lies about 10° from the mirror of candidate 1, the pole at
 classical inversion.
 
 Other fields of `expected_prediction.json`: `fold` 0 and `bundle_id`
-`k3-oof-fold-0`; `calibration.cone90_deg` 46.6 and `cone95_deg` 90.0, which
+`k3-oof-fold-0`; `calibration.cone90_deg` 44.7 and `cone95_deg` 90.0, which
 apply to the run-0 benchmark asteroids as a group and are not uncertainties of
 these candidates; `risk_deg` `null`. All fields are explained in the
 [prediction guide](../../docs/usage.md#6-read-the-output).
 
 ## Timing
 
-Measured with Python 3.12, PyTorch 2.3.1, an Intel Core i5-13600KF CPU and an
-NVIDIA GeForce RTX 4070 GPU:
+Measured on an Intel Core Ultra 7 270K Plus CPU and an NVIDIA RTX 5070 Ti GPU,
+using 12 CPU cores for prediction:
 
 | | CPU | GPU (`--device cuda`) |
 |---|---|---|
-| Whole `delphi-k3-predict` command, including start-up and loading the five networks | 6.0 s | 4.0 s |
-| Prediction only, networks already loaded (Python API, second call) | 4.0 s | 0.7 s |
+| Whole `delphi-k3 estimate-period` command (one BLAS thread on CPU) | 3.5 s | 3.4 s |
+| Whole `delphi-k3-predict` command, including start-up and loading the five networks | about 4.3 s | 2.6 s |
+| Prediction only, networks already loaded (Python API, second call) | 2.7 s | 0.25 s |
 
 ## How the input was made
 

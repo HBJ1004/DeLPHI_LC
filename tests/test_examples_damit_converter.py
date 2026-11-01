@@ -159,11 +159,11 @@ def test_expected_astraea_prediction_gives_six_starting_poles() -> None:
     rows = poles.starting_poles(expected)
     assert len(rows) == 6 and {row["candidate"] for row in rows} == {1, 2, 3}
     assert poles.max_difference_deg(expected, expected) == pytest.approx(0.0, abs=1e-4)
-    # The reference pole of (5) Astraea (DAMIT model 1816: 124, +39) is 11.9 deg
+    # The reference pole of (5) Astraea (DAMIT model 1816: 124, +39) is 28.4 deg
     # from the nearest candidate axis in the run-0 bundle.
     reference = poles.pole_to_axis(124.0, 39.0)
     oracle = min(poles.axial_angle_deg(axis["axis_xyz"], reference) for axis in expected["axes"])
-    assert oracle == pytest.approx(11.92, abs=0.01)
+    assert oracle == pytest.approx(28.42, abs=0.01)
 
 
 def test_astraea_example_input_is_valid() -> None:

@@ -82,15 +82,27 @@ package versions of our test environment, add `-c constraints/ci.txt` to the ins
 
 ## 2. Make your first prediction
 
-Follow the [prediction guide](docs/usage.md). It downloads the retrained
-networks from the [v1.1.0 data record](https://doi.org/{DATA_DOI}), estimates
-the rotation period, and predicts three candidate axes for (5) Astraea. It also
-shows a supplied-period example, explains
-every field of the result, and turns the candidate axes into the six starting
-poles for an inversion. It also explains which network set to use, which
-matters for the 170 asteroids of the paper.
-The archived v1.0.0 expected output is kept as historical evidence; the
-retrained networks give different candidates and scores.
+Download the retrained run-0 networks (about 12 MB) from the
+[v1.1.0 data record](https://doi.org/{DATA_DOI}) and check their checksum:
+
+```bash
+mkdir -p networks && cd networks
+curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/k3-oof-fold-0-v1.1.0.tar.gz
+curl --fail -LO https://zenodo.org/records/{DATA_RECORD}/files/SHA256SUMS
+sha256sum --check SHA256SUMS --ignore-missing     # must print "k3-oof-fold-0-v1.1.0.tar.gz: OK"
+tar -xzf k3-oof-fold-0-v1.1.0.tar.gz
+cd ..
+```
+
+On macOS use `shasum -a 256 --check SHA256SUMS --ignore-missing`.
+Then follow the [prediction guide](docs/usage.md#4-estimate-the-period) to
+estimate the rotation period and predict three candidate axes for (5) Astraea,
+using `--bundle networks/k3-oof-fold-0`. The guide also shows a supplied-period
+example, explains every field of the result, and turns the candidate axes into
+the six starting poles for an inversion. The saved expected output uses these
+retrained networks. Check
+[which network set to use](docs/usage.md#3-choose-the-network-set) for the
+170 asteroids of the paper.
 
 To prepare your own asteroid, see the [data-format guide](docs/data-format.md):
 it converts DAMIT lightcurve files, or takes your own photometry with geometry
@@ -119,7 +131,12 @@ These DOI and record placeholders will be filled before publication.
 
 | To… | Use from the data record |
 |---|---|
-| Predict from your lightcurves | `delphi-k3-artifacts-v1.1.0.tar.gz`: retrained checkpoints, evaluations, model binding and five-network fold bundles in `retrain-20261030/artifact-root/` |
+| Predict Astraea or use test run 0 | `k3-oof-fold-0-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-0/` |
+| Use test run 1 | `k3-oof-fold-1-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-1/` |
+| Use test run 2 | `k3-oof-fold-2-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-2/` |
+| Use test run 3 | `k3-oof-fold-3-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-3/` |
+| Use test run 4 | `k3-oof-fold-4-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-4/` |
+| Reproduce network evaluations | `delphi-k3-artifacts-v1.1.0.tar.gz` (648 MB): retrained checkpoints, evaluations, model binding and five-network fold bundles in `retrain-20261030/artifact-root/` |
 | Check Paper I results | `delphi-retrain-results-v1.1.0.tar.gz`: revised results, protocols and same-PC timing receipts under `retrain-20261030/`; newly written solver fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz` |
 | Use retained inputs and comparisons | Unchanged `delphi-own-period-results-v1.0.0.tar.gz`, `delphi-benchmark-fits-v1.0.0.tar.gz`, `delphi-supporting-results-v1.0.0.tar.gz` and `delphi-paper-v1-evidence.tar.gz`; their older network scores are historical |
 | Retrain the networks | `delphi-k3-synthetic-data-v1.1.0.tar.gz`, which extracts to `retrain-20261030/synthetic/`, plus the DAMIT inputs and retraining protocol |
