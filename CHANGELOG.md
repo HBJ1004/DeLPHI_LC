@@ -8,6 +8,15 @@
 - Review fixes (d0f586a): record GPU numerics settings in timing receipts,
   check V6 files before resuming, validate scorer inputs, and include the
   RT5 timing scorer in the repository.
+- The wheel and source archive now carry every module and data file that the
+  commands use.
+- The released figure command redraws every printed figure, with pole-fit
+  times taken from the same-PC retimed scores.
+- Timing receipts record `DELPHI_SCORE_CHUNK_MAX`, transient GPU errors are
+  retried on resume instead of being sealed as failures, and the synthetic
+  data generator no longer has machine-specific default paths.
+- New data record version 1.1.0 (DOI 10.5281/zenodo.23857881) with the
+  retrained networks, all results and the historical source snapshots.
 
 ## 1.0.0 (2026-10-29)
 
