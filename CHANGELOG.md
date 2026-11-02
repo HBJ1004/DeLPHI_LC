@@ -2,6 +2,7 @@
 
 ## 1.2.0 (unreleased)
 
+- Share equivalent SHA-256 and canonical JSON helpers while preserving their formats and errors.
 - Remove unused inference, tensor-cache, loss and figure code and unreferenced reproduction scripts.
 - Keep the existing K3 result types as deprecated imports and export `load_predictor` and `read_observations`.
 - Remove no-op exception wrappers and duplicate seed definitions.

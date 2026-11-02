@@ -18,6 +18,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from ..v2.serialization import canonical_json as _canonical
 from .reliability_scoring import (
     reliability_table_rows,
     render_reliability_tex,
@@ -30,10 +31,6 @@ class ReliabilityReportingError(ValueError):
 
 def _stable_key(object_id: object, salt: str = "reliability-20260915") -> str:
     return hashlib.sha256(f"{salt}:{object_id}".encode()).hexdigest()
-
-
-def _canonical(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _write_text(path: Path, text: str) -> Path:

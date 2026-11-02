@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..v2.serialization import sha256_file as digest
 from .reliability_sampling import SEEDS
 
 SCHEMA = "delphi.k3-reliability-study.v1"
@@ -29,11 +30,6 @@ PERIOD_MULTIPLIERS = (0.9999, 1.0001, 0.999, 1.001, 0.99, 1.01, 0.5, 2.0)
 
 def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def digest(path):
-    with Path(path).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def binding(path):

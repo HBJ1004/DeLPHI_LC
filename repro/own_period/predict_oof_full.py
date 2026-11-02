@@ -27,7 +27,6 @@ file is written once and never overwritten.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 import time
@@ -53,6 +52,7 @@ from lc_pipeline.k3.publication_run import (
 from lc_pipeline.k3.tokenizer import tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, collate_examples
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from lc_pipeline.v2.serialization import sha256_file as sha256
 from repro.network_root import (
     NetworkPath,
     check_checkpoint,
@@ -73,10 +73,6 @@ MODELS = NetworkPath("models")
 PUBLISHED = NetworkPath("evaluations")
 INPUT_KEYS = {"phase_features", "phase_mask", "geometry_features", "epoch_features", "epoch_mask"}
 PLACEHOLDER_AXIS = np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32)
-
-
-def sha256(path: Path) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def write_npz_once(path: Path, **arrays) -> None:

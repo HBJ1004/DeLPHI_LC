@@ -18,6 +18,8 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 
 from ..physics.axial import axial_angular_error_deg
+from ..v2.serialization import canonical_json as canonical_json
+from ..v2.serialization import sha256_file as sha256_file
 
 GENERALIZATION_ANALYSIS_SCHEMA = "delphi.k3-generalization-analysis.v1"
 EXPOSURE_AUDIT_SCHEMA = "delphi.k3-identity-exposure-audit.v1"
@@ -40,18 +42,6 @@ def _canonical_syntax(identity: str) -> bool:
 
 class GeneralizationValidationError(ValueError):
     """Raised when a generalization artifact violates its explicit contract."""
-
-
-def canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def sha256_path(path: str | Path) -> tuple[str, str, int]:

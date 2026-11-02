@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from dataclasses import dataclass
@@ -16,22 +15,12 @@ from .preprocessing import (
     Observation,
     ObservationEpoch,
 )
+from .serialization import canonical_json as canonical_json
+from .serialization import sha256_file as sha256_file
 
 
 class DataContractError(ValueError):
     """Raised when source data or a prepared cache violates the V2 contract."""
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 @dataclass(frozen=True)

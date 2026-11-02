@@ -47,6 +47,7 @@ from lc_pipeline.k3.downstream import (
 )
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from lc_pipeline.physics.axial import axial_angular_error_deg, nearest_source_axis_errors_deg
+from lc_pipeline.v2.serialization import sha256_file as digest
 from repro import network_root as network
 from repro.own_period import DataPath
 
@@ -97,10 +98,6 @@ def retime_inference(oid, fold, models, example, expected_axes):
         "matched_angle_deg": nearest_source_axis_errors_deg(expected_axes, axes).tolist(),
         "gpu_numerics": gpu_numerics(),
         **network.json_metadata()}
-
-
-def digest(path: Path) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def write_once(path: Path, payload: dict) -> None:

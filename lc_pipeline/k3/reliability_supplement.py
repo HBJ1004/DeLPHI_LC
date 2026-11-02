@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
+from ..v2.serialization import sha256_file
+
 
 class ReliabilitySupplementError(ValueError):
     pass
@@ -20,7 +22,7 @@ def _canon(x):
 
 
 def _hash(p):
-    return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+    return sha256_file(p)
 
 
 def _unseal(p):

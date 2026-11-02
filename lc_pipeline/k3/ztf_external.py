@@ -25,6 +25,7 @@ import numpy as np
 import yaml
 
 from ..v2.preprocessing import Observation, ObservationEpoch
+from ..v2.serialization import sha256_file as _sha256_file
 
 
 class ZTFExternalError(ValueError):
@@ -47,14 +48,6 @@ def _canonical(value: object) -> str:
 
 def _hash(value: object) -> str:
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
-
-
-def _sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _write_new_json(path: Path, value: object) -> None:

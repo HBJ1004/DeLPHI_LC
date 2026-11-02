@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable
+
+from ..v2.serialization import sha256_file as sha256_file
 
 K3_PROTOCOL_SHA256 = "84dee816d08a60b7780a6d1d400add16136fa96c0677e84929700cee8bf22a50"
 
@@ -16,14 +17,6 @@ class K3ProtocolError(ValueError):
 
 def repository_root() -> Path:
     return Path(__file__).resolve().parents[2]
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _require_path(document: dict[str, Any], *parts: str) -> Any:

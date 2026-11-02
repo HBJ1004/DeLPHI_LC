@@ -23,6 +23,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .v2.serialization import sha256_file as digest
+
 RADIUS_DEG = 15.772555008039914
 ARMS = ("classical20", "guided20", "classical15", "guided15", "standard6")
 MODES = ("cold", "warm")
@@ -81,11 +83,6 @@ def read_json(path: str | Path) -> dict:
     if not isinstance(value, dict):
         raise GridBenchmarkError("expected JSON object")
     return value
-
-
-def digest(path: str | Path) -> str:
-    with Path(path).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def write_once(path: str | Path, value: dict) -> None:

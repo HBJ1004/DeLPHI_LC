@@ -15,6 +15,8 @@ import numpy as np
 import torch
 
 from ..v2.preprocessing import Observation, ObservationEpoch
+from ..v2.serialization import canonical_json as canonical_json
+from ..v2.serialization import sha256_file as sha256_file
 from .renderer import (
     DEFAULT_LAMBERT_COEFFICIENT,
     ConvexFacets,
@@ -29,18 +31,6 @@ LEGACY_SYNTHETIC_SHARD_SCHEMA = "delphi.k3-synthetic-shard.v1"
 
 class SyntheticDataError(ValueError):
     """Raised when simulation data violate the prospective contract."""
-
-
-def canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 @dataclass(frozen=True)

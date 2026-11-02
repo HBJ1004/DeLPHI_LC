@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import subprocess
 import tempfile
@@ -11,23 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..v2.serialization import canonical_json as _canonical_json
+from ..v2.serialization import sha256_file as sha256_file
 from .protocol import K3_PROTOCOL_SHA256
 
 
 class K3ManifestError(ValueError):
     """Raised when an experiment manifest is missing provenance."""
-
-
-def _canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def implementation_commit(repository_root: str | Path) -> str:

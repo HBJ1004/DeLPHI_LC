@@ -9,9 +9,10 @@ an independent or confirmatory status.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from typing import Any, Mapping, Sequence
+
+from ..v2.serialization import canonical_json as canonical_json
 
 ELIGIBILITY_SCHEMA = "delphi.k3-external-eligibility.v1"
 UNKNOWN = "unknown"
@@ -39,10 +40,6 @@ FORBIDDEN_OUTCOME_KEYS = {
 
 class ExternalEligibilityError(ValueError):
     """Raised when metadata cannot support a fail-closed eligibility decision."""
-
-
-def canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _sha256_bytes(payload: bytes) -> str:

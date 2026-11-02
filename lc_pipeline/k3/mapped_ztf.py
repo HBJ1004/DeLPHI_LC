@@ -19,6 +19,7 @@ from typing import Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from ..v2.serialization import sha256_file as _sha256
 from .survey_identity import BINDING_SCHEMA, IDENTITY_MAP_SCHEMA
 from .ztf_external import (
     FINK_NORMALIZED_SCHEMA,
@@ -43,14 +44,6 @@ _PROVISIONAL_DESIGNATION = re.compile(r"^\d{4}[A-Z]{1,3}\d{0,3}$")
 
 class MappedZTFError(ValueError):
     """Raised when an internal DAMIT identity is not safely bound to MPC data."""
-
-
-def _sha256(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _write_new_json(path: Path, value: object) -> None:

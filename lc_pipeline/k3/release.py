@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -11,6 +10,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
+from ..v2.serialization import sha256_file as _sha256
 from .evaluation import evaluate_oof_promotion_gate, summarize_errors
 from .protocol import K3_PROTOCOL_SHA256
 from .publication_run import K3_DIAGNOSTIC_CONTROLS, K3_OOF_SEEDS
@@ -18,14 +18,6 @@ from .publication_run import K3_DIAGNOSTIC_CONTROLS, K3_OOF_SEEDS
 
 class K3ReleaseError(ValueError):
     """Raised when definitive artifacts cannot support a release summary."""
-
-
-def _sha256(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _atomic_text(path: Path, text: str) -> str:

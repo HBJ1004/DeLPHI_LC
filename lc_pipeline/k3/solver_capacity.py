@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from ..v2.serialization import sha256_file as sha256_file
+
 
 class SolverCapacityError(ValueError):
     """Raised when a capacity preflight cannot establish safe support."""
@@ -80,14 +82,6 @@ def require_current_internal_capacity_receipt(receipt: Mapping[str, object]) -> 
         raise SolverCapacityError("capacity receipt does not bind the current internal-padding schema")
     if receipt.get("internal_capacity_padding") != internal_capacity_padding():
         raise SolverCapacityError("capacity receipt does not bind the current internal-padding version")
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def tree_sha256(root: str | Path) -> str:
