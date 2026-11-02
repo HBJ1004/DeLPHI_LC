@@ -230,7 +230,26 @@ def predict_prepared_ztf_object(
     mean = ensemble_score_grids(grids[:, None, :])[0]
     modes = modes_from_score_grid(mean)
     axes, scores = refine_ensemble_axes(models, inputs, np.asarray([mode.axis_xyz for mode in modes]))
-    payload = {"schema": "delphi.k3-ztf-external-prediction.v1", "object_id": object_id, "policy": policy, "folds": list(folds), "model_count": len(models), "checkpoint_names": names, "checkpoint_bindings": bindings, "model_manifest_sha256": _sha256_file(Path(model_manifest_path)), "prepared_sha256": hashlib.sha256(Path(prepared_path).read_bytes()).hexdigest(), "period_provenance": period.provenance, "axes": [{"axis_xyz": axis.tolist(), "score": float(score), "grid_index": int(mode.grid_index)} for axis, score, mode in zip(axes, scores, modes, strict=True)]}
+    payload = {
+        "schema": "delphi.k3-ztf-external-prediction.v1",
+        "object_id": object_id,
+        "policy": policy,
+        "folds": list(folds),
+        "model_count": len(models),
+        "checkpoint_names": names,
+        "checkpoint_bindings": bindings,
+        "model_manifest_sha256": _sha256_file(Path(model_manifest_path)),
+        "prepared_sha256": hashlib.sha256(Path(prepared_path).read_bytes()).hexdigest(),
+        "period_provenance": period.provenance,
+        "axes": [
+            {
+                "axis_xyz": axis.tolist(),
+                "score": float(score),
+                "grid_index": int(mode.grid_index)
+            }
+            for axis, score, mode in zip(axes, scores, modes, strict=True)
+        ]
+    }
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
     return payload

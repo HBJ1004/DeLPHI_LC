@@ -1160,4 +1160,16 @@ def fink_rows_to_epoch(
 def prepared_ztf_object(object_id: str, rows: Sequence[Mapping[str, object]], horizons_cache: Mapping[str, object], *, known_period_hours: float, period_provenance: str) -> dict[str, object]:
     """Create a label-free frozen external object document; never queries a service."""
     epoch = fink_rows_to_epoch(object_id, rows, horizons_cache)
-    return {"schema": "delphi.k3-ztf-prepared.v1", "object_id": object_id, "known_period_hours": known_period_hours, "period_provenance": period_provenance, "epochs": [{"epoch_id": epoch.epoch_id, "observations": [observation.__dict__ for observation in epoch.observations]}], "observer_geometry": {"target": "Earth center (Horizons 500@399)", "approximation": "geocenter substitutes for the individual ZTF observatory position"}, "horizons_query_metadata_sha256": HorizonsCache.from_mapping(horizons_cache).query_metadata_sha256, "horizons_rows_sha256": HorizonsCache.from_mapping(horizons_cache).rows_sha256}
+    return {
+        "schema": "delphi.k3-ztf-prepared.v1",
+        "object_id": object_id,
+        "known_period_hours": known_period_hours,
+        "period_provenance": period_provenance,
+        "epochs": [{
+            "epoch_id": epoch.epoch_id,
+            "observations": [observation.__dict__ for observation in epoch.observations]
+        }],
+        "observer_geometry": {"target": "Earth center (Horizons 500@399)", "approximation": "geocenter substitutes for the individual ZTF observatory position"},
+        "horizons_query_metadata_sha256": HorizonsCache.from_mapping(horizons_cache).query_metadata_sha256,
+        "horizons_rows_sha256": HorizonsCache.from_mapping(horizons_cache).rows_sha256
+    }

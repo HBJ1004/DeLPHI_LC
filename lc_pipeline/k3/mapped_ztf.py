@@ -340,7 +340,17 @@ def fetch_mapped_fink(
             body, http_status, error = exc.read(), int(exc.code), str(exc)
         except (URLError, TimeoutError, OSError) as exc:
             error = str(exc)
-        common = {"object_id": object_id, "damit_id": int(identity["damit_id"]), "mpc_number": number, "held_out_fold": int(identity["held_out_fold"]), "identity_map_sha256": map_hash, "endpoint": FINK_SSO_API_URL, "request_payload_sha256": hashlib.sha256(payload).hexdigest(), "http_status": http_status, "response_sha256": hashlib.sha256(body).hexdigest()}
+        common = {
+            "object_id": object_id,
+            "damit_id": int(identity["damit_id"]),
+            "mpc_number": number,
+            "held_out_fold": int(identity["held_out_fold"]),
+            "identity_map_sha256": map_hash,
+            "endpoint": FINK_SSO_API_URL,
+            "request_payload_sha256": hashlib.sha256(payload).hexdigest(),
+            "http_status": http_status,
+            "response_sha256": hashlib.sha256(body).hexdigest()
+        }
         if status == "received":
             response_path = output / "responses" / f"{number}.json"
             _write_new_bytes(response_path, body)
@@ -370,7 +380,19 @@ def fetch_mapped_fink(
         results.append(receipt)
         if position + 1 < len(selected):
             time.sleep(request_interval_seconds)
-    return {"schema": "delphi.k3-mapped-fink-fetch-batch.v1", "identity_map_sha256": map_hash, "requested_object_count": len(selected), "received_validated_count": sum(row["status"] == "received_validated" for row in results), "received_no_retained_rows_count": sum(row["status"] == "received_no_retained_rows" for row in results), "empty_response_count": sum(row["status"] == "empty_response" for row in results), "invalid_response_count": sum(row["status"] == "invalid_response" for row in results), "failed_http_count": sum(row["status"] == "failed_http" for row in results), "objects": results}
+    return {
+        "schema": "delphi.k3-mapped-fink-fetch-batch.v1",
+        "identity_map_sha256": map_hash,
+        "requested_object_count": len(selected),
+        "received_validated_count": sum(row["status"] == "received_validated" for row in results),
+        "received_no_retained_rows_count": sum(
+            row["status"] == "received_no_retained_rows" for row in results
+        ),
+        "empty_response_count": sum(row["status"] == "empty_response" for row in results),
+        "invalid_response_count": sum(row["status"] == "invalid_response" for row in results),
+        "failed_http_count": sum(row["status"] == "failed_http" for row in results),
+        "objects": results
+    }
 
 
 def ingest_mapped_fink(
@@ -610,7 +632,22 @@ def fetch_mapped_horizons(
             failure_path = output / "failures" / f"{object_id}.json"
             _write_new_json(failure_path, {**common, "status": "failed_horizons", "error": str(exc)})
             results.append({**common, "status": "failed_horizons", "failure_path": f"failures/{object_id}.json", "failure_sha256": _sha256(failure_path)})
-    result = {"schema": MAPPED_HORIZONS_SCHEMA, "identity_map_sha256": map_hash, "identity_table_sha256": table_hash, "ingest_manifest_sha256": _sha256(manifest_path), "reuse_roots": [str(path) for path in reuse_roots], "expected_object_count": int(source["expected_object_count"]), "mapped_fink_ready_count": int(source["ready_object_count"]), "missing_local_raw_count": int(source["missing_local_raw_count"]), "missing_period_count": int(source["missing_period_count"]), "ready_object_count": sum(row["status"] != "failed_horizons" for row in results), "failed_horizons_count": sum(row["status"] == "failed_horizons" for row in results), "reused_object_count": sum(row["status"] == "reused_physical_mpc_cache" for row in results), "fetched_object_count": sum(row["status"] == "fetched" for row in results), "objects": results}
+    result = {
+        "schema": MAPPED_HORIZONS_SCHEMA,
+        "identity_map_sha256": map_hash,
+        "identity_table_sha256": table_hash,
+        "ingest_manifest_sha256": _sha256(manifest_path),
+        "reuse_roots": [str(path) for path in reuse_roots],
+        "expected_object_count": int(source["expected_object_count"]),
+        "mapped_fink_ready_count": int(source["ready_object_count"]),
+        "missing_local_raw_count": int(source["missing_local_raw_count"]),
+        "missing_period_count": int(source["missing_period_count"]),
+        "ready_object_count": sum(row["status"] != "failed_horizons" for row in results),
+        "failed_horizons_count": sum(row["status"] == "failed_horizons" for row in results),
+        "reused_object_count": sum(row["status"] == "reused_physical_mpc_cache" for row in results),
+        "fetched_object_count": sum(row["status"] == "fetched" for row in results),
+        "objects": results
+    }
     _write_new_json(final_manifest, result)
     return result
 
@@ -694,14 +731,50 @@ def prepare_mapped_ztf(
             target = cache["query_metadata"]["resolved_target_identity"]
             binding = _binding(identity, identity_map_sha256=map_hash, identity_table_sha256=table_hash)
             period = periods[object_id]
-            payload = {"schema": MAPPED_PREPARED_SCHEMA, "object_id": object_id, "held_out_fold": int(identity["held_out_fold"]), "identity_binding": binding, "resolved_target_identity": target, "known_period_hours": float(period["known_period_hours"]), "period_provenance": period.get("period_provenance"), "epochs": [{"epoch_id": epoch.epoch_id, "observations": [item.__dict__ for item in epoch.observations]}], "horizons_query_metadata_sha256": cache["query_metadata_sha256"], "horizons_rows_sha256": cache["rows_sha256"]}
+            payload = {
+                "schema": MAPPED_PREPARED_SCHEMA,
+                "object_id": object_id,
+                "held_out_fold": int(identity["held_out_fold"]),
+                "identity_binding": binding,
+                "resolved_target_identity": target,
+                "known_period_hours": float(period["known_period_hours"]),
+                "period_provenance": period.get("period_provenance"),
+                "epochs": [{
+                    "epoch_id": epoch.epoch_id,
+                    "observations": [item.__dict__ for item in epoch.observations]
+                }],
+                "horizons_query_metadata_sha256": cache["query_metadata_sha256"],
+                "horizons_rows_sha256": cache["rows_sha256"]
+            }
             destination = staging / "objects" / f"{object_id}.json"
             _write_new_json(destination, payload)
             records.append({"object_id": object_id, "status": "ready", "path": f"objects/{object_id}.json", "sha256": _sha256(destination), "held_out_fold": int(identity["held_out_fold"]), "mpc_number": int(identity["mpc_number"])})
         ready = [row for row in records if row["status"] == "ready"]
         if len(records) != len(identities) or len({row["object_id"] for row in records}) != len(identities):
             raise MappedZTFError("mapped prepared manifest must retain exactly one row per internal object")
-        manifest = {"schema": MAPPED_PREPARED_MANIFEST_SCHEMA, "identity_map_sha256": map_hash, "identity_table_sha256": table_hash, "ingest_manifest_sha256": _sha256(ingest_path), "horizons_manifest_sha256": _sha256(horizons_path), "period_manifest_sha256": _sha256(period_path), "expected_object_count": len(identities), "mapped_fink_ready_count": int(ingest["ready_object_count"]), "missing_local_raw_count": int(ingest["missing_local_raw_count"]), "period_manifest_object_count": len(periods), "ready_object_count": len(ready), "missing_period_count": sum(row["status"] == "missing_period_manifest_entry" for row in records), "missing_horizons_count": sum(row["status"] == "missing_horizons_cache" for row in records), "insufficient_observations_count": sum(row["status"] == "insufficient_observations" for row in records), "objects": records}
+        manifest = {
+            "schema": MAPPED_PREPARED_MANIFEST_SCHEMA,
+            "identity_map_sha256": map_hash,
+            "identity_table_sha256": table_hash,
+            "ingest_manifest_sha256": _sha256(ingest_path),
+            "horizons_manifest_sha256": _sha256(horizons_path),
+            "period_manifest_sha256": _sha256(period_path),
+            "expected_object_count": len(identities),
+            "mapped_fink_ready_count": int(ingest["ready_object_count"]),
+            "missing_local_raw_count": int(ingest["missing_local_raw_count"]),
+            "period_manifest_object_count": len(periods),
+            "ready_object_count": len(ready),
+            "missing_period_count": sum(
+                row["status"] == "missing_period_manifest_entry" for row in records
+            ),
+            "missing_horizons_count": sum(
+                row["status"] == "missing_horizons_cache" for row in records
+            ),
+            "insufficient_observations_count": sum(
+                row["status"] == "insufficient_observations" for row in records
+            ),
+            "objects": records
+        }
         _write_new_json(staging / "manifest.json", manifest)
         os.replace(staging, output)
         return manifest

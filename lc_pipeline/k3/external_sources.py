@@ -663,9 +663,27 @@ def census_alcdef(path: str | Path, *, source_uri: str = ALCDEF_BUNDLE_URI, iden
         "objects": sorted([dict(row, internal_source_ids=([identity_map.get(row["object_number"])] if identity_map and row["object_number"] in identity_map else [])) for row in object_rows.values()], key=lambda row: str(row["candidate_identity"])),
         "sessions": session_rows,
         "screening_policy": {"minimum_sessions": 5, "minimum_valid_points": 150, "minimum_documented_apparitions": 2, "documented_apparitions_status": "not_computed; year/session count is an explicitly labeled approximation"},
-        "documentation_reconciliation": {"documented_object_count": 23847, "source_object_name_count": len({row.object_name for row in metadata if row.object_name}), "canonical_candidate_count": len(object_rows), "object_count_delta_vs_documentation": len(object_rows) - 23847, "documented_observation_count": 9944193, "parsed_positive_mdid_count": total_points, "observation_count_delta_vs_documentation": total_points - 9944193, "explanation": "The archive documentation reports distinct object names and a bundle-level observation count. Canonical MPC identity merges four numbered objects carrying alternate names while three unnumbered names overlap numbered names, yielding one fewer conservative candidate. The extracted lcdata tables contain 9,944,099 positive-MDID rows; the documented 9,944,193 total is 94 higher and is retained as a source/documentation discrepancy, not silently discarded."},
+        "documentation_reconciliation": {
+            "documented_object_count": 23847,
+            "source_object_name_count": len({row.object_name for row in metadata if row.object_name}),
+            "canonical_candidate_count": len(object_rows),
+            "object_count_delta_vs_documentation": len(object_rows) - 23847,
+            "documented_observation_count": 9944193,
+            "parsed_positive_mdid_count": total_points,
+            "observation_count_delta_vs_documentation": total_points - 9944193,
+            "explanation": "The archive documentation reports distinct object names and a bundle-level observation count. Canonical MPC identity merges four numbered objects carrying alternate names while three unnumbered names overlap numbered names, yielding one fewer conservative candidate. The extracted lcdata tables contain 9,944,099 positive-MDID rows; the documented 9,944,193 total is 94 higher and is retained as a source/documentation discrepancy, not silently discarded."
+        },
         "observation_counts": {"total": total_points, "valid": valid_points, "excluded": total_points - valid_points, "duplicate_observation_ids": exclusions.get("duplicate_observation_id", 0)},
-        "timestamp_ranges": {"jd_min": min(timestamps) if timestamps else None, "jd_max": max(timestamps) if timestamps else None, "session_min": min((row.session_datetime for row in metadata if row.session_datetime), default=None), "session_max": max((row.session_datetime for row in metadata if row.session_datetime), default=None)},
+        "timestamp_ranges": {
+            "jd_min": min(timestamps) if timestamps else None,
+            "jd_max": max(timestamps) if timestamps else None,
+            "session_min": min(
+                (row.session_datetime for row in metadata if row.session_datetime), default=None
+            ),
+            "session_max": max(
+                (row.session_datetime for row in metadata if row.session_datetime), default=None
+            )
+        },
         "metadata_issues": [{"reason": reason, "count": count} for reason, count in sorted(issues.items())],
         "exclusions": [{"reason": reason, "count": count} for reason, count in sorted(exclusions.items())],
         "input_files": [{"path": str(file), "sha256": _sha256(file), "source_uri": source_uri} for file in files],
