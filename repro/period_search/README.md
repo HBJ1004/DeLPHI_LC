@@ -4,7 +4,7 @@ These scripts produced the experimental period search of Appendix C: the
 Fourier-series and phase-dispersion searches on the 170 asteroids, the
 candidate lists with P/2, P and 2P, the 20-asteroid pilot of a short physical
 fit, the check with the DeLPHI scores, and the Delta-chi^2 period intervals.
-Paper I as revised uses the top Fourier period for each asteroid, before
+The paper uses the top Fourier period for each asteroid, before
 any reference-pole scoring, through `repro/own_period/manifest.py`. The pilot,
 score-based checks and uncertainty intervals here remain supporting
 comparisons; they do not select the main own-period results.
@@ -17,8 +17,12 @@ these scripts in `part-b-analyses/period-search/code/`.
 
 The revised network-dependent checks and all same-PC timings are in
 `delphi-retrain-results-v1.1.0.tar.gz`, under
-`retrain-20261030/results/{period-peak-pilot,period-retime}/`; the RT6/RT7
-runners, checker scripts and receipts are under `retrain-20261030/runners/`.
+`retrain-20261030/results/{period-peak-pilot,period-retime}/`.
+The Fourier-search runner retimes the search on all 170 main-sample asteroids.
+The period-method benchmark runner retimes the phase-dispersion search and
+physical-screen pilot. Their scripts, checkers and receipts are under
+`retrain-20261030/runners/`, with archive names explained in the
+[run labels](../../docs/reproduction.md#run-labels).
 New per-start physical-screen fits are in
 `delphi-retrain-benchmark-fits-v1.1.0.tar.gz`. Use the retrained networks from
 [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-artifacts-v1.1.0.tar.gz)

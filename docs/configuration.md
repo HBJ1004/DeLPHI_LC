@@ -36,7 +36,7 @@ networks (see [training-your-data.md](training-your-data.md)).
 |---|---|---|---|
 | `nside` | 32 | yes | HEALPix resolution of the trial axes, 6,144 axes about 1.8 deg apart. |
 | `candidate_count` | 3 | yes | Number of candidates K. Section 6.4.1 of the paper reads 1 to 6 peaks from the same maps. |
-| `nms_separation_deg` | 15.0 | no | Minimum separation between candidates. Used by the Python scoring interface `lc_pipeline.k3.api`; the prediction command for the published networks, `delphi-k3-predict`, always uses 15°. Changing it needs no retraining. |
+| `nms_separation_deg` | 15.0 | no | Minimum separation between candidates. This setting is not used by the prediction command for the published networks, `delphi-k3-predict`, which uses the default separation of 15°. Changing the separation needs no retraining. |
 | `refinement_steps` | 8 | yes | Steps of the final adjustment. |
 | `refinement_max_displacement_deg` | 5.0 | yes | Cap on the final adjustment. The adjustment increased the median oracle error from 10.47° to 10.70° (Section 3.4 and Appendix A). |
 | `refinement_learning_rate` | 0.08 | no | Step size of the final adjustment. |

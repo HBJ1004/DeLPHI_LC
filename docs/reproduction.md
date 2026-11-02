@@ -11,8 +11,13 @@ rerun the analyses.
 [Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
 Download the retrained results and `SHA256SUMS` using the
 [minimal download](#minimal-download-for-check-a), then follow
-[Install](#install) and [Check A](#check-a-paper-i-own-period-results).
+[Install](#install) and [Check A](#check-a-own-period-results).
 The other archives support the detailed comparisons and reruns below.
+Each sealed lock records the exact source files it ran with, so it verifies only
+at that code. The inversion locks of the retrained runs verify at commit
+`a316943`. Tag `v1.1.0` adds input checks and receipt fields to five of those
+files and changes no computed value. Locks in the retained v1.0.0 archives
+verify at the earlier commits recorded with them.
 
 A few terms are used throughout.
 
@@ -25,9 +30,39 @@ A few terms are used throughout.
 - **K3** is the name of the DeLPHI model in the code and in file names (`k3-`,
   `delphi-k3`); it refers to the three candidate axes.
 
-## Paper I results
+## Run labels
 
-The code at tag `v1.1.0` provides the revised Paper I analyses with our own
+Archive paths, receipt fields and script names retain the labels below.
+Paper sections refer to the submitted manuscript (v1.1.0).
+The runner scripts and `RUNLOG.md` in the data record describe the reruns.
+The [result map](#3-where-each-result-comes-from) lists their outputs.
+
+| Label | Meaning and paper section |
+|---|---|
+| V6 | Fixed-period inversion from six DeLPHI starts versus six standard starts, using `repro/own_period/v6_fixed_period.py`. Section 6.4.2 and Appendix E. |
+| V7 | Guided grid near the DeLPHI axes versus a 146-start classical grid, using `repro/own_period/v7_grid.py`. Section 6.4.2 and Appendix E. |
+| V67 | The queue and result folder for the fixed-period and guided-grid comparisons above. Section 6.4.2 and Appendix E. |
+| RT3, RT3a | Reruns with retrained networks and the shared network-selection settings. The first runner makes the main-sample predictions and maps. Sections 5.1, 5.2 and 6.2. |
+| RT3b | Reruns for external photometry, spacecraft targets and lower-quality and post-snapshot census samples. Sections 6.1.2, 6.1.3 and 6.5, and Appendix D. |
+| RT3c | Controls, input removals, input contributions and mirror checks. Sections 6.1.1 and 6.2, and Appendix B. |
+| RT3c2 | Calibration bundles, reduced-data and noise tests, withheld-lightcurve fits, internal checks, period sensitivity and the period pilot. Sections 6.1.4 and 6.3.3, and Appendices B, C and E.1. |
+| RT3d1, RT3d3 | Inversion, temporal and period-refinement comparisons. The later adapter preserves the original solver worker counts when reusing fits. Sections 6.1.2 and 6.4.2, and Appendices D and E. |
+| RT3d2 | Median statistics, figures and summary tables assembled from the rerun families. Sections 5 and 6 and Appendices B to E. |
+| RT4 | Same-PC retiming of the direct six-DeLPHI versus 12-classical-start comparison, with cold and loaded networks at estimated and DAMIT periods. Section 5.3, Section 6.4.2 and Appendix E. |
+| RT5, RT5b, RT5c | Same-PC retiming of the exploratory 18- and 96-start ladder, fixed-period and guided-grid comparisons. The later runners finish the fixed-period fits and score the retimed results. Section 6.4.2 and Appendix E. |
+| RT6 | Same-PC retiming of the Fourier period search on the main 170 asteroids. Section 5.3 and Appendix C. |
+| RT7 | Same-PC retiming of the period-method benchmark, including phase dispersion and the physical-screen pilot. Appendix C and Figure 18. |
+| M1 | Original 93-entry inventory of manuscript statistics, including seven deliberate exclusions. Sections 5 and 6 and Appendices B to E. |
+| M1b | Extension of the statistics inventory by 90 entries, retained by `repro/own_period/mean_macros.py` and `median_stats.py`. Sections 5 and 6 and Appendices B to E. |
+| F1, F2 | Two groups of six median-figure functions in `repro/own_period/median_figures.py`, with separate report files. Sections 5 and 6 and Appendices B to E. |
+| phaseB2 | Historical reliability stage for own-period predictions and withheld-lightcurve fits. Its `phaseB2.log` is a prerequisite checked by the inversion queue. Section 6.1.4 and Appendix E.1. |
+| Job 1 | Historical spacecraft input acquisition and conversion by `spacecraft/fetch.py` and `spacecraft/convert.py` under `repro/own_period/`. Section 6.1.3. |
+| Job 2 | Historical spacecraft cohort locking in `repro/own_period/spacecraft/run.py`. Section 6.1.3. |
+| atlas | Historical label for the fixed-axis baseline built from training asteroids. Supporting validation comparisons in Section 6.1. |
+
+## Results of the paper
+
+The code at tag `v1.1.0` provides the paper's analyses with our own
 rotation periods and the 25 networks retrained on corrected simulations.
 Data, predictions and fits are in the
 [Zenodo data record v1.1.0](https://doi.org/10.5281/zenodo.23857881). The corrected simulations
@@ -44,14 +79,14 @@ uses all 25. The main 170 and ZTF use the five networks of their test fold.
 
 The Python runners and shell drivers under `repro/own_period/` use
 `DELPHI_DATA` for **the extracted `own-period-20261021/` folder**, containing
-`benchmark/`, `lowq/`, `reliability/` and `own-periods-170.json`. This replaces
-the earlier shell setting that named its parent `data/` folder. Settings:
+`benchmark/`, `lowq/`, `reliability/` and `own-periods-170.json`.
+The settings are listed below.
 
 | Setting | Meaning and default |
 |---|---|
 | `DELPHI_REPO` | Code folder; defaults to the repository root found from the shell script's location. |
 | `DELPHI_DATA` | The extracted `own-period-20261021/` folder, with `benchmark/` directly underneath. Python data paths read this setting lazily when used; imports and `--help` need no setting. An unset or empty value stops a shell driver or Python data access. |
-| `DELPHI_NETWORK_ROOT` | The extracted `retrain-20261030/artifact-root/`, containing `models/` and `evaluations/`. Its sibling `results/` contains the new network results. Set this for the revised paper; leaving the network variables unset selects historical inputs. |
+| `DELPHI_NETWORK_ROOT` | The extracted `retrain-20261030/artifact-root/`, containing `models/` and `evaluations/`. Its sibling `results/` contains the new network results. Set this for the paper. Leaving the network variables unset selects historical inputs. |
 | `DELPHI_MODEL_BINDING` | The supplied `model-binding.json` in `DELPHI_NETWORK_ROOT`; records the new model hashes. |
 | `DELPHI_BUNDLE_ROOT` | The `bundles/` folder in `DELPHI_NETWORK_ROOT`, containing one safe inference bundle per fold. |
 | `PYTHON` | Python executable; default `python`. |
@@ -63,9 +98,9 @@ the earlier shell setting that named its parent `data/` folder. Settings:
 For example, with the layout below:
 
 ```bash
-export DELPHI_REPO=/path/to/DeLPHI-followup/source
-export DELPHI_DATA=/path/to/DeLPHI-followup/data/own-period-20261021
-export DELPHI_NETWORK_ROOT=/path/to/DeLPHI-followup/data/retrain-20261030/artifact-root
+export DELPHI_REPO=/path/to/delphi-check/extracted/source
+export DELPHI_DATA=/path/to/delphi-check/extracted/data/own-period-20261021
+export DELPHI_NETWORK_ROOT=/path/to/delphi-check/extracted/data/retrain-20261030/artifact-root
 export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
 export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 export PYTHON=/path/to/venv/bin/python
@@ -74,7 +109,7 @@ export PYTHON=/path/to/venv/bin/python
 
 Python data paths are resolved from the current `DELPHI_DATA` at use time,
 including paths imported from another runner and command-line defaults.
-For historical reruns, put the checkout at the follow-up root's `source/`
+For historical reruns, put the checkout at the extraction root's `source/`
 folder before extracting the supporting and historical sources archives.
 The quick checks of current results also work with a separate checkout.
 Keep the data record's relative layout: earlier data folders are siblings of
@@ -114,10 +149,10 @@ retiming receipts and runner scripts are in `retrain-20261030/runners/`.
 | Inversion benchmark, including full grid and loaded runs | `benchmark_lock.py`, `benchmark_relock.py`, `full_grid.py`; frozen copies of `repro/direct_workflow_benchmark/run_direct_benchmark.py`, `run_loaded_benchmark.py`, `time_exploratory_budgets.py`, `score_exploratory_timing.py`, `score_classical_ladder.py`, `budget_equivalence.py`, `candidate_accuracy_cost.py` beside the locks | `../direct-workflow-benchmark/` scripts and locks; **O/**`own-periods-170.json`; frozen models, solver and hash-bound benchmark code | **O/**`benchmark/evaluation-lock.json`, `scoring-lock.json`, `evaluation/`, `evaluation-loaded/`, `full-grid/`, `exploratory-loaded-ladder/`, `score.json`, `score-loaded.json`, `classical-ladder-*.json`, `budget-equivalence.json`, `candidate-accuracy-cost.json` |
 | Maps and candidate count | `maps/run_predictions.sh`, `maps/run_analyses.sh`; `predict_oof_full.py`, `maps/validate_damit_run.py`, `maps/analyses.py`, `maps/render_figures.py`, `maps/build_results.py` | **O/**`own-periods-170.json`; frozen evaluations; `../reliability-20260915/run-1/`; published interpretation records | **O/**`maps/damit-period/` and `maps/own-period/` (`predictions/`, `evaluations/`, `analyses/`, including `candidate-count.json`); `maps/published-check/`, `maps/figures/`; result table on standard output |
 | Lower-quality census | `run_lowq_chain.sh`; `lowq_search.py`, `lowq_predict.py`, `lowq_validate.py`, `lowq_score.py`, `lowq_check_published.py`, `lowq_results.py`, `lowq_figures/render_main_figures.py` | `../../source/experiments/lowq_damit_census_20260917/`; DAMIT snapshot; frozen models; `../publication-revision-20260917-r2/`; published reference baselines | **O/**`lowq/search.jsonl`, `own-periods-lowq.json`, `own-period-lowq-predictions.jsonl`, validation records, `scores-own/`, `scores-published-check/`, `scores-damit-period-500/`, `figures/`, `RESULTS.md` |
-| Census blind test (seven post-snapshot asteroids) | `census7.py` (`prepare`, `validate`, `search`, `predict --periods own|damit --networks fold0|all25`, `score --stage own|final`, all with `--out-dir`) | `census7/PROTOCOL.md`, `census7/inputs-sha256.txt`; `../damit-postsnapshot-check/raw/`; `../../source/experiments/lowq_damit_census_20260917/` (validation); frozen models | **O/**`census7/` (`prepared-manifest.json`, `exposure.json`, `validation.json`, `periods.json`, `predictions*.jsonl`, `scores-own.json`, `scores.json`, `RESULTS.md`) |
+| Census blind test (seven post-snapshot asteroids) | `census7.py` (`prepare`, `validate`, `search`, `predict --periods own\|damit --networks fold0\|all25`, `score --stage own\|final`, all with `--out-dir`) | `census7/PROTOCOL.md`, `census7/inputs-sha256.txt`, `../damit-postsnapshot-check/raw/`, `../../source/experiments/lowq_damit_census_20260917/` (validation), frozen models | **O/**`census7/` (`prepared-manifest.json`, `exposure.json`, `validation.json`, `periods.json`, `predictions*.jsonl`, `scores-own.json`, `scores.json`, `RESULTS.md`) |
 | Reduced-data and noise reliability | `reliability_chunks.sh`; `reliability.py`, `reliability_score.py`, `reliability_report.py` | `../reliability-20260915/run-1/study.json`, `schedule.json`, scored rows and fits; **O/**`own-periods-170.json`; frozen models | **O/**`reliability/search/`, `predictions/`, validation files, `score/scored-rows-own.json`, `score/reliability-own-period.json`, `RESULTS.md` |
 | Network tests and external variants | `network_controls.py`, `summarize_controls.py`, `train_vs_test.py`, `shapley_op.py`, `shapley_check.py`, `external_variants.py`, `nettests_results.py` | **O/**`own-periods-170.json`; frozen models and evaluations; `../internal-validation-20260916/run-1/`; `../interpretation-20260926/shapley/`; external prepared inputs above | **O/**`nettests/controls-{damit,own}/`, `train-vs-test-{damit,own}/`, `shapley-{damit,own}/`, summary and validation JSON; `ztf-variants/`, `no-uncertainty/`, `RESULTS.md` |
-| V6 fixed-period and V7 guided search | `v67_periods.py`, `v6_fixed_period.py`, `v7_grid.py`, `v67_queue.sh`, `v67_finalize.sh`, `v67_results.py` | **O/**`own-periods-170.json`, `own-period-oof.npz`, `benchmark/evaluation-lock.json`; `../pole-grid-benchmark/20260912-environment-relocked-v3/`; earlier paper summaries | **O/**`v67/own-periods-170-rounded6.json`, validation runs, `v6-own-period/`, `v7-own-period/`, score JSON, `v7-own-period/crosscheck-own-period-full-grid.json`, `RESULTS.md` |
+| Fixed-period and guided-grid comparisons ([run labels](#run-labels)) | `v67_periods.py`, `v6_fixed_period.py`, `v7_grid.py`, `v67_queue.sh`, `v67_finalize.sh`, `v67_results.py` | **O/**`own-periods-170.json`, `own-period-oof.npz`, `benchmark/evaluation-lock.json`, `../pole-grid-benchmark/20260912-environment-relocked-v3/`, earlier paper summaries | **O/**`v67/own-periods-170-rounded6.json`, validation runs, `v6-own-period/`, `v7-own-period/`, score JSON, `v7-own-period/crosscheck-own-period-full-grid.json`, `RESULTS.md` |
 | Withheld-lightcurve test | `reliability.py search --scope withheld`, `withheld-candidates`, `withheld-fits`; corresponding stages in `reliability_chunks.sh`; `reliability_score.py`, `reliability_report.py` | Retained lightcurves and schedule from `../reliability-20260915/run-1/`; searches use only retained observations; fixed 15.8-degree radius | **O/**`reliability/search/periods-withheld.jsonl`, `reliability/withheld/{damit,own}/` candidates and fits; withheld block of `reliability/score/reliability-own-period.json` |
 | Period-search cost | `period_cost.py` | Own-period manifest, `period-cost/PROTOCOL.md`, lightcurves and period-search records | **O/**`period-cost/` (`trial-counts.json`, `period-cost-summary.json`) |
 | Period and pole refinement | `refine_chain.py`, `refine_chain_post.py` | `refine-chain/PROTOCOL.md`, frozen sources, solver and manifests | **O/**`refine-chain/` (`refine-medians.json`, selected fits and scores) |
@@ -130,8 +165,9 @@ after scoring. Reduced, noisy, external-variant and retained-lightcurve inputs
 receive their own searches. Failures are reported at 90 degrees and also
 excluded. Validation at published periods precedes the corresponding own-period
 run. Shell drivers are resumable queues: maps, lower-quality and reliability
-wait for `O/benchmark/explore-timed.log`; V67 waits for
+wait for `O/benchmark/explore-timed.log`. The fixed-period and guided-grid queue waits for
 `O/reliability/phaseB2.log`, and its finalizer waits for `O/v67/queue.log`.
+The [run labels](#run-labels) explain these historical stage names.
 Keep these logs with the data record when using those drivers.
 
 Median commands require explicit scratch destinations, for example:
@@ -149,7 +185,8 @@ To redraw the printed figures, set the retrained-network environment variables
 as shown above. The command redraws 13 figures and requires the manuscript
 folder with `--paper-dir` for its checks and page layout.
 Pole-fit times then come from `timing-retime/own/` under the selected results folder.
-The Fourier time comes from the accepted RT6 timing receipt beside that folder.
+The Fourier time comes from the accepted period-search timing receipt beside
+that folder. See the [run labels](#run-labels) for its archive name.
 
 Figure 18, `period-search`, has a separate command that redraws the printed
 figure from the retimed summary without running a search or fit.
@@ -187,7 +224,7 @@ JSON with a `macros` list and the manuscript source. Each entry needs `name`,
 The inventory is not included in the data record. Pass its path with
 `--inventory`, the manuscript with `--manuscript` and a scratch JSON path with
 `--output`. Macros removed from the manuscript are skipped with a note.
-In retrained-network mode, timing macros use the retimed scores and RT6 Fourier
+In retrained-network mode, timing macros use the retimed scores and Fourier
 receipt and keep full precision until display.
 
 ## 1. What to download
@@ -196,9 +233,8 @@ Use the software release
 [`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0),
 software DOI [10.5281/zenodo.23860198](https://doi.org/10.5281/zenodo.23860198), with the
 [Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
-The paper's results were made with v1.1.0. Version 1.1.1 changes no result.
-Cite the concept DOI
-[10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947) for the latest version.
+The paper's results were made with v1.1.0.
+See [Citation](../README.md#citation) for citation guidance.
 Download URLs have the form
 `https://zenodo.org/records/23857881/files/<name>`.
 
@@ -215,12 +251,12 @@ the other 15 uploads.
 | [`k3-oof-fold-4-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/k3-oof-fold-4-v1.1.0.tar.gz) | Five retrained networks for run 4, about 12 MB. Extract into `networks/`; creates `k3-oof-fold-4/`. |
 | [`delphi-k3-artifacts-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-artifacts-v1.1.0.tar.gz) | Full archive for reproduction (648 MB): retrained networks, training histories, fold bundles, model binding and evaluation arrays. Extract to the data directory; creates `retrain-20261030/artifact-root/`. `DELPHI_NETWORK_ROOT` points there, `DELPHI_MODEL_BINDING` to its `model-binding.json`, and `DELPHI_BUNDLE_ROOT` to its `bundles/`. |
 | [`delphi-k3-synthetic-data-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-k3-synthetic-data-v1.1.0.tar.gz) | Corrected simulated training, validation and test sets, recipe metadata and generation checks. Extract to the data directory; creates `retrain-20261030/synthetic/`. |
-| [`delphi-retrain-results-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz) | Rerun predictions, score maps, figures, summaries, locks, protocols, run logs, training times, runners and RT4–RT7 receipts. Extract to the data directory; creates `retrain-20261030/`, with results in `results/`, beside `artifact-root/`. Includes the failed V6 attempt's audit evidence. |
-| [`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-benchmark-fits-v1.1.0.tar.gz) | Newly written per-start solver parameters, solutions, modelled lightcurves and output records for direct, withheld, refinement, reporting-validation, RT4/RT5 and RT7 fits. Extract to the data directory; paths start with `retrain-20261030/results/`. |
-| [`delphi-historical-sources-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-historical-sources-v1.1.0.tar.gz) | Historical sources and input locks (6.4 MB, 128 files), including census validation inputs and the historical model binding. Extract at the follow-up root, one level above `data/`, after placing the checkout at `source/`. Paths begin with `source-op-.../`, `source-bench-8a67c52/`, `source-own-period/`, `source/`, `data/` and `inputs/`. The source folders contain selected files only. |
+| [`delphi-retrain-results-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-results-v1.1.0.tar.gz) | Rerun predictions, score maps, figures, summaries, locks, protocols, run logs, training times, runners and same-PC timing receipts ([run labels](#run-labels)). Extract to the data directory. Creates `retrain-20261030/`, with results in `results/`, beside `artifact-root/`. Includes the failed fixed-period attempt's audit evidence. |
+| [`delphi-retrain-benchmark-fits-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-retrain-benchmark-fits-v1.1.0.tar.gz) | Newly written per-start solver parameters, solutions, modelled lightcurves and output records for direct, withheld, refinement, reporting-validation, ladder, fixed-period, guided-grid and physical-screen fits. Extract to the data directory. Paths start with `retrain-20261030/results/`. |
+| [`delphi-historical-sources-v1.1.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-historical-sources-v1.1.0.tar.gz) | Historical sources and input locks (6.4 MB, 128 files), including census validation inputs and the historical model binding. Extract at the root one level above `data/`, after placing the checkout at `source/`. Paths begin with `source-op-.../`, `source-bench-8a67c52/`, `source-own-period/`, `source/`, `data/` and `inputs/`. The source folders contain selected files only. |
 | [`delphi-own-period-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-own-period-results-v1.0.0.tar.gz) | Retained unchanged: periods, protocols, classical baselines, sample definitions and historical summaries. Extract to the data directory; creates `own-period-20261021/`, selected by `DELPHI_DATA`. Its old network scores are historical. |
 | [`delphi-benchmark-fits-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-benchmark-fits-v1.0.0.tar.gz) | Retained unchanged: classical and historical comparison fits. Extract to the data directory; paths start with `own-period-20261021/benchmark/`, `direct-workflow-benchmark/` or `pole-grid-benchmark/20260912-environment-relocked-v3/full/`. |
-| [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-supporting-results-v1.0.0.tar.gz) | Retained unchanged: cited supporting tables, derived DAMIT catalogue tables and historical scripts. Extract to the follow-up root, one level above the data directory; paths start with `data/`, `experiments/`, `inputs/`, `source/`, `source-own-period/` or `source-op-maps/`. |
+| [`delphi-supporting-results-v1.0.0.tar.gz`](https://zenodo.org/records/23857881/files/delphi-supporting-results-v1.0.0.tar.gz) | Retained unchanged with cited supporting tables, derived DAMIT catalogue tables and historical scripts. Extract to the root one level above the data directory. Paths start with `data/`, `experiments/`, `inputs/`, `source/`, `source-own-period/` or `source-op-maps/`. |
 | [`delphi-paper-v1-evidence.tar.gz`](https://zenodo.org/records/23857881/files/delphi-paper-v1-evidence.tar.gz) | Retained unchanged: historical evidence and classical analyses. Extract in a separate `legacy/` directory; creates `delphi-paper-v1-evidence/part-a-validation/` and `part-b-analyses/`. |
 | [`README.md`](https://zenodo.org/records/23857881/files/README.md) | Data record inventory, extraction instructions, paper map, input sources and licence. |
 | [`SHA256SUMS`](https://zenodo.org/records/23857881/files/SHA256SUMS) | Checksums for the other 15 deposited files. |
@@ -281,7 +317,7 @@ export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 Saved fits are optional for checking score and timing tables. The new fits
 archive contains newly written regular files, omitting absolute symlinks to
 reused historical fits; the retained fits archive preserves the old selection.
-The documented failed V6 attempt stays together in the new results archive.
+The documented failed fixed-period attempt stays together in the new results archive.
 
 ### Minimal download for Check A
 
@@ -319,13 +355,15 @@ The last command checks that the fixed configuration file of the model,
 {"schema": "delphi.k3-redesign-spec.v1", "sha256": "84dee816d08a60b7780a6d1d400add16136fa96c0677e84929700cee8bf22a50"}
 ```
 
+The file name and schema retain `redesign` as part of the fixed model specification's identity.
+
 ## 2. Quick checks without rerunning anything
 
 Run the checks from `delphi-check/` inside the environment created under
 [Install](#install). Checks A and B use the retrained results and networks; Check C uses the
 unchanged historical evidence archive.
 
-### Check A: Paper I own-period results
+### Check A: own-period results
 
 Recompute the main sample's median from the per-object own-period errors,
 then read the standard-pole and random-axis medians from `median-stats.json`.
@@ -361,7 +399,7 @@ KThreeRandomMean: 32.33 deg (mean_of_randomization_draw_medians)
 ```
 
 The `Mean` strings in the macro names are historical identifiers. The
-`statistic` fields describe the revised median calculation. Inversion
+`statistic` fields describe the median calculation. Inversion
 medians are in the `WorkflowDelphiError` and `WorkflowClassicalError` entries
 (23.55° and 45.58°). Their per-object records and same-PC timing ratios are
 in `retrain-20261030/results/delphi-inversions/timing-retime/own/score.json`
@@ -460,9 +498,9 @@ In this map, **R/** is `extracted/data/retrain-20261030/`, **O/** is
 `extracted/legacy/delphi-paper-v1-evidence/`. **K/** is
 `DELPHI_NETWORK_ROOT` (`R/artifact-root/`). The new results archive supplies
 `R/results/`, except for the per-start solver files in the new fits archive;
-the failed V6 attempt stays with its audit evidence in the results archive.
+the failed fixed-period attempt stays with its audit evidence in the results archive.
 Historical network outputs in **O/** and **E/** describe the old networks.
-The numbers below refer to the current manuscript build.
+The numbers below refer to the submitted manuscript (v1.1.0).
 
 | Paper | Result files | Code or protocol |
 |---|---|---|
@@ -481,7 +519,7 @@ The numbers below refer to the current manuscript build.
 | Appendix B, Figure 16 (input removals) | `R/results/input-removals/` | `repro/own_period/network_controls.py` |
 | Section 6.3.3, Appendix C, Figures 17 and 18 (period sensitivity and search) | `R/results/{period-sensitivity,period-peak-pilot,period-retime}/`; unchanged `O/own-periods-170.json`, `O/period-cost/` and `E/part-b-analyses/period-search/` | `repro/period_search/` ([README](../repro/period_search/README.md)); `R/runners/check_rt6_fourier.py`, `R/runners/check_rt7_period_bench.py` |
 | Section 6.4.1, Figure 12 (candidate count) | `R/results/headline/maps/own-period/analyses/candidate-count.json` | `repro/own_period/maps/analyses.py` |
-| Section 6.4.2, Tables 4 and 5, Figure 13; Appendix E, Tables 12 and 13, Figure 19 (inversion comparisons) | `R/results/delphi-inversions/`, including `timing-retime/`; `R/results/refine-chain/`, `R/results/reporting/v7-validation.json`; unchanged classical inputs in `O/benchmark/` and `E/part-b-analyses/workflow-benchmark/` | `repro/direct_workflow_benchmark/`, `repro/own_period/{v6_fixed_period,v7_grid,refine_chain}.py`; RT4/RT5 receipts |
+| Section 6.4.2, Tables 4 and 5, Figure 13, and Appendix E, Tables 12 and 13, Figure 19 (inversion comparisons) | `R/results/delphi-inversions/`, including `timing-retime/`, `R/results/refine-chain/`, `R/results/reporting/v7-validation.json`, with unchanged classical inputs in `O/benchmark/` and `E/part-b-analyses/workflow-benchmark/` | `repro/direct_workflow_benchmark/`, `repro/own_period/{v6_fixed_period,v7_grid,refine_chain}.py`, with direct and ladder timing receipts ([run labels](#run-labels)) |
 | Appendix E.1, Table 14 (withheld-lightcurve test) | `R/results/reliability/{score,withheld}/`; unchanged classical results in `O/reliability/score/` | `repro/own_period/reliability.py`; new per-start fits in the new fits archive |
 | Section 6.5 (future work and census) | `E/part-b-analyses/damit-census/q3_current_classification.csv`, `R/results/census7/` | `repro/damit_census/`, `repro/own_period/census7.py` |
 | Section 7 (summary) | The same files as Sections 5 and 6 | |
@@ -544,7 +582,7 @@ legacy evidence archive's `part-a-validation/` and `part-b-analyses/` folders.
 ### Arrange the archives
 
 For current results, use the extraction instructions in Section 1, with
-`extracted/` serving as the follow-up root. For the retained historical
+`extracted/` serving as the extraction root. For the retained historical
 comparisons, work in an empty folder `<parent>` and separately extract the
 v1.0.0 artifacts and synthetic-data archives there, creating `artifact-root/`
 and `synthetic-data/`. Set `E` to the legacy evidence folder and `D` to the
@@ -612,7 +650,7 @@ round-off.
 
 ### Historical inputs and sources
 
-Extract `delphi-historical-sources-v1.1.0.tar.gz` at the follow-up root,
+Extract `delphi-historical-sources-v1.1.0.tar.gz` at the extraction root,
 alongside `data/` and `inputs/`. For the complete download above that root is
 `extracted/`; for the historical layout it is `DeLPHI-followup/`.
 The archive adds the two original census files directly under
@@ -847,7 +885,7 @@ in place of `--check`. The synthetic evaluation Python entry points accept
   the reported summaries. The corrected networks were trained once; Appendix A
   does not establish repeatability of retraining. Results may differ on other
   hardware or software versions. Table 9 reports variation across the five seeds.
-- **Run times** depend on the computer. All timings printed in the revised
+- **Run times** depend on the computer. All timings printed in the
   paper were measured on one PC: Intel Core Ultra 7 270K Plus with an NVIDIA
   RTX 5070 Ti (Appendix E). Bootstrap intervals of times describe the asteroids
   on that computer only.

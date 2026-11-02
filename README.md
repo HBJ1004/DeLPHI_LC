@@ -71,17 +71,17 @@ The first check confirms that the fixed settings of the paper
 (`repro/k3_redesign_spec.yaml`) are intact. The second compares the brightness
 simulator that made the simulated training lightcurves with an independent
 reference calculation. The last runs the automated tests.
+The file name retains `redesign` as part of the fixed model specification's identity.
 
 Tests that need stored research data or a solver are skipped when those inputs
 are unavailable; the count depends on the local data. Set `DELPHI_DATA` to the
 extracted `own-period-20261021/` folder to enable the stored-data checks (see the
-[reproduction guide](docs/reproduction.md#paper-i-results)). The training smoke
-test and the two local-binding provenance tests,
-`test_local_binding_audits_graph_without_inventing_publication_evidence` and
-`test_local_binding_accepts_native_training_cli_receipts` in `tests/test_network_root.py`,
-record the current Git commit and need a Git checkout; a source archive
-without Git metadata cannot pass those provenance checks. To install the exact
-package versions of our test environment, add `-c constraints/ci.txt` to the install command.
+[reproduction guide](docs/reproduction.md#results-of-the-paper)). A few training
+and provenance tests record the current Git commit and need a Git checkout.
+A source archive without Git metadata cannot pass those checks.
+For the historical CPU test constraints, add `-c constraints/ci.txt` to the
+install command. These constraints differ from the training environment and
+are not installed by current CI.
 
 ## 2. Make your first prediction
 
@@ -125,18 +125,12 @@ from JPL Horizons.
 ## Code and data
 
 The paper's results were made with this repository at tag
-[`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0), software
-DOI [10.5281/zenodo.23860198](https://doi.org/10.5281/zenodo.23860198).
-Version 1.1.1 changes no result. Cite the concept DOI
-[10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947) for the latest version.
-The revised paper uses 25 networks retrained on corrected
+[`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0).
+See [Citation](#citation) for the software and data DOIs.
+The paper uses 25 networks retrained on corrected
 simulations and timings measured on one PC. Data are in the
 [v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881). Downloads use
 `https://zenodo.org/records/23857881/files/<name>`.
-
-The data record has 16 uploads: five new archives, five small network sets,
-four retained archives, `README.md` and `SHA256SUMS`. The checksum file covers
-the other 15 uploads.
 
 | To… | Use from the data record |
 |---|---|
@@ -146,9 +140,9 @@ the other 15 uploads.
 | Use test run 3 | `k3-oof-fold-3-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-3/` |
 | Use test run 4 | `k3-oof-fold-4-v1.1.0.tar.gz` (about 12 MB), extracts to `k3-oof-fold-4/` |
 | Reproduce network evaluations | `delphi-k3-artifacts-v1.1.0.tar.gz` (648 MB): retrained checkpoints, evaluations, model binding and five-network fold bundles in `retrain-20261030/artifact-root/` |
-| Check Paper I results | `delphi-retrain-results-v1.1.0.tar.gz`: revised results, protocols and same-PC timing receipts under `retrain-20261030/`; newly written solver fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz` |
+| Check the paper's results | `delphi-retrain-results-v1.1.0.tar.gz` contains results, protocols and same-PC timing receipts under `retrain-20261030/`. Newly written solver fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz`. |
 | Use retained inputs and comparisons | Unchanged `delphi-own-period-results-v1.0.0.tar.gz`, `delphi-benchmark-fits-v1.0.0.tar.gz`, `delphi-supporting-results-v1.0.0.tar.gz` and `delphi-paper-v1-evidence.tar.gz`; their older network scores are historical |
-| Run analyses that read historical sources or input locks | `delphi-historical-sources-v1.1.0.tar.gz` (6.4 MB, 128 files): selected source files, reliability locks, census validation inputs and the historical model binding. Extract at the follow-up root, beside `data/` and `inputs/`. |
+| Run analyses that read historical sources or input locks | `delphi-historical-sources-v1.1.0.tar.gz` (6.4 MB, 128 files) contains selected source files, reliability locks, census validation inputs and the historical model binding. Extract at the root beside `data/` and `inputs/`. |
 | Retrain the networks | `delphi-k3-synthetic-data-v1.1.0.tar.gz`, which extracts to `retrain-20261030/synthetic/`, plus the DAMIT inputs and retraining protocol |
 
 The historical sources are needed by the median statistics and figures,
@@ -163,11 +157,11 @@ list every file, including `README.md` and
 Superseded network archives remain in the
 [v1.0.0 data record, DOI 10.5281/zenodo.23757942](https://doi.org/10.5281/zenodo.23757942).
 
-## Paper I results
+## Results in the paper
 
 The code includes the own-period analyses, inversion benchmarks, reliability
 and network tests, and median statistics and figures. See
-[Paper I results](docs/reproduction.md#paper-i-results) for the settings,
+[the results guide](docs/reproduction.md#results-of-the-paper) for the settings,
 section-to-file maps and data layout. Set `DELPHI_DATA` to the extracted
 `own-period-20261021/` folder for unchanged inputs, and select the retrained
 networks and results with:
@@ -178,8 +172,6 @@ export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
 export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 ```
 
-## Results in the paper
-
 The candidate results below are for the 170 DAMIT asteroids, each analyzed by the networks of
 the cross-validation run in which it was not used for training. The **oracle
 error** of an asteroid is the smallest angle between any of its three candidate
@@ -187,10 +179,11 @@ axes and any of its published DAMIT poles. It measures how well the candidates
 cover the published solutions; it uses the published poles after the
 prediction and is not the error of a single pole chosen by DeLPHI.
 
-The revised analysis uses periods estimated from the lightcurves, with the
+The analysis uses periods estimated from the lightcurves, with the
 retrained networks held fixed and no choice between P/2, P and 2P after scoring.
 The DeLPHI row comes from `retrain-20261030/results/median-stats.json`
-(`KThreeOofMean/median`) and
+(`KThreeOofMean/median`, where `Mean` is a historical identifier and `median`
+holds the median oracle error) and
 `retrain-20261030/results/headline/maps/own-period/analyses/summary.json`
 (`overall/within20`). The standard-pole and random-axis rows come from
 `repro/baselines_out/reference-baselines.json`.

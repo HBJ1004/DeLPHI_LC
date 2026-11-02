@@ -3,6 +3,9 @@
 This folder holds a complete DeLPHI input and the output you should get with
 the retrained v1.1.0 networks. Use the
 [prediction guide](../../docs/usage.md) for downloads and commands.
+The saved output predates the software and network provenance fields added in
+v1.1.1. Those fields are described in the
+[output field table](../../docs/usage.md#6-read-the-output).
 
 | | |
 |---|---|

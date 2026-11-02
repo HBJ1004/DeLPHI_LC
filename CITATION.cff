@@ -17,10 +17,10 @@ identifiers:
     description: "Software version 1.1.0 used for the paper's results"
   - type: doi
     value: "10.5281/zenodo.23757942"
-    description: "Paper I data record, version 1.0.0 (superseded networks and results)"
+    description: "DeLPHI data record, version 1.0.0 (superseded networks and results)"
   - type: doi
     value: "10.5281/zenodo.23857881"
-    description: "Paper I data record, version 1.1.0"
+    description: "DeLPHI data record, version 1.1.0"
 keywords:
   - asteroids
   - asteroid rotation

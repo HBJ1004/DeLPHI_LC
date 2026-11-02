@@ -5,7 +5,7 @@ signed poles of the three DeLPHI axes with a classical search started from a
 fixed list of 12 poles, the cold and loaded timings (Table 4, Figures 13 and
 19), and the exploratory comparison with 18 and 96 classical starts
 (Tables 5, 12 and 13). Both searches fit the lightcurves with `convexinv`
-and keep the fit of lowest RMS residual. The revised paper uses our estimated
+and keep the fit of lowest RMS residual. The paper uses our estimated
 period, with the DAMIT period as a comparison.
 
 The original-period results are in
@@ -14,13 +14,14 @@ in the [v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281
 folder `delphi-paper-v1-evidence/part-b-analyses/workflow-benchmark/`. It holds
 the locks, execution summaries, scores and the three historical run notes kept
 here. The dated notes describe original-period comparisons, rather than the
-revised own-period medians.
+own-period medians in the paper.
 
-Use this repository at tag `v1.1.0` for Paper I as revised. The retrained
+Use this repository at tag `v1.1.0` for the paper. The retrained
 benchmark results, locks, same-PC timing receipts and runner scripts are in
 `delphi-retrain-results-v1.1.0.tar.gz`. Direct scores are under
 `retrain-20261030/results/delphi-inversions/timing-retime/{own,damit}/`;
-the same tree contains ladder retimes and V6/V7 retimes. Newly written
+the same tree contains ladder, fixed-period and guided-grid retimes
+([run labels](../../docs/reproduction.md#run-labels)). Newly written
 per-start fits are in `delphi-retrain-benchmark-fits-v1.1.0.tar.gz`.
 The unchanged `delphi-own-period-results-v1.0.0.tar.gz` and
 `delphi-benchmark-fits-v1.0.0.tar.gz` retain classical and historical evidence;
@@ -33,9 +34,13 @@ export DELPHI_MODEL_BINDING="$DELPHI_NETWORK_ROOT/model-binding.json"
 export DELPHI_BUNDLE_ROOT="$DELPHI_NETWORK_ROOT/bundles"
 ```
 
-The [Paper I results map](../../docs/reproduction.md#3-where-each-result-comes-from)
-describes the corresponding scripts and frozen sources. The RT4/RT5 runners
-and receipts are under `retrain-20261030/runners/`.
+The [results map](../../docs/reproduction.md#3-where-each-result-comes-from)
+describes the corresponding scripts and frozen sources. The direct comparison
+runner retimes six DeLPHI starts against 12 classical starts. The
+exploratory comparison runners retime the 18- and 96-start ladder,
+fixed-period and guided-grid fits. Their scripts and receipts are under
+`retrain-20261030/runners/`, with the archive names explained in the
+[run labels](../../docs/reproduction.md#run-labels).
 
 ## Prerequisites
 
@@ -53,7 +58,7 @@ and receipts are under `retrain-20261030/runners/`.
   the released `workflow-benchmark/` folder copied to
   `DeLPHI-followup/data/direct-workflow-benchmark/`.
 
-All timings printed in the revised paper were measured on one PC with an
+All timings printed in the paper were measured on one PC with an
 Intel Core Ultra 7 270K Plus CPU and an NVIDIA RTX 5070 Ti GPU. The direct
 comparison uses six single-threaded solver workers and the settings of
 Appendix E. The dated run notes retain old-PC timings from the Core
@@ -63,12 +68,13 @@ the stated computer only.
 ## Historical scripts and order
 
 The sequence below describes the original DAMIT-period comparison. The
-retrained comparisons use `rerun.py`, the RT4/RT5 runners and their receipts.
-RT5 ladder scoring uses the committed `score_exploratory_timing_rt5.py`:
-it records DeLPHI inference drift while retaining the strict classical-fit
-check. DeLPHI timing receipts record GPU numerics settings; see
+retrained comparisons use `rerun.py`, the direct and exploratory timing
+runners and their receipts ([run labels](../../docs/reproduction.md#run-labels)).
+Retimed ladder scoring uses `score_exploratory_timing_rt5.py` to record
+DeLPHI inference drift while retaining the strict classical-fit check.
+DeLPHI timing receipts record GPU numerics settings. See
 [Run-to-run GPU differences](../../docs/reproduction.md#run-to-run-gpu-differences).
-Table and figure numbers below refer to the current manuscript.
+Table and figure numbers below refer to the submitted manuscript (v1.1.0).
 
 | Step | Script | Writes | Role |
 |---|---|---|---|
@@ -120,7 +126,7 @@ Every script refuses to overwrite an existing output.
   comparison.
 
 These are records written at the time of the runs. Their numbers are those of
-the original-period scored files. The revised own-period results and medians
+the original-period scored files. The paper's own-period results and medians
 are mapped separately in the reproduction guide.
 
 ## Provenance

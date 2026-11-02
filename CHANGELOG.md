@@ -1,17 +1,28 @@
 # Release notes
 
+## 1.1.2 (unreleased)
+
+- Clarify installation constraints, packaged split data and prediction provenance fields.
+- Merge the results headings and explain historical statistic names and run labels.
+- Correct configuration guidance and name the commit at which the deposited locks verify.
+- Simplify citation wording and released notes. No numerical results change.
+
 ## 1.1.1 (2026-11-02)
 
-- Clean up CI lint, pin Ruff, support PyTorch 2.2 OOM handling, and clarify the historical constraints file; no numerical results change.
-- Make CPU-affinity tests portable and skip worker-count cases when CPUs are unavailable; no numerical results change.
-- Default shipped commands to the caller's available CPUs and record actual affinity in reports; no numerical results change.
-- Refuse seed-bug v1.0.0 networks unless explicitly enabled for historical reproduction, and add software version, training commit and network hashes to predictions; no numerical results change.
-- Update software release metadata to 1.1.1 (2026-11-02); no printed numbers or numerical results change.
+No numerical results change.
+
+- Support PyTorch 2.2 out-of-memory handling and default shipped commands to the
+  caller's available CPUs, recording actual affinity in reports.
+- Make CPU-affinity tests portable and skip worker-count cases when CPUs are
+  unavailable. Pin Ruff for lint checks and clarify the historical constraints.
+- Require explicit opt-in for historical v1.0.0 networks trained on simulations
+  that reused random seeds. Add software version, training commit and network
+  hashes to predictions.
 - Distinguish the paper's v1.1.0 software DOI from the concept DOI for the latest version.
 - Add the disclosed overlap between simulated training, validation and test objects.
 - Guard historical DeLPHI helpers, select current coverage and timing inputs, document stale figures and their redraw commands, and keep figure reports inside the output folder.
 - Document the compatible GCC solver build and find its test fixture through `DELPHI_DATA`.
-- Use public schema URLs, a generic test path and neutral execution status text.
+- Clarify documentation and metadata wording.
 
 ## 1.1.0 (2026-11-01)
 
@@ -21,9 +32,9 @@
   Each simulated validation and test object shares its pole, period, phase and
   noise draw with a training object, with different observing geometry and shape.
 - Reran all network results and retimed all reported comparisons on one PC.
-- Review fixes (d0f586a): record GPU numerics settings in timing receipts,
-  check V6 files before resuming, validate scorer inputs, and include the
-  RT5 timing scorer in the repository.
+- Record GPU numerics settings in timing receipts, check fixed-period
+  inversion files before resuming, validate scorer inputs, and include the
+  retimed exploratory-ladder scorer in the repository.
 - The wheel and source archive now carry every module and data file that the
   commands use.
 - The released `median_figures` command redraws its 13 figures with the
@@ -40,8 +51,8 @@
 DeLPHI estimates the rotation period with its own Fourier search and proposes
 three unranked pole-axis candidates from asteroid lightcurves, the observing
 geometry and that period (or a supplied one), for use as six signed
-starting poles in convex lightcurve inversion. This is the software behind
-Paper I as revised.
+starting poles in convex lightcurve inversion. This is the initial software
+release for the paper. Version 1.1.0 supersedes its networks and results.
 
 - K3 scoring, simulated pretraining, real-data training, prediction, safe
   inference bundles, custom-data training and protocol checks.

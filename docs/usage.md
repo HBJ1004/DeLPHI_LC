@@ -18,8 +18,9 @@ inversion should start from all six.
 - Install DeLPHI from a source checkout as described in the
   [README](../README.md#1-install). Run all
   commands below from the repository root. The prediction checks the network
-  files against the frozen cross-validation split in `repro/data`, so it needs
-  the checkout, not only an installed package.
+  files against the frozen cross-validation split in `repro/data`, which is
+  included in the installed package. The checkout supplies the example inputs
+  used below.
 - Allow a few minutes for installation and download, then seconds for one
   prediction. Times depend on your computer.
 - A GPU is optional.
@@ -243,6 +244,9 @@ or use this alternative if you already have a reliable period.
 | `schema`, `status` | Format of this file; `status` is `ok` for every written result (invalid input stops the program with an error message instead). |
 | `object_id` | Copied from the input. |
 | `fold`, `bundle_id` | The cross-validation run and network set used. Record them with your result. |
+| `software_version` | Version of the installed DeLPHI software that made this prediction. Added in v1.1.1. |
+| `training_commit` | Training commit recorded in the bundle metadata, or `null` if the bundle does not record one. Added in v1.1.1. |
+| `network_sha256` | SHA-256 checksums of the network files used, keyed by file name. Added in v1.1.1. |
 | `tokenizer_sha256` | Identifies the version of the input preparation the networks expect. |
 | `period_provenance` | Your `known_period.provenance`, copied so the result records which period it used. |
 | `axes[].axis_xyz` | A candidate axis: a unit vector (x, y, z) in ecliptic J2000. It stands for both ends, `(x, y, z)` and `(-x, -y, -z)`. The three axes are **unranked**, and their order means nothing. |
