@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         predictor = load_predictor(args.bundle, device=args.device,
                                    allow_legacy=args.allow_legacy_networks)
         result = predictor.predict(epochs, known_period=period, object_id=object_id)
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, KeyError) as exc:
         parser.error(str(exc))
     with args.output.open("x") as handle:
         json.dump(result, handle, indent=2, allow_nan=False)

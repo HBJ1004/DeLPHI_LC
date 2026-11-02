@@ -25,4 +25,19 @@ __all__ = [
     "partition_damit_donors",
     "ResidualNoiseBank",
     "verify_synthetic_shard",
+    "load_predictor",
+    "read_observations",
 ]
+
+
+def __getattr__(name: str):
+    """Load prediction helpers when requested so module CLIs can start normally."""
+    if name == "load_predictor":
+        from .bundle import load_predictor
+
+        return load_predictor
+    if name == "read_observations":
+        from .predict import read_observations
+
+        return read_observations
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

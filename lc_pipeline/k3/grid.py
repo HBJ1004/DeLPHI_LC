@@ -171,18 +171,3 @@ def extract_axial_modes(
         )
         for index in chosen
     )
-
-
-def compatibility_mass(scores: np.ndarray, *, temperature: float = 1.0) -> np.ndarray:
-    """Normalize grid compatibility scores without calling them a posterior."""
-    values = np.asarray(scores, dtype=np.float64)
-    if values.ndim != 1 or values.size == 0 or not np.all(np.isfinite(values)):
-        raise K3GridError("compatibility scores must be a finite vector")
-    if not math.isfinite(temperature) or temperature <= 0:
-        raise K3GridError("temperature must be finite and positive")
-    shifted = values / temperature
-    shifted -= np.max(shifted)
-    mass = np.exp(shifted)
-    mass /= np.sum(mass)
-    mass.setflags(write=False)
-    return mass

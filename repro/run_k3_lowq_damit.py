@@ -111,8 +111,6 @@ def prepare(snapshot: Path, output: Path, *, q1_sample_size: int) -> dict[str, o
             [row for row, q in zip(rows, qualities, strict=True) if q == highest],
             key=lambda row: int(row["id"]),
         )
-        if not selected_models:
-            continue
         try:
             period = float(selected_models[0]["period"])
         except (KeyError, ValueError):

@@ -1,5 +1,12 @@
 # Release notes
 
+## 1.2.0 (unreleased)
+
+- Remove unused inference, tensor-cache, loss and figure code and unreferenced reproduction scripts.
+- Keep the existing K3 result types as deprecated imports and export `load_predictor` and `read_observations`.
+- Remove no-op exception wrappers and duplicate seed definitions.
+- Keep `risk_deg` as a reserved prediction field with value `null`. No numerical results change.
+
 ## 1.1.2 (unreleased)
 
 - Clarify installation constraints, packaged split data and prediction provenance fields.

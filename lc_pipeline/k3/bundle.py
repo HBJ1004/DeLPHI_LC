@@ -13,14 +13,13 @@ from safetensors.torch import load_file
 
 from ..v2.preprocessing import KnownPeriod, ObservationEpoch
 from ..version import __version__
+from .config import K3_OOF_SEEDS as SEEDS
 from .config import K3ScoreModelConfig
 from .evaluation import ensemble_score_grids, modes_from_score_grid
 from .inference import refine_axes, refine_ensemble_axes, score_axial_grid
 from .model import CandidateConditionedScorer
 from .protocol import K3_PROTOCOL_SHA256, repository_root
 from .tokenizer import K3_TOKENIZER_SCHEMA_SHA256, pad_tokenized_objects, tokenize_epochs
-
-SEEDS = (17, 42, 137, 777, 2027)
 
 
 def sha256(path: Path) -> str:

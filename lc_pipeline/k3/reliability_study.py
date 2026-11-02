@@ -21,8 +21,9 @@ from pathlib import Path
 
 import numpy as np
 
+from .reliability_sampling import SEEDS
+
 SCHEMA = "delphi.k3-reliability-study.v1"
-SEEDS = (20260915, 20260916, 20260917)
 PERIOD_MULTIPLIERS = (0.9999, 1.0001, 0.999, 1.001, 0.99, 1.01, 0.5, 2.0)
 
 

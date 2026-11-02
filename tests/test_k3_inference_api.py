@@ -1,8 +1,7 @@
-"""Grid, bounded refinement, and no-oracle K3 API tests."""
+"""Grid, bounded refinement, and K3 public import tests."""
 
 from __future__ import annotations
 
-import inspect
 import math
 from copy import deepcopy
 
@@ -10,8 +9,6 @@ import numpy as np
 import pytest
 import torch
 
-from lc_pipeline.k3.api import DeLPHIK3Predictor, K3ModelBundle
-from lc_pipeline.k3.calibration import K3Calibration
 from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.grid import axial_healpix_grid, extract_axial_modes
 from lc_pipeline.k3.inference import (
@@ -22,10 +19,32 @@ from lc_pipeline.k3.inference import (
     score_axial_grid,
 )
 from lc_pipeline.k3.model import CandidateConditionedScorer, K3ModelError
-from lc_pipeline.k3.schema import K3PredictionStatus
 from lc_pipeline.k3.tokenizer import pad_tokenized_objects, tokenize_epochs
 from lc_pipeline.physics.axial import axial_angular_error_deg
 from lc_pipeline.v2.preprocessing import KnownPeriod, Observation, ObservationEpoch
+
+
+def test_package_exports_preserve_existing_imports_and_add_prediction_helpers() -> None:
+    from lc_pipeline import k3
+    from lc_pipeline.k3 import bundle, config, damit, damit_synthetic, predict, schema, synthetic
+
+    exports = (
+        (schema, ("K3AxialPrediction", "K3AxisCandidate", "K3PredictionStatus")),
+        (config, ("K3ScoreModelConfig", "K3TokenizerConfig", "K3TrainingConfig")),
+        (damit, ("DAMITLoadError", "DAMITObject", "load_damit_object")),
+        (damit_synthetic, (
+            "generate_damit_synthetic_shards", "discover_damit_donors", "partition_damit_donors",
+        )),
+        (synthetic, ("ResidualNoiseBank", "verify_synthetic_shard")),
+        (bundle, ("load_predictor",)),
+        (predict, ("read_observations",)),
+    )
+    for module, names in exports:
+        for name in names:
+            assert name in k3.__all__
+            assert getattr(k3, name) is getattr(module, name)
+    with pytest.raises(AttributeError):
+        getattr(k3, "unknown_export")
 
 
 def _epochs() -> tuple[ObservationEpoch, ...]:
@@ -263,31 +282,3 @@ def test_ensemble_refinement_rejects_invalid_membership() -> None:
     ).eval()
     with np.testing.assert_raises_regex(K3InferenceError, "identical configurations"):
         refine_ensemble_axes((model, different), inputs, starts)
-
-
-def test_public_api_has_no_ground_truth_and_returns_structured_failure_or_k3() -> None:
-    assert "target" not in inspect.signature(DeLPHIK3Predictor.predict).parameters
-    config = K3ScoreModelConfig(
-        hidden_dim=32, attention_heads=4, convolution_blocks=1, set_encoder_layers=1,
-        dropout=0.0, score_chunk_size=2048,
-    )
-    model = CandidateConditionedScorer(config)
-    calibration = K3Calibration(
-        calibration_id="unit-test",
-        temperature=1.0,
-        cone90_deg=30.0,
-        cone95_deg=40.0,
-        risk_raw_knots=(0.0, 1.0),
-        risk_deg_knots=(0.0, 60.0),
-    )
-    predictor = DeLPHIK3Predictor(
-        K3ModelBundle(model, "untrained-unit-test", calibration, config)
-    )
-    failed = predictor.predict(_epochs(), known_period=None)
-    assert failed.status is K3PredictionStatus.FAILED and not failed.axes
-    result = predictor.predict(
-        _epochs(), known_period=KnownPeriod(8.0, "external-fixed-period")
-    )
-    assert result.status is not K3PredictionStatus.FAILED
-    assert len(result.axes) == 3
-    assert all(np.isfinite(axis.axis_xyz).all() for axis in result.axes)

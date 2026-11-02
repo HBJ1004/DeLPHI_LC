@@ -2406,15 +2406,12 @@ def _claim_locked_execution(
         raise DownstreamBenchmarkError(
             "locked evaluation was already claimed; rerunning into any directory is forbidden"
         ) from exc
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-    except BaseException:
-        # The exclusive claim remains as evidence even when serialization or
-        # later execution fails.  A failed locked attempt is not reusable.
-        raise
+    # The exclusive claim remains as evidence even when serialization or
+    # later execution fails.  A failed locked attempt is not reusable.
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 __all__ = [

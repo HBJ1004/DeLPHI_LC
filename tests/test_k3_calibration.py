@@ -8,7 +8,6 @@ import pytest
 from lc_pipeline.k3.calibration import (
     K3CalibrationError,
     conformal_radius,
-    normalized_entropy,
 )
 
 
@@ -34,8 +33,3 @@ def test_fourteen_object_95_percent_radius_is_bounded_full_hemisphere() -> None:
 def test_conformal_radius_rejects_invalid_inputs(errors, coverage) -> None:
     with pytest.raises(K3CalibrationError):
         conformal_radius(errors, coverage)
-
-
-def test_normalized_entropy_extremes() -> None:
-    assert normalized_entropy([1.0, 0.0, 0.0]) == 0.0
-    assert normalized_entropy([0.25] * 4) == pytest.approx(1.0)

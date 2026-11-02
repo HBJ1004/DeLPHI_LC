@@ -1,4 +1,7 @@
-"""Strict public result schema for candidate-conditioned K=3 inference."""
+"""Deprecated result types retained for public import compatibility.
+
+Current prediction helpers return dictionaries from the bundle interface.
+"""
 
 from __future__ import annotations
 

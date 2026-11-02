@@ -255,13 +255,10 @@ def create_correction_locked_authorization(
         raise CorrectionLockedAuthorizationError(
             "correction-bound locked authorization already exists"
         ) from exc
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(canonical_json(payload) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-    except BaseException:
-        raise
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(canonical_json(payload) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     return {
         **payload,
         "authorization_path": str(authorization),
@@ -362,13 +359,10 @@ def claim_correction_locked_execution(
         raise CorrectionLockedAuthorizationError(
             "corrected locked evaluation was already claimed; rerunning is forbidden"
         ) from exc
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(canonical_json(payload) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-    except BaseException:
-        raise
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(canonical_json(payload) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def materialize_frozen_selection_inputs(
