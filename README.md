@@ -223,7 +223,7 @@ Please cite the paper, software v1.1.0 used for its results using DOI
 and the [v1.1.0 data DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
 For the latest software version, cite the concept DOI
 [10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947).
-Version 1.1.1 changes no result.
+Versions 1.1.1 and 1.2.0 change no result.
 See [CITATION.cff](CITATION.cff) and the [release notes](CHANGELOG.md).
 
 ## Use of AI assistants

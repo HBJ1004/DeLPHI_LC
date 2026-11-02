@@ -1,19 +1,20 @@
 # Release notes
 
-## 1.2.0 (unreleased)
+## 1.2.0 (2026-11-02)
 
-- Share equivalent SHA-256 and canonical JSON helpers while preserving their formats and errors.
+No numerical results change.
+
 - Remove unused inference, tensor-cache, loss and figure code and unreferenced reproduction scripts.
+  The removed scripts remain available at tag v1.1.0.
 - Keep the existing K3 result types as deprecated imports and export `load_predictor` and `read_observations`.
+- Share equivalent SHA-256 and canonical JSON helpers while preserving their formats and errors.
 - Remove no-op exception wrappers and duplicate seed definitions.
-- Keep `risk_deg` as a reserved prediction field with value `null`. No numerical results change.
-
-## 1.1.2 (unreleased)
-
+- Keep `risk_deg` as a reserved prediction field with value `null`.
+- Correct docstrings, help and error text, and remove development notes from report text.
 - Clarify installation constraints, packaged split data and prediction provenance fields.
 - Merge the results headings and explain historical statistic names and run labels.
 - Correct configuration guidance and name the commit at which the deposited locks verify.
-- Simplify citation wording and released notes. No numerical results change.
+- Simplify citation wording and release notes.
 
 ## 1.1.1 (2026-11-02)
 

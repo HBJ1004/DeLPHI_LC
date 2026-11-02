@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_identity_is_consistent():
     citation = yaml.safe_load((ROOT / "CITATION.cff").read_text(encoding="utf-8"))
-    assert __version__ == citation["version"] == "1.1.1"
-    assert citation["url"] == "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.1"
+    assert __version__ == citation["version"] == "1.2.0"
+    assert citation["url"] == "https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.2.0"
     assert str(citation["date-released"]) == "2026-11-02"
     assert any(identifier["type"] == "doi" and identifier["value"] == "10.5281/zenodo.23757942"
                for identifier in citation["identifiers"])
