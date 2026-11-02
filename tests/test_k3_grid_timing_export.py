@@ -22,5 +22,5 @@ def test_source_has_no_hard_coded_private_path() -> None:
     source = Path("repro/export_k3_grid_timing_cases.py").read_text(encoding="utf-8")
     # The regex literal contains these tokens by design; no concrete host path is allowed.
     assert "/mnt/d/Downloads" not in source
-    assert "/home/onlyb" not in source
+    assert "/home/example-user" not in source
     json.dumps({"source": source})

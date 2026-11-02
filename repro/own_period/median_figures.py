@@ -1524,7 +1524,7 @@ def write_report(ctx, names):
                   "All input and manuscript hashes were unchanged during generation. "
                   "The six PDFs and six PNGs were checked for valid dimensions and median labels. "
                   "`values.json` records every point, interval, count, geometric radius, histogram bin and ratio.", ""])
-    (ctx.out.parent / "f1-report.md").write_text("\n".join(lines), encoding="utf-8")
+    (ctx.out / "f1-report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def validate_f2_training(ctx):
@@ -1595,7 +1595,7 @@ def write_f2_report(ctx, names):
     lines.extend(["## Execution", "", f"Used CPUs {sorted(os.sched_getaffinity(0))}, niceness {os.nice(0)}, one Python process, CPU only. "
                   "All recorded read-only source, renderer, original-PDF and manuscript hashes were unchanged "
                   "during generation. Live refine-chain/period-cost modules were neither imported nor edited.", ""])
-    (ctx.out.parent / "f2-report.md").write_text("\n".join(lines), encoding="utf-8")
+    (ctx.out / "f2-report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():

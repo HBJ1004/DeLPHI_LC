@@ -124,11 +124,14 @@ from JPL Horizons.
 
 ## Code and data
 
-The code is this repository at tag
+The paper's results were made with this repository at tag
 [`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0), software
-DOI `10.5281/zenodo.23787947`. The revised paper uses 25 networks retrained on corrected
+DOI [10.5281/zenodo.23860198](https://doi.org/10.5281/zenodo.23860198).
+Version 1.1.1 changes no result. Cite the concept DOI
+[10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947) for the latest version.
+The revised paper uses 25 networks retrained on corrected
 simulations and timings measured on one PC. Data are in the
-[v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881); downloads use
+[v1.1.0 data record, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881). Downloads use
 `https://zenodo.org/records/23857881/files/<name>`.
 
 The data record has 16 uploads: five new archives, five small network sets,
@@ -186,9 +189,13 @@ prediction and is not the error of a single pole chosen by DeLPHI.
 
 The revised analysis uses periods estimated from the lightcurves, with the
 retrained networks held fixed and no choice between P/2, P and 2P after scoring.
-The saved `retrain-20261030/results/headline/own-period-scores-main.json`,
-`retrain-20261030/results/median-stats.json` and
-`repro/baselines_out/reference-baselines.json` give:
+The DeLPHI row comes from `retrain-20261030/results/median-stats.json`
+(`KThreeOofMean/median`) and
+`retrain-20261030/results/headline/maps/own-period/analyses/summary.json`
+(`overall/within20`). The standard-pole and random-axis rows come from
+`repro/baselines_out/reference-baselines.json`.
+Its DeLPHI blocks are historical, as explained in the
+[baseline notes](repro/baselines_out/README.md).
 
 | Directions | Median oracle error | Within 20° |
 |---|---:|---:|
@@ -218,8 +225,12 @@ solution quality. The result files and saved fits are mapped in the
 
 ## Citation
 
-Please cite the paper, software v1.1.0 using DOI `10.5281/zenodo.23787947`,
+Please cite the paper, software v1.1.0 used for its results using DOI
+[10.5281/zenodo.23860198](https://doi.org/10.5281/zenodo.23860198),
 and the [v1.1.0 data DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
+For the latest software version, cite the concept DOI
+[10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947).
+Version 1.1.1 changes no result.
 See [CITATION.cff](CITATION.cff) and the [release notes](CHANGELOG.md).
 
 ## Use of AI assistants

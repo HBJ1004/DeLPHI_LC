@@ -338,7 +338,7 @@ def load_models(networks, device):
 
     if device != "cpu" and (device != "cuda" or not torch.cuda.is_available()):
         raise ValueError(
-            "this subcommand requires CUDA and must be run by Claude under the shared lock"
+            "this subcommand requires CUDA and must be run under the shared GPU lock"
         )
     models, names, bindings = _load_models(
         MODELS, MODEL_MANIFEST, (0,) if networks == "fold0" else tuple(range(5)), device
@@ -438,7 +438,7 @@ def search(out):
     manifest = context(out)
     validated(out, manifest)
     if not torch.cuda.is_available():
-        raise ValueError("GPU Fourier search must be run by Claude under the shared lock")
+        raise ValueError("GPU Fourier search must be run under the shared GPU lock")
     details, periods = {}, {}
     for row in manifest["objects"]:
         oid = row["object_id"]

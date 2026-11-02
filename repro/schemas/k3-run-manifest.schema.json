@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/hangbin9/DeLPHI_lc/repro/schemas/k3-run-manifest.schema.json",
+  "$id": "https://github.com/HBJ1004/DeLPHI_LC/repro/schemas/k3-run-manifest.schema.json",
   "title": "DeLPHI K3 run manifest",
   "type": "object",
   "additionalProperties": false,

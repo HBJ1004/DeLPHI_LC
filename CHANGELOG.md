@@ -7,19 +7,28 @@
 - Default shipped commands to the caller's available CPUs and record actual affinity in reports; no numerical results change.
 - Refuse seed-bug v1.0.0 networks unless explicitly enabled for historical reproduction, and add software version, training commit and network hashes to predictions; no numerical results change.
 - Update software release metadata to 1.1.1 (2026-11-02); no printed numbers or numerical results change.
+- Distinguish the paper's v1.1.0 software DOI from the concept DOI for the latest version.
+- Add the disclosed overlap between simulated training, validation and test objects.
+- Guard historical DeLPHI helpers, select current coverage and timing inputs, document stale figures and their redraw commands, and keep figure reports inside the output folder.
+- Document the compatible GCC solver build and find its test fixture through `DELPHI_DATA`.
+- Use public schema URLs, a generic test path and neutral execution status text.
 
 ## 1.1.0 (2026-11-01)
 
 - Retrained all 25 ensemble networks after correcting reused simulation seeds
   that linked the pole to the period and initial phase.
+  Pole, period, phase and noise use independent random streams within each object.
+  Each simulated validation and test object shares its pole, period, phase and
+  noise draw with a training object, with different observing geometry and shape.
 - Reran all network results and retimed all reported comparisons on one PC.
 - Review fixes (d0f586a): record GPU numerics settings in timing receipts,
   check V6 files before resuming, validate scorer inputs, and include the
   RT5 timing scorer in the repository.
 - The wheel and source archive now carry every module and data file that the
   commands use.
-- The released figure command redraws every printed figure, with pole-fit
-  times taken from the same-PC retimed scores.
+- The released `median_figures` command redraws its 13 figures with the
+  manuscript folder required for its checks and pole-fit times taken from the
+  same-PC retimed scores. Period-search and map figures have separate commands.
 - Timing receipts record `DELPHI_SCORE_CHUNK_MAX`, transient GPU errors are
   retried on resume instead of being sealed as failures, and the synthetic
   data generator no longer has machine-specific default paths.

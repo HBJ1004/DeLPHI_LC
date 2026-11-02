@@ -1463,7 +1463,13 @@ def render_coverage() -> None:
     baselines = load_npz(
         FOLLOWUP / "source/repro/baselines_out/reference-baselines-per-object.npz"
     )
-    delphi_x, delphi_y = empirical_cdf(baselines["delphi_errors_deg"])
+    if network.switched():
+        errors = load_npz(
+            DataPath("maps/own-period/evaluations/real-oof-ensemble.npz")
+        )["oracle_errors_deg"]
+    else:
+        errors = baselines["delphi_errors_deg"]
+    delphi_x, delphi_y = empirical_cdf(errors)
     standard_x, standard_y = empirical_cdf(baselines["standard_errors_deg"])
     random_cdf = load_npz(FOLLOWUP / "data/interpretation-20260926/random-axes-cdf.npz")
     fig, ax = plt.subplots(figsize=(5.3, 3.4))

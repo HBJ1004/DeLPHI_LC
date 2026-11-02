@@ -11,6 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import switched
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
@@ -20,6 +22,11 @@ FOLLOWUP = HERE.parents[1]
 
 
 def main(scored_rows):
+    if switched():
+        raise ValueError(
+            "sampling_baselines uses historical DeLPHI rows. For v1.1 results use "
+            "repro.own_period.reliability_score and repro.own_period.median_stats."
+        )
     rows = [r for r in json.load(open(scored_rows))["payload"] if r.get("status") != "ineligible"]
     out = {"groups": {}}
     for blocks in (1, 3, 5, 10):

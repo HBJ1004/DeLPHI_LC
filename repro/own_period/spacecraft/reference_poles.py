@@ -89,7 +89,7 @@ def build(output: Path) -> dict:
     return {"schema": "delphi.spacecraft-reference-poles.v1", "objects": rows,
             "equatorial_frame": "J2000", "ecliptic_frame": "ECLIPJ2000",
             "obliquity_arcsec": 84381.448, "epoch_jd_tdb": 2451545.0,
-            "paper_crosscheck": "pending Claude review before Job 2; no scoring performed"}
+            "paper_crosscheck": "reference poles recorded; no scoring performed"}
 
 
 def main() -> None:

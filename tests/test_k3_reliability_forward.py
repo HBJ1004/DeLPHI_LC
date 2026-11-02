@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -129,12 +130,19 @@ def test_patched_solver_native_relative_parity_on_independent_tiny_fixture(tmp_p
     """The source translation matches native normalized relative output <=1e-5."""
     root = Path(__file__).resolve().parents[2]
     original = root / "data" / "solver-internal-capacity-corrected" / "20260911" / "expanded-solver" / "convexinv"
+    if not (original / "convexinv").is_file() and os.environ.get("DELPHI_DATA"):
+        original = (Path(os.environ["DELPHI_DATA"]).expanduser().parent
+                    / "solver-internal-capacity-corrected/20260911/expanded-solver/convexinv")
     if not (original / "convexinv").is_file() or shutil.which("make") is None:
         pytest.skip("technical convexinv fixture is unavailable")
     copy = tmp_path / "convexinv"
     shutil.copytree(original, copy)
     patch_full_precision_export(copy)
-    build = subprocess.run(["make", "convexinv"], cwd=copy, text=True, capture_output=True, check=False)
+    # GCC 15 rejects the legacy solver callbacks; prefer an older compiler when one is installed.
+    compiler = os.environ.get("CC") or next(
+        (name for name in ("gcc-14", "gcc-13", "gcc-12") if shutil.which(name)), "gcc")
+    build = subprocess.run(["make", f"CC={compiler}", "convexinv"], cwd=copy, text=True,
+                           capture_output=True, check=False)
     assert build.returncode == 0, build.stderr or build.stdout
     parameter_path, input_path = tmp_path / "input.parameters", tmp_path / "input.lcs"
     parameter_path.write_text(_technical_parameters(), encoding="ascii")

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
+from repro.network_root import switched
+
 HERE = Path(__file__).resolve().parent
 FOLLOWUP = HERE.parents[1]
 BASELINES = HERE / "baselines_out/reference-baselines-per-object.npz"
@@ -18,6 +20,11 @@ OUT = FOLLOWUP / "data/interpretation-20260926"
 
 
 def main():
+    if switched():
+        raise ValueError(
+            "primary_intervals uses v1.0.0 DeLPHI errors. For v1.1 results use "
+            "repro.own_period.maps.analyses and repro.own_period.median_stats."
+        )
     data = np.load(BASELINES)
     errors = data["delphi_errors_deg"]
     draws = np.random.default_rng(20260930).integers(0, len(errors), (10000, len(errors)))

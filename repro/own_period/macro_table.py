@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +60,22 @@ class Values:
     def path(self, path):
         return select(path) if self.selected else Path(path)
 
+    def macro_source(self, macro):
+        source = self.path(macro["source_file"])
+        if self.selected and network.switched() and any(
+            key in macro["source_field"]
+            for key in ("seconds", "speed_ratio", "runtime", "time_ratios")
+        ):
+            folder = Path(network.NetworkPath("results", "delphi-inversions"))
+            if source.is_relative_to(folder / "own"):
+                relative = source.relative_to(folder / "own")
+                if relative.parts[0] == "exploratory-loaded-ladder":
+                    relative = Path("ladder-retime") / relative
+                return folder / "timing-retime/own" / relative
+            if source.name in ("v6-own-score.json", "v7-own-score.json") and source.parent == folder:
+                return folder / "timing-retime" / source.name
+        return source
+
     def json(self, path):
         path = self.path(path)
         if path not in self.cache and path.name == "paired-gains.json" and not network.switched():
@@ -104,7 +121,7 @@ class Values:
         return value
 
     def raw(self, macro):
-        name, source, field = macro["name"], Path(macro["source_file"]), macro["source_field"]
+        name, source, field = macro["name"], self.macro_source(macro), macro["source_field"]
         if source.name == "own-period-scores.json" and field.startswith("alcdef/") and self.selected and network.switched():
             # The rerun scores ALCDEF in its own file; the published run kept it beside ZTF.
             source = Path(network.NetworkPath("results", "alcdef", "own-period-scores.json"))
@@ -209,11 +226,14 @@ class Values:
             from repro.own_period.median_figures import full_scan_costs
 
             seconds = full_scan_costs(value)["seconds"]
-            loaded = self.json(FixedDataPath("benchmark/score-loaded.json"))["point_estimates"][
+            loaded_source = self.macro_source(dict(
+                source_file=FixedDataPath("benchmark/score-loaded.json"),
+                source_field="point_estimates/delphi_mean_seconds",
+            ))
+            loaded = self.json(loaded_source)["point_estimates"][
                 "delphi_mean_seconds"
             ]
-            # The fixed Fourier cost is reported in the period-cost summary.
-            return seconds / (self.period_search_seconds() + round(loaded, 2))
+            return seconds / (self.period_search_seconds() + loaded)
         if name == "AreaThreeMedian":
             return value["k"][2]["search_area_median_radius"]
         if name.startswith("InsightRho") or name == "PropertyReferenceCountP":
@@ -369,7 +389,13 @@ class Values:
         )
 
     def period_search_seconds(self):
-        # Use the fixed period-cost macro's source, never a rounded paper number.
+        # Use the accepted timing receipt when selected, never a rounded paper number.
+        if self.selected and network.switched():
+            path = Path(network.NetworkPath("results")).parent / "runners/receipts-rt6/001.json"
+            receipt = self.json(path)
+            if not receipt["accepted_for_timing"]:
+                raise ValueError("RT6 Fourier timing receipt was not accepted")
+            return receipt["comparison"]["new_timing"]["mean_seconds"]
         value = self.json(FixedDataPath("period-cost/period-cost-summary.json"))
         return value["fourier_seconds"]
 
@@ -381,7 +407,10 @@ class Values:
             self.extra_sources.update(map(select, result["source_files"]))
             return result["mean_recomputed"]
         if name.startswith("DownSix"):
-            value = self.json(FixedDataPath("v67/v6-own-period-score.json"))
+            source = (network.NetworkPath("results", "delphi-inversions", "timing-retime", "v6-own-score.json")
+                      if self.selected and network.switched()
+                      else FixedDataPath("v67/v6-own-period-score.json"))
+            value = self.json(source)
             return lookup(
                 value,
                 "verdict_published_convention/"
@@ -451,15 +480,24 @@ def build(inventory, manuscript, *, selected=True):
     definitions = dict(
         re.findall(r"^\\newcommand\{\\(\w+)\}\{(.*)\}$", Path(manuscript).read_text(), re.M)
     )
-    values, rows = Values(selected=selected), []
+    values, rows, skipped = Values(selected=selected), [], []
     for macro in catalog["macros"]:
         if not macro["network_dependent"]:
             continue
         name = macro["name"]
+        if name not in definitions:
+            skipped.append(name)
+            print(f"Skipping removed manuscript macro {name}", file=sys.stderr)
+            continue
         new = values.resolve(macro)
         if isinstance(new, np.generic):
             new = new.item()
-        source_file, source_key = macro["source_file"], macro["source_field"]
+        source_file, source_key = values.macro_source(macro), macro["source_field"]
+        if name == "WorkflowFullSearchSpeedFactor" and selected and network.switched():
+            source_key = (
+                "median(Set A full-scan seconds) / "
+                "(RT6 Fourier mean seconds + retimed loaded DeLPHI mean seconds)"
+            )
         if name.startswith("TOne"):
             base, kind, bound = re.fullmatch(r"(TOne.+?)(Mean|Median)(Low|High)?", name).groups()
             source_file = FixedDataPath("paired-gains.json")
@@ -481,7 +519,9 @@ def build(inventory, manuscript, *, selected=True):
                     "failed_excluded; condition and original bootstrap bound selected by macro name"
                 )
             elif name.startswith("DownSix"):
-                source_file = FixedDataPath("v67/v6-own-period-score.json")
+                source_file = (network.NetworkPath("results", "delphi-inversions", "timing-retime", "v6-own-score.json")
+                               if selected and network.switched()
+                               else FixedDataPath("v67/v6-own-period-score.json"))
                 source_key = "verdict_published_convention/" + (
                     "speed_ratio_ci95_low" if name.endswith("Low") else "speed_ratio"
                 )
@@ -521,6 +561,7 @@ def build(inventory, manuscript, *, selected=True):
         manuscript=dict(path=str(manuscript), sha256=network.sha256(manuscript)),
         inventory_sha256=network.sha256(inventory),
         count=len(rows),
+        skipped_removed_macros=skipped,
         macros=rows,
     )
 

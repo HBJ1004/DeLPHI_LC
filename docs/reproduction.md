@@ -32,6 +32,9 @@ rotation periods and the 25 networks retrained on corrected simulations.
 Data, predictions and fits are in the
 [Zenodo data record v1.1.0](https://doi.org/10.5281/zenodo.23857881). The corrected simulations
 use independent random streams for the pole, period, initial phase and noise.
+Each simulated validation and test object shares its pole, period, phase and
+noise draw with a training object, with different observing geometry and shape.
+The simulated test is therefore not fully independent of training.
 `retrain-20261030/PROTOCOL.md` and `RUNLOG.md` record the retraining, reruns and
 same-PC retimes. The unchanged `own-period-20261021/PROTOCOL.md` and protocols in `census7/`,
 `refine-chain/`, `period-cost/` and `spacecraft/` record the fixed choices,
@@ -120,7 +123,7 @@ retiming receipts and runner scripts are in `retrain-20261030/runners/`.
 | Period and pole refinement | `refine_chain.py`, `refine_chain_post.py` | `refine-chain/PROTOCOL.md`, frozen sources, solver and manifests | **O/**`refine-chain/` (`refine-medians.json`, selected fits and scores) |
 | Spacecraft reference checks | `spacecraft/fetch.py`, `convert.py`, `run.py`, `classical.py`, `classical_freep.py`, `posthoc.py`, `eros_loo.py`, `eros_context.py`, `reference_poles.py` | `spacecraft/` protocols, acquired photometry, geometry and independent reference poles | **O/**`spacecraft/` (acquisition, predictions, fits and scores) |
 | Median statistics | `median_stats.py` | Explicit `--input-list` macro inventory and optional `--manuscript`; per-object evidence under **O/**`maps/`, `lowq/`, `reliability/`, `nettests/`, `benchmark/`, `v67/`, `failed-excluded-derived/`, plus published reference records | **O/**`median-stats.json` by default (`--out` overrides); required `--report` path |
-| Median figures | `median_figures.py` | **O/**`median-stats.json` and the same frozen evidence; historical renderers; manuscript and original figures in `../../../paper-rev-20261021/` | Required `--out-dir`: PDFs, PNGs and `values.json`; `f1-report.md` and `f2-report.md` in its parent folder |
+| Median figures | `median_figures.py` | **O/**`median-stats.json` and the same frozen evidence, historical renderers, manuscript and original figures in `../../../paper-rev-20261021/` | Required `--out-dir` holds PDFs, PNGs, `values.json`, `f1-report.md` and `f2-report.md` |
 
 The main protocol fixes the top Fourier period without choosing P/2 or 2P
 after scoring. Reduced, noisy, external-variant and retained-lightcurve inputs
@@ -137,21 +140,65 @@ Median commands require explicit scratch destinations, for example:
 "$PYTHON" -m repro.own_period.median_stats \
   --input-list /path/to/mean-macros.txt --report /path/to/median-report.md
 "$PYTHON" -m repro.own_period.median_figures \
-  --figures candidate-count inversion-benchmark inversion-timing --out-dir /path/to/median-figures
+  --figures candidate-count inversion-benchmark inversion-timing shapley \
+  --paper-dir /path/to/paper-rev-20261021 --out-dir /path/to/median-figures
 ```
 
 To redraw the printed figures, set the retrained-network environment variables
 `DELPHI_DATA`, `DELPHI_NETWORK_ROOT`, `DELPHI_MODEL_BINDING` and `DELPHI_BUNDLE_ROOT`
-as shown above. Pass the manuscript folder with `--paper-dir` for its page layout.
+as shown above. The command redraws 13 figures and requires the manuscript
+folder with `--paper-dir` for its checks and page layout.
 Pole-fit times then come from `timing-retime/own/` under the selected results folder.
 The Fourier time comes from the accepted RT6 timing receipt beside that folder.
+
+Figure 18, `period-search`, has a separate command that redraws the printed
+figure from the retimed summary without running a search or fit.
+
+```bash
+"$PYTHON" -m repro.period_search.benchmark_end_to_end \
+  --plot-summary "$DELPHI_NETWORK_ROOT/../results/period-retime/benchmark-v8-retime/benchmark-summary.json" \
+  --figure-output-dir /path/to/period-search-figures
+```
+
+The score maps and examples also have their own command.
+
+```bash
+"$PYTHON" -m repro.own_period.maps.render_figures \
+  --analyses "$DELPHI_NETWORK_ROOT/../results/headline/maps/own-period/analyses" \
+  --run "$DELPHI_NETWORK_ROOT/../results/headline/maps/own-period" \
+  --periods "$DELPHI_DATA/own-periods-170.json" \
+  --figures worked-example oracle-error candidate-sky primary-coverage \
+  --out /path/to/map-figures
+```
+
+In the published data record, the copies of `inversion-benchmark`,
+`inversion-timing`, `shapley` and `period-search` under
+`retrain-20261030/results/figures/` are stale.
+The commands above redraw their printed versions.
+
+The historical helpers `repro.primary_intervals` and `repro.sampling_baselines`
+refuse retrained-network mode. Use `repro.own_period.maps.analyses`,
+`repro.own_period.reliability_score` and `repro.own_period.median_stats`
+for the v1.1 results. See the [baseline notes](../repro/baselines_out/README.md).
+
+The optional `repro.own_period.macro_table` audit requires an external inventory
+JSON with a `macros` list and the manuscript source. Each entry needs `name`,
+`network_dependent`, `source_file`, `source_field` and `value`.
+The inventory is not included in the data record. Pass its path with
+`--inventory`, the manuscript with `--manuscript` and a scratch JSON path with
+`--output`. Macros removed from the manuscript are skipped with a note.
+In retrained-network mode, timing macros use the retimed scores and RT6 Fourier
+receipt and keep full precision until display.
 
 ## 1. What to download
 
 Use the software release
 [`v1.1.0`](https://github.com/HBJ1004/DeLPHI_LC/releases/tag/v1.1.0),
-software DOI `10.5281/zenodo.23787947`, with the
+software DOI [10.5281/zenodo.23860198](https://doi.org/10.5281/zenodo.23860198), with the
 [Zenodo data record v1.1.0, DOI 10.5281/zenodo.23857881](https://doi.org/10.5281/zenodo.23857881).
+The paper's results were made with v1.1.0. Version 1.1.1 changes no result.
+Cite the concept DOI
+[10.5281/zenodo.23787947](https://doi.org/10.5281/zenodo.23787947) for the latest version.
 Download URLs have the form
 `https://zenodo.org/records/23857881/files/<name>`.
 
@@ -674,7 +721,7 @@ cd version_0.2.1/convexinv
 sed -i -e 's/^\(#define MAX_LC *\)[0-9]*/\1210/' \
        -e 's/^\(#define MAX_N_OBS *\)[0-9]*/\126612/' \
        -e 's/^\(#define POINTS_MAX *\)[0-9]*/\11549/' constants.h
-make convexinv
+make CC=gcc-13 convexinv  # GCC 14 or older is required because GCC 15 rejects the legacy callbacks
 ```
 
 This allows 210 lightcurves, 26,612 observations and 1,549 observations per
@@ -819,9 +866,11 @@ in place of `--check`. The synthetic evaluation Python entry points accept
   geometry are not redistributed. The data record holds the prepared inputs'
   checksums, the predictions and the scores. Prepared external variant inputs
   and their indices must also be obtained separately for those reruns.
-- **Figures.** The current figures are in the new results archive, with
-  runners and receipts. `repro/own_period/median_figures.py` and the rerun
-  runners draw the revised network-dependent figures. The median tools still
+- **Figures.** The new results archive includes runners and receipts, but its
+  `results/figures/` copies of `inversion-benchmark`, `inversion-timing`,
+  `shapley` and `period-search` are stale. The commands above redraw the printed
+  versions. `repro/own_period/median_figures.py` redraws its 13 figures, while
+  period-search and map figures have separate commands. The median tools still
   require the manuscript and macro input list, and figure generation needs
   the original reference figure PDFs. The manuscript and reference PDFs are
   not included in the data record. Historical versions
