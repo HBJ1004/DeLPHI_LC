@@ -18,8 +18,9 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import modes_from_score_grid
 from lc_pipeline.k3.inference import refine_axes, refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _load_prepared
 from lc_pipeline.physics.axial import axial_angular_error_deg
+from repro.network_root import load_historical_models as _load_models
 
 PREDICTION_SCHEMA = "delphi.k3-lowq-ensemble-ablation-predictions.v1"
 ANALYSIS_SCHEMA = "delphi.k3-lowq-ensemble-ablation-analysis.v1"

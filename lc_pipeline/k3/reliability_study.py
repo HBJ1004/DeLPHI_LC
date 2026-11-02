@@ -522,7 +522,7 @@ def prediction_cell(root, row, config, repeat, predictor, *, network_metadata=No
     except (ValueError, RuntimeError) as exc:
         import torch
         # Resource and CUDA runtime failures must remain retryable on resume.
-        if isinstance(exc, torch.OutOfMemoryError) or (
+        if isinstance(exc, getattr(torch, "OutOfMemoryError", torch.cuda.OutOfMemoryError)) or (
                 isinstance(exc, RuntimeError) and any(marker in str(exc).lower() for marker in (
                     "cuda", "cublas", "cudnn", "cusolver", "cusparse", "cufft", "curand"))):
             raise
@@ -546,7 +546,9 @@ def inference(root, lock, ids, repeats, budget):
         if not objects:
             continue
         budget.check()
-        predictor = K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=lock["device"])
+        # This sealed study reproduces the archived v1.0.0 experiment.
+        predictor = K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=lock["device"],
+                                        allow_legacy=True)
         for row in objects:
             started = time.monotonic()
             cells = []
@@ -717,7 +719,9 @@ def fitting(root, lock, ids, budget):
         objects = [by_id[o] for o in ids if by_id[o]["fold"] == fold]
         if not objects:
             continue
-        predictor = K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=lock["device"])
+        # This sealed study reproduces the archived v1.0.0 experiment.
+        predictor = K3EnsemblePredictor(lock["bundles"][fold]["directory"], device=lock["device"],
+                                        allow_legacy=True)
         for row in objects:
             started = time.monotonic()
             values = []
@@ -1035,9 +1039,11 @@ def _period_rerun_lock(root):
 
 
 def run_period_rerun(*, root, device='cuda', max_seconds=3300):
-    from repro import network_root as network
-    from .bundle import K3EnsemblePredictor
     import torch
+
+    from repro import network_root as network
+
+    from .bundle import K3EnsemblePredictor
     root = Path(root)
     lock = _period_rerun_lock(root)
     torch.set_num_threads(int(os.environ.get('OMP_NUM_THREADS', 4)))
@@ -1069,6 +1075,7 @@ def run_period_rerun(*, root, device='cuda', max_seconds=3300):
 
 def score_period_rerun(*, root):
     from repro import network_root as network
+
     from ..v2.data import load_catalog
     from .reliability_scoring import render_reliability_csv, score_reliability
     root = Path(root)

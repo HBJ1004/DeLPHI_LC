@@ -21,8 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
-from repro.own_period import reliability as R
 from repro import network_root as network
+from repro.own_period import reliability as R
 
 FIG8_BLOCKS = (1, 3, 5, 10)
 CAPS = ("10", "20", "50", "100", "200", "500", "None")
@@ -233,7 +233,12 @@ def table_value(csv_text, condition, key):
 
 def score_withheld(root: Path, ids, lock, catalog, arms=("classical20", "k3")):
     """Withheld normalized RMS as in ``reliability_study.score`` for the given fits root."""
-    from lc_pipeline.k3.reliability_forward import ForwardLightcurve, ForwardObservation, holdout_shape_rmse, load_solution
+    from lc_pipeline.k3.reliability_forward import (
+        ForwardLightcurve,
+        ForwardObservation,
+        holdout_shape_rmse,
+        load_solution,
+    )
     from lc_pipeline.k3.reliability_sampling import read_lc, select_holdout
     from lc_pipeline.k3.reliability_scoring import stratified_asteroid_bootstrap
     from lc_pipeline.k3.reliability_study import validate_start

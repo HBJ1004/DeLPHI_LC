@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import math
 import os
-from pathlib import Path
 import queue
 import shutil
+from pathlib import Path
 from types import SimpleNamespace
+
 import pytest
 
 from lc_pipeline.v2.convexinv import ConvexinvProvenance, PeriodScanParameters, PeriodScanRow

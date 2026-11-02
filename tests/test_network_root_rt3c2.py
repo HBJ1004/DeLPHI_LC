@@ -9,7 +9,8 @@ import pytest
 from lc_pipeline.k3 import reliability_study as study
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from repro import network_root as network
-from repro.own_period import external_variants as variants, reliability as reliability
+from repro.own_period import external_variants as variants
+from repro.own_period import reliability as reliability
 from repro.own_period import reliability_report, train_vs_test
 
 
@@ -201,6 +202,7 @@ def test_period_score_requires_completed_bound_inference(selected, monkeypatch):
 def test_local_bundle_export_preserves_tensors_and_records_skipped_gates(selected, monkeypatch):
     import torch
     from safetensors.torch import load_file
+
     from repro import export_k3_bundles as exporter
     from repro import prepare_k3_followup_inputs as inputs
     repository = Path(__file__).resolve().parents[1]
@@ -256,7 +258,12 @@ def test_local_bundle_export_preserves_tensors_and_records_skipped_gates(selecte
 
 def test_period_rerun_resume_and_score_use_fixed_cells(selected, monkeypatch):
     from lc_pipeline.k3 import bundle
-    from lc_pipeline.k3.reliability_sampling import CurveObservation, LightCurve, NativeSession, write_lc
+    from lc_pipeline.k3.reliability_sampling import (
+        CurveObservation,
+        LightCurve,
+        NativeSession,
+        write_lc,
+    )
     from lc_pipeline.v2 import data
     source = selected.parent / 'period-source'
     rows = []

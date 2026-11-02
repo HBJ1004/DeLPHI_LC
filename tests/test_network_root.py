@@ -163,6 +163,52 @@ def test_full_prediction_checks_hash_before_unpickling(selected, monkeypatch):
         predict_oof_full.load_model(0, 17, "cpu")
 
 
+@pytest.mark.parametrize("loader", ["ensemble", "single"])
+def test_checkpoint_seed_bug_requires_opt_in(selected, monkeypatch, loader):
+    import torch
+
+    from lc_pipeline.k3 import model
+    from lc_pipeline.k3.config import K3ScoreModelConfig
+    from repro.own_period import predict_oof_full
+
+    root, manifest = selected
+    provenance = {"implementation_commit": "7874092b81d9456e5bf52fba9adb699b8218046f"}
+    metadata = json.loads(manifest.read_text())
+    for record in metadata["models"]:
+        record["run_provenance"] = provenance
+    manifest.write_text(json.dumps(metadata))
+
+    class Model:
+        def __init__(self, config):
+            pass
+
+        def load_state_dict(self, state):
+            pass
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    monkeypatch.setattr(torch, "load", lambda path, **kwargs: {
+        "stage": "real-oof", "run_provenance": provenance,
+        "config": {"seed": int(Path(path).stem.rsplit("-", 1)[1])},
+        "model_config": K3ScoreModelConfig().as_mapping(), "model_state_dict": {},
+    })
+    monkeypatch.setattr(model, "CandidateConditionedScorer", Model)
+    monkeypatch.setattr(predict_oof_full, "CandidateConditionedScorer", Model)
+
+    def load(**kwargs):
+        if loader == "ensemble":
+            return nr.load_models(root / "models", manifest, (0,), "cpu", **kwargs)[0]
+        return [predict_oof_full.load_model(0, 17, "cpu", **kwargs)[0]]
+
+    with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+        load()
+    assert len(load(allow_legacy=True)) == (5 if loader == "ensemble" else 1)
+
+
 def test_full_scoring_can_resume_only_identical_bound_outputs(selected, tmp_path):
     from repro.own_period.predict_oof_full import write_npz_once
 

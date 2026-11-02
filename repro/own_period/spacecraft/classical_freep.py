@@ -38,8 +38,8 @@ WORKTREE = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(WORKTREE))
 
 # Import before numpy: classical pins BLAS/OpenMP threads to one per worker.
-from repro.own_period.spacecraft import classical as c  # noqa: E402
 from lc_pipeline.v2.convexinv import ConvexinvParameters  # noqa: E402
+from repro.own_period.spacecraft import classical as c  # noqa: E402
 
 np, grid = c.np, c.grid
 RUNS = ("itokawa-combined", "itokawa-lowry2014", "eros-damit",
@@ -362,7 +362,8 @@ def cmd_validate(args) -> dict:
     c.write(root / "round-trip.json", proof)
     actual = execute_start({**job, "lightcurve": c.binding(root / "lc.txt")}, args.start_index,
                            vectors[args.start_index], lock, root / "cases", False)
-    stable = lambda r: {k: v for k, v in r.items() if k != "solver_wall_seconds"}
+    def stable(r):
+        return {k: v for k, v in r.items() if k != "solver_wall_seconds"}
     equal = stable(actual) == stable(expected)
     passed = actual["selected_fit"] is not None and equal
     report = {"schema": "delphi.spacecraft-classical-freep-validation.v1", "status": "PASS" if passed else "FAIL",

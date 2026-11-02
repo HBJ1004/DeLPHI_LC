@@ -37,8 +37,8 @@ from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_prepared
-from repro import network_root as network
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro import network_root as network
 
 from .nettests_common import FOLLOWUP, MODEL_MANIFEST, MODELS, OUT, SPLITS, sha256, write_json_once
 
@@ -228,7 +228,7 @@ def predict(args) -> int:
                 else:
                     period = KnownPeriod(float(own[object_id]), PROVENANCE)
                 if models is None:
-                    models = network.load_models(MODELS, MODEL_MANIFEST, folds, args.device)[0]
+                    models = network.load_historical_models(MODELS, MODEL_MANIFEST, folds, args.device)[0]
                 try:
                     axes = _predict(models, epochs, period, args.device, chunk, sensitivity_style)
                     lines.append({**record, "status": "ok", "period_hours": period.hours,
@@ -244,7 +244,7 @@ def predict(args) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with destination.open("x") as stream:
             stream.writelines(json.dumps(line) + "\n" for line in lines)
-        print(variant, args.periods, sum(l["status"] == "ok" for l in lines), "ok of", len(lines), flush=True)
+        print(variant, args.periods, sum(line["status"] == "ok" for line in lines), "ok of", len(lines), flush=True)
     return 0
 
 
@@ -273,7 +273,7 @@ def score(args) -> int:
         sensitivity = json.loads((REVISION / "error-channel-sensitivity.json").read_text())
     for variant in sorted(items_of(args.set)):
         network.check_jsonl(out / f'predictions-{args.periods}-{variant}.jsonl')
-        lines = [json.loads(l) for l in (out / f"predictions-{args.periods}-{variant}.jsonl").read_text().splitlines()]
+        lines = [json.loads(line) for line in (out / f"predictions-{args.periods}-{variant}.jsonl").read_text().splitlines()]
         alcdef = args.set == "no-error" and variant == "alcdef"
         ids, err, std, reasons = [], [], [], defaultdict(int)
         for line in lines:
@@ -290,7 +290,7 @@ def score(args) -> int:
             err.append(e)
             std.append(crb.axial_error_deg(standard_axes, refs))
         err, std = np.asarray(err), np.asarray(std)
-        available = np.asarray([l.get("reason") != "input_unavailable" for l in lines])
+        available = np.asarray([line.get("reason") != "input_unavailable" for line in lines])
         ok = np.isfinite(err)
         at90 = np.where(ok, err, FAILED_DEG)
         a90, s_av = at90[available], std[available]
@@ -334,7 +334,7 @@ def score(args) -> int:
                          "rerun_mean": block["available_failed_at_90"]["mean_deg"]}
                 pub_pred = json.loads((REVISION / f"error-channel-{variant}-predictions.json").read_text())["objects"]
                 pa = {r["object_id"]: np.asarray(r["axes"]) for r in pub_pred}
-                mine = {l["object_id"]: np.asarray(l["axes"]) for l in lines if l["status"] == "ok"}
+                mine = {line["object_id"]: np.asarray(line["axes"]) for line in lines if line["status"] == "ok"}
                 check["same_objects"] = sorted(pa) == sorted(mine)
                 check["max_abs_axis_diff"] = float(max(np.max(np.abs(pa[k] - mine[k])) for k in pa))
             published_checks[variant] = check

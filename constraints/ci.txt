@@ -1,4 +1,4 @@
-# Direct dependency versions used by the reference CPU CI environment.
+# Historical reference CPU environment; current CI does not install this file.
 #
 # This is a constraints file, not a transitive or hash-locked environment. A
 # release candidate must additionally archive `python -m pip freeze --all` and

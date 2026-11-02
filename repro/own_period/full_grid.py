@@ -20,7 +20,6 @@ from pathlib import Path
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline import workflow_benchmark as prior
 from lc_pipeline.v2.convexinv import _parse_lightcurve_brightness
-
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")

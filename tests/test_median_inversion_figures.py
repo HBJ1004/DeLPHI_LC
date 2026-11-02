@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from repro.own_period.median_figures import full_scan_costs, inversion_time_label
 from repro import network_root as network
 from repro.own_period import median_figures as figures
+from repro.own_period.median_figures import full_scan_costs, inversion_time_label
 
 
 class TimingContext:

@@ -15,7 +15,6 @@ scoring lock again.  Nothing else changes.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from benchmark_lock import OUT, digest, write_once
 

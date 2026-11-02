@@ -26,7 +26,7 @@ from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_prepared
 from lc_pipeline.v2.preprocessing import KnownPeriod
 from repro.network_root import NetworkPath, guard_output, json_metadata
-from repro.network_root import load_models as _load_models
+from repro.network_root import load_historical_models as _load_models
 
 from .search_external import FOLLOWUP, PREPARED, ready_objects
 

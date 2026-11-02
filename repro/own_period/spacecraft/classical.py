@@ -49,16 +49,26 @@ import numpy as np  # noqa: E402
 
 from lc_pipeline import grid_benchmark as grid  # noqa: E402
 from lc_pipeline.k3.solver_capacity import (  # noqa: E402
-    capacity_violations, parse_lightcurve_structure, read_static_capacities, tree_sha256,
+    capacity_violations,
+    parse_lightcurve_structure,
+    read_static_capacities,
+    tree_sha256,
 )
 from lc_pipeline.v2.convexinv import (  # noqa: E402
-    _FINAL, _ITERATION, _parse_lightcurve_brightness,
+    _FINAL,
+    _ITERATION,
+    _parse_lightcurve_brightness,
 )
 from lc_pipeline.v2.preprocessing import Observation, ObservationEpoch  # noqa: E402
-
+from repro.network_root import (
+    NetworkPath,
+    check_json,
+    check_jsonl,
+    guard_output,
+    json_metadata,
+    switched,
+)
 from repro.own_period import DataPath
-from repro.network_root import (NetworkPath, check_json, check_jsonl, guard_output,
-                                json_metadata, switched)
 from repro.own_period.spacecraft import run as network_run
 
 OWN = DataPath()

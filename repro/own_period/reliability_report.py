@@ -18,14 +18,14 @@ import sys
 
 import numpy as np
 
-from repro.own_period import reliability as R
 from repro import network_root as network
+from repro.own_period import DataPath
+from repro.own_period import reliability as R
 
 PUB_GRID = R.FOLLOWUP / "data/reliability-publication-20260916-final/k3_data_degradation.csv"
 PUB_TABLE = R.RUN / "sampling-table.csv"
 PUB_BASE = R.FOLLOWUP / "data/interpretation-20260930/sampling-baselines.json"
 PUB_SUPP = R.FOLLOWUP / "data/reliability-supplement-20260916-final-v8/k3_supplement_numbers.json"
-from repro.own_period import DataPath
 
 OWN_SCORES = DataPath('own-period-scores-main.json')
 VALIDATION_IDS = ("asteroid_3521", "asteroid_1727")

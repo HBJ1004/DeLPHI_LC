@@ -23,12 +23,12 @@ import torch
 from lc_pipeline.k3.config import K3TokenizerConfig
 from lc_pipeline.k3.grid import axial_healpix_grid
 from repro.network_root import NetworkPath, check_npz, guard_output, json_metadata, switched
+from repro.own_period import DataPath
 from repro.own_period import predict_oof as prediction
 
 sys.dont_write_bytecode = True
 
 OBJECT_ID = "asteroid_1714"
-from repro.own_period import DataPath
 
 OWN = DataPath()
 SPACECRAFT = NetworkPath("results", "spacecraft", legacy_path=OWN / "spacecraft")

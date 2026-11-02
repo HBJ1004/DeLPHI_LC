@@ -20,9 +20,10 @@ from pathlib import Path
 
 import numpy as np
 
+from repro import network_root as network
+
 from .nettests_common import OUT, max_abs, write_json_once
 from .shapley_op import PUBLISHED, compute_summary
-from repro import network_root as network
 
 
 def compact(summary):

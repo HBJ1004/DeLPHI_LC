@@ -19,9 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from repro.period_search.search import Curve, estimate
-
 from repro.own_period import DataPath
+from repro.period_search.search import Curve, estimate
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")

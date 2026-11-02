@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from repro.own_period.median_stats import (
-    Evidence,
     OWN,
+    Evidence,
     audit_manuscript,
     bootstrap_indices,
     check_printed_mean,

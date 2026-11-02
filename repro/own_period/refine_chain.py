@@ -10,16 +10,16 @@ are retained, and a directory without a record requires manual inspection.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
-from datetime import datetime
 import json
 import math
+import os
+from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from statistics import median
 
-from repro.own_period import period_cost as cost
-
 from repro.own_period import DataPath
+from repro.own_period import period_cost as cost
 
 DATA = DataPath()
 OUTPUT = DATA / "refine-chain"
@@ -305,7 +305,7 @@ def main(argv=None) -> int:
     refine.add_argument("--periods-file", type=Path, default=cost.COHORT)
     refine.add_argument("--cost-summary", type=Path, default=COST_SUMMARY)
     refine.add_argument("--solver-source", type=Path, default=cost.SOURCE)
-    refine.add_argument("--cpus", type=cost.parse_cpus, default=cost.parse_cpus("12-23"))
+    refine.add_argument("--cpus", type=cost.parse_cpus, default=tuple(sorted(os.sched_getaffinity(0))))
     refine.add_argument("--workers", type=int, default=12)
     refine.add_argument("--chunk-trials", type=int, default=CHUNK_TRIALS)
     refine.add_argument("--plan-only", action="store_true")

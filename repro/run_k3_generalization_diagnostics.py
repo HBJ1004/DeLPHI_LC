@@ -20,7 +20,8 @@ from lc_pipeline.k3.generalization_diagnostics import (
 )
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.survey_identity import validate_survey_binding
-from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _fold_policy, _load_prepared
+from repro.network_root import load_historical_models as _load_models
 
 
 def validate_prediction_manifest(manifest_path: Path, split_path: Path) -> dict:

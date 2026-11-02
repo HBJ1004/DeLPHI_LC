@@ -36,6 +36,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from lc_pipeline.k3.bundle import check_network_provenance
 from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.damit import load_damit_object
 from lc_pipeline.k3.evaluation import (
@@ -154,10 +155,11 @@ def build_examples(ids, periods, provenance) -> tuple[K3TrainingExample, ...]:
     return tuple(examples)
 
 
-def load_model(fold: int, seed: int, device: str):
+def load_model(fold: int, seed: int, device: str, *, allow_legacy: bool = False):
     path = MODELS / f"real-fold-{fold}-seed-{seed}.pt"
     check_checkpoint(path)
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    check_network_provenance(checkpoint, allow_legacy=allow_legacy)
     if checkpoint.get("stage") != "real-oof" or int(checkpoint.get("config", {}).get("seed", -1)) != seed:
         raise SystemExit(f"unexpected checkpoint {path.name}")
     config = K3ScoreModelConfig(**checkpoint["model_config"])
@@ -174,7 +176,7 @@ def predict_seed(fold, seed, examples, out: Path, device: str, batch_size: int =
         check_npz(destination)
         print("exists", destination.name, flush=True)
         return
-    model, _, path = load_model(fold, seed, device)
+    model, _, path = load_model(fold, seed, device, allow_legacy=not switched())
     grids = np.empty((len(examples), 6144), dtype=np.float32)
     initial_out = np.empty((len(examples), 3, 3), dtype=np.float64)
     refined_out = np.empty((len(examples), 3, 3), dtype=np.float64)
@@ -228,7 +230,7 @@ def predict_ensemble(fold, examples, out: Path, device: str) -> None:
     mean_grids = ensemble_score_grids(seed_grids)
     models, names, hashes = [], [], []
     for seed in K3_OOF_SEEDS:
-        model, _, path = load_model(fold, seed, device)
+        model, _, path = load_model(fold, seed, device, allow_legacy=not switched())
         models.append(model)
         names.append(path.name)
         hashes.append(sha256(path))

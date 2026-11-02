@@ -28,10 +28,11 @@ from pathlib import Path
 
 import numpy as np
 
+from repro import network_root as network
+from repro.own_period.reporting_inputs import DataPath, load_npz, select
+
 sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period.reporting_inputs import DataPath, load_npz, select
-from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 DATA = DataPath()
@@ -1591,7 +1592,7 @@ def write_f2_report(ctx, names):
         lines.extend(["", result["artifact_validation"], "", "### Source files", ""])
         lines.extend(f"- `{path}`" for path in result["source_files"])
         lines.append("")
-    lines.extend(["## Execution", "", "Used `taskset -c 12-23 nice -n 19`, one Python process, CPU only. "
+    lines.extend(["## Execution", "", f"Used CPUs {sorted(os.sched_getaffinity(0))}, niceness {os.nice(0)}, one Python process, CPU only. "
                   "All recorded read-only source, renderer, original-PDF and manuscript hashes were unchanged "
                   "during generation. Live refine-chain/period-cost modules were neither imported nor edited.", ""])
     (ctx.out.parent / "f2-report.md").write_text("\n".join(lines), encoding="utf-8")

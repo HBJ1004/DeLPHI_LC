@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lc_pipeline.k3 import publication_run as run
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.k3.tokenizer import K3_EPOCH_FEATURE_NAMES, K3_PHASE_FEATURE_NAMES
-
 from repro import network_root as network
 from repro.own_period import DataPath
 

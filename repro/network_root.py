@@ -281,18 +281,28 @@ def check_json(path) -> None:
         raise ValueError(f"network binding hash mismatch: {path}")
 
 
-def load_models(model_directory, manifest_path, folds, device):
+def load_historical_models(model_directory, manifest_path, folds, device):
+    """Replay archived studies; a selected network root keeps the default guard."""
+    if switched():
+        return load_models(model_directory, manifest_path, folds, device)
+    return load_models(model_directory, manifest_path, folds, device, allow_legacy=True)
+
+
+def load_models(model_directory, manifest_path, folds, device, *, allow_legacy=False):
     """Preserve the published loader; local bindings carry no publication claim."""
+    from lc_pipeline.k3.bundle import check_network_provenance
     from lc_pipeline.k3.ztf_prediction import _load_models
 
     if not switched() or binding()["schema"] != LOCAL_SCHEMA:
-        return _load_models(model_directory, manifest_path, folds, device)
+        return _load_models(model_directory, manifest_path, folds, device,
+                            allow_legacy=allow_legacy)
     import torch
 
     from lc_pipeline.k3.config import K3ScoreModelConfig
     from lc_pipeline.k3.model import CandidateConditionedScorer
 
     value = binding()
+    check_network_provenance(value, allow_legacy=allow_legacy)
     models, names, records = [], [], []
     for fold in folds:
         for seed in SEEDS:
@@ -300,6 +310,7 @@ def load_models(model_directory, manifest_path, folds, device):
             path = Path(model_directory) / name
             check_checkpoint(path)
             checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+            check_network_provenance(checkpoint, allow_legacy=allow_legacy)
             record = next(r for r in value["models"] if r["filename"] == name)
             if (checkpoint.get("stage") != "real-oof"
                     or checkpoint.get("run_provenance") != record["run_provenance"]

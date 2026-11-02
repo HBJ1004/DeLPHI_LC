@@ -33,10 +33,9 @@ import numpy as np
 from lc_pipeline.k3.internal_validation import _error, diagnostic_predict
 from lc_pipeline.k3.internal_validation_reporting import fold_bootstrap
 from lc_pipeline.k3.reliability_study import unseal, verify
+from repro import network_root as network
 
 from .nettests_common import FOLLOWUP, max_abs, period_override, write_json_once
-
-from repro import network_root as network
 
 PUBLISHED = FOLLOWUP / "data/internal-validation-20260916/run-1"
 
@@ -69,7 +68,8 @@ def run(args) -> int:
             rows = rows[: args.limit]
         cells = []
         if True:
-            predictor = K3EnsemblePredictor(by_fold[fold], device=args.device or lock["device"])
+            predictor = K3EnsemblePredictor(by_fold[fold], device=args.device or lock["device"],
+                                            allow_legacy=not network.switched())
             for row in rows:
                 period = row["period_hours"] if periods is None else periods[row["object_id"]]
                 prov = "locked-internal-diagnostic" if periods is None else provenance

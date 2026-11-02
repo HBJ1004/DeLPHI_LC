@@ -241,8 +241,9 @@ def _install_capture_fakes(
     counters = {"predictor": 0, "predict": 0, "parity": 0}
 
     class FakePredictor:
-        def __init__(self, _directory: Path, *, device: str) -> None:
+        def __init__(self, _directory: Path, *, device: str, allow_legacy: bool) -> None:
             assert device == "cpu"
+            assert allow_legacy is True
             counters["predictor"] += 1
 
     def fake_predict(*_args: object, **_kwargs: object) -> object:

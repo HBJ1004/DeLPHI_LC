@@ -61,7 +61,8 @@ def parse_alcdef(text: str, number: int) -> tuple[dict, list[dict]]:
             return
         if state != "points" or not records:
             raise ValueError("incomplete or empty ALCDEF session")
-        value = lambda key, default="": metadata.get(key, [default])[-1]
+        def value(key, default=""):
+            return metadata.get(key, [default])[-1]
         if int(value("OBJECTNUMBER")) != number:
             raise ValueError("ALCDEF identity mismatch")
         identifier = value("LCBLOCKID")
@@ -152,7 +153,8 @@ def from_zip(archive: Path, number: int) -> tuple[dict, list[dict], dict]:
 
 def summary(obj: dict, metadata: list[dict]) -> dict:
     jds = [float(row["JD"]) for row in obj["points"]]
-    date = lambda jd: (datetime(2000, 1, 1, 12, tzinfo=timezone.utc) + timedelta(days=jd - 2451545)).isoformat()
+    def date(jd):
+        return (datetime(2000, 1, 1, 12, tzinfo=timezone.utc) + timedelta(days=jd - 2451545)).isoformat()
     fields = {key: sorted({v for row in metadata for v in row["fields"].get(key, [])})
               for key in ("SESSIONDATE", "MAGBAND", "FILTER", "DIFFERMAGS", "STANDARD", "LTCAPP", "REDUCEDMAGS", "TIMESYS", "TIMESYSTEM")}
     return {"object_id": obj["object_id"], "source": "alcdef", "nights": len(fields["SESSIONDATE"]),

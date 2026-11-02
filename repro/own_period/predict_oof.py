@@ -32,7 +32,7 @@ from lc_pipeline.k3.tokenizer import tokenize_epochs
 from lc_pipeline.k3.training import K3TrainingExample, collate_examples
 from lc_pipeline.v2.preprocessing import KnownPeriod
 from repro.network_root import NetworkPath, guard_output, network_metadata
-from repro.network_root import load_models as _load_models
+from repro.network_root import load_historical_models as _load_models
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")

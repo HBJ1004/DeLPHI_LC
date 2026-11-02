@@ -1,5 +1,13 @@
 # Release notes
 
+## 1.1.1 (2026-11-02)
+
+- Clean up CI lint, pin Ruff, support PyTorch 2.2 OOM handling, and clarify the historical constraints file; no numerical results change.
+- Make CPU-affinity tests portable and skip worker-count cases when CPUs are unavailable; no numerical results change.
+- Default shipped commands to the caller's available CPUs and record actual affinity in reports; no numerical results change.
+- Refuse seed-bug v1.0.0 networks unless explicitly enabled for historical reproduction, and add software version, training commit and network hashes to predictions; no numerical results change.
+- Update software release metadata to 1.1.1 (2026-11-02); no printed numbers or numerical results change.
+
 ## 1.1.0 (2026-11-01)
 
 - Retrained all 25 ensemble networks after correcting reused simulation seeds

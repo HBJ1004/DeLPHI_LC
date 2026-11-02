@@ -10,26 +10,26 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import defaultdict
 import errno
-from functools import cached_property
 import hashlib
 import json
-from pathlib import Path
+import os
 import random
 import re
 import shlex
 import subprocess
 import sys
+from collections import defaultdict
+from functools import cached_property
+from pathlib import Path
 
 import numpy as np
 
 from repro import compute_reference_baselines as reference
-
+from repro import network_root as network
+from repro.own_period.reporting_inputs import DataPath, load_npz, select
 
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period.reporting_inputs import DataPath, load_npz, select
-from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 NOTEBOOKS = FOLLOWUP.parent
@@ -545,7 +545,9 @@ class Evidence:
                     with load_npz(p, allow_pickle=False) as d, load_npz(q, allow_pickle=False) as raw:
                         if not np.array_equal(d["object_ids"], raw["object_ids"]):
                             raise ValueError("Control pairing changed")
-                        ids.extend(d["object_ids"].astype(str).tolist()); a.extend(d["oracle_errors_deg"]); b.extend(raw["oracle_errors_deg"])
+                        ids.extend(d["object_ids"].astype(str).tolist())
+                        a.extend(d["oracle_errors_deg"])
+                        b.extend(raw["oracle_errors_deg"])
                     sources.extend([p, q])
                 results.append(self.stat(a, ids, [], "", second=b))
             mean_gaps = [r["mean_recomputed"] for r in results]
@@ -670,8 +672,8 @@ class Evidence:
             second=b, seed=seed, folds=None if folds is None else [folds[i] for i in ids], order=order, mean_interval=source_interval)
 
     def candidate_statistic(self, name):
-        from repro.candidate_count import peaks
         from lc_pipeline.k3.grid import axial_healpix_grid
+        from repro.candidate_count import peaks
         key = ("candidate_vectors",)
         path = OWN / "maps/own-period/evaluations/real-oof-ensemble.npz"
         if key not in self.cache:
@@ -706,7 +708,8 @@ class Evidence:
                 for f in range(5):
                     p = OWN / f"maps/own-period/evaluations/real-fold-{f}-seed-{seed}.npz"
                     with load_npz(p, allow_pickle=False) as d:
-                        values.extend(d["oracle_errors_deg"]); current_ids.extend(d["object_ids"].astype(str).tolist())
+                        values.extend(d["oracle_errors_deg"])
+                        current_ids.extend(d["object_ids"].astype(str).tolist())
                     sources.append(p)
                 groups[str(seed)] = self.stat(values, current_ids, [], "")
         extreme = min if name.endswith("Min") else max
@@ -781,7 +784,8 @@ class Evidence:
             second = None
             if paired:
                 base_ids, base, _ = per_condition("full")
-                base = dict(zip(base_ids, base)); second = [base[i] for i in ids]
+                base = dict(zip(base_ids, base))
+                second = [base[i] for i in ids]
             interval = [float(source[k]) for k in (("degradation_bootstrap_lower_95", "degradation_bootstrap_upper_95") if paired else ("mean_error_bootstrap_lower_95", "mean_error_bootstrap_upper_95"))]
             return self.stat(values, ids, [path, table_path, REPO / "lc_pipeline/k3/reliability_scoring.py"],
                 f"Published-period perturbation {condition}; preserve original set, average repeats within asteroid, failed errors at 90 degrees, original fold-stratified bootstrap.",
@@ -811,10 +815,12 @@ class Evidence:
         for r in records:
             if r["arm"] not in by_arm or r.get("cache_state", "cold") != "cold":
                 continue
-            oid = r["object_id"]; folds[oid] = r["fold"]
+            oid = r["object_id"]
+            folds[oid] = r["fold"]
             fit = r["selected_fit"]
             if fit is not None:
-                axis = np.array(fit["axis"], dtype=float); axis /= np.linalg.norm(axis)
+                axis = np.array(fit["axis"], dtype=float)
+                axis /= np.linalg.norm(axis)
                 by_arm[r["arm"]][oid].append(reference.axial_error_deg(axis[None, :], self.poles[oid]))
         ids = sorted(folds)
         values = {arm: [np.mean(by_arm[arm][i]) if by_arm[arm][i] else 90.0 for i in ids] for arm in by_arm}
@@ -1216,7 +1222,8 @@ def write_report(result: dict, path: Path, pytest_output: str, *, output_path: P
         lines += [f"- `{e['mean_macro']}`: {e['method']}",
                   "  Sources: " + "; ".join(f"`{p}`" for p in e["source_files"]) + "."]
     lines += ["", "## Pytest output", "", "```text", pytest_output.rstrip(), "```"]
-    command = ["taskset", "-c", "12-23", "nice", "-n", "19", "env", "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "MKL_NUM_THREADS=1", "PYTHONDONTWRITEBYTECODE=1",
+    lines += ["", "## Execution", "", f"Available CPUs: {sorted(os.sched_getaffinity(0))}."]
+    command = ["nice", "-n", "19", "env", "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1", "MKL_NUM_THREADS=1", "PYTHONDONTWRITEBYTECODE=1",
                sys.executable, "-m", "repro.own_period.median_stats", "--input-list", result["input_list"],
                "--manuscript", result.get("manuscript", str(PAPER)),
                "--out", str(output_path), "--report", str(path)]

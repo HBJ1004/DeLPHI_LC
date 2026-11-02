@@ -89,7 +89,7 @@ def test_rerun_preserves_baseline_status_and_reuses_successful_predictions(
     monkeypatch.setattr(t.network, "guard_output", lambda path: None)
     monkeypatch.setattr(t.network, "json_metadata", lambda: {})
     monkeypatch.setattr(t.network, "check_json", lambda path: None)
-    monkeypatch.setattr(t.network, "load_models", lambda *args: ([object()] * 25, None))
+    monkeypatch.setattr(t.network, "load_models", lambda *args, **kwargs: ([object()] * 25, None))
     calls = []
 
     def predict(models, epochs, period, device, cohort):

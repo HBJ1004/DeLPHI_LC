@@ -42,8 +42,8 @@ from repro.network_root import (  # noqa: E402
     check_json,
     check_npz,
     guard_output,
-    network_metadata,
     json_metadata,
+    network_metadata,
     switched,
 )
 from repro.own_period import DataPath  # noqa: E402
@@ -301,7 +301,7 @@ def phase_bin_occupancy(periods: dict, provenance: str) -> dict:
     from lc_pipeline.v2.preprocessing import KnownPeriod
 
     dump = FOLLOWUP.parent / "damit-20250610T000301Z"
-    filled, points = [], []
+    filled, _points = [], []
     for oid in sorted(base.reference_poles()):
         source = load_damit_object(dump, oid)
         tokenized = tokenize_epochs(source.epochs, known_period=KnownPeriod(float(periods[oid]), provenance))

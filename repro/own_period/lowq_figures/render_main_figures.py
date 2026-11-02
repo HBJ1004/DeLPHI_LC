@@ -22,10 +22,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Rectangle
 
+from repro import network_root as network
 
 # Own-period copy: the paths of the published layout, resolved from this worktree.
 from repro.own_period.reporting_inputs import DataPath, load_npz
-from repro import network_root as network
 
 FOLLOWUP = DataPath("../..")
 ROOT = DataPath('lowq')
@@ -1523,7 +1523,7 @@ def render_transfer(variant: str) -> None:
     print("generalization differences", variant, np.round(difference, 2), np.round(low, 2), np.round(high, 2))
     with (OUT / f"generalization-checks-{variant}-rows.json").open("x") as stream:
         stream.write(json.dumps({"variant": variant, "variant_meaning": VARIANTS[variant],
-                                 "rows": [dict(label=l, **r) for l, r in zip(labels, rows)]}, indent=1) + "\n")
+                                 "rows": [dict(label=label, **r) for label, r in zip(labels, rows)]}, indent=1) + "\n")
     y = np.arange(len(labels))[::-1]
     colors = np.where(difference >= 0, "#2878B5", "#C44E52")
     fig, ax = plt.subplots(figsize=(6.4, 3.5))

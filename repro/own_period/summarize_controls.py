@@ -24,8 +24,8 @@ import numpy as np
 
 from repro import network_root as network
 
-from .network_controls import CONTROLS, DIAGNOSTIC, output_name
 from .nettests_common import EVALUATIONS, FOLLOWUP, SEEDS, max_abs, write_json_once
+from .network_controls import CONTROLS, DIAGNOSTIC, output_name
 
 FINER_PUBLISHED = FOLLOWUP / "data/interpretation-20260923/ablations"
 

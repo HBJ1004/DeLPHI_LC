@@ -29,9 +29,8 @@ from pathlib import Path
 import numpy as np
 
 from lc_pipeline.v2.data import parse_damit_lightcurve
-from repro.period_search.search import Curve, estimate
-
 from repro.own_period import DataPath
+from repro.period_search.search import Curve, estimate
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")

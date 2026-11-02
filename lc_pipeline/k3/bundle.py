@@ -12,6 +12,7 @@ import torch
 from safetensors.torch import load_file
 
 from ..v2.preprocessing import KnownPeriod, ObservationEpoch
+from ..version import __version__
 from .config import K3ScoreModelConfig
 from .evaluation import ensemble_score_grids, modes_from_score_grid
 from .inference import refine_axes, refine_ensemble_axes, score_axial_grid
@@ -25,6 +26,19 @@ SEEDS = (17, 42, 137, 777, 2027)
 def sha256(path: Path) -> str:
     with path.open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def check_network_provenance(metadata: dict, *, allow_legacy: bool = False) -> None:
+    """Require explicit consent to use the seed-coupled v1.0.0 networks."""
+    provenance = metadata.get("run_provenance") or {}
+    commits = [metadata.get(key) for key in
+               ("training_commit", "implementation_commit", "analysis_commit")]
+    commits.append(provenance.get("implementation_commit"))
+    if not allow_legacy and any(str(commit).startswith("7874092") for commit in commits):
+        raise ValueError(
+            "v1.0.0 networks (training commit 7874092) used simulations with the seed bug; "
+            "use allow_legacy=True / --allow-legacy-networks only for historical reproduction"
+        )
 
 
 class K3Predictor(Protocol):
@@ -74,10 +88,12 @@ class K3EnsemblePredictor:
     establish coverage for new populations, nor provide an individual risk.
     """
 
-    def __init__(self, directory: str | Path, *, device: str = "cpu") -> None:
+    def __init__(self, directory: str | Path, *, device: str = "cpu",
+                 allow_legacy: bool = False) -> None:
         root = Path(directory).resolve()
         self.manifest = json.loads((root / "bundle.json").read_text())
         data = self.manifest
+        check_network_provenance(data, allow_legacy=allow_legacy)
         if (data.get("schema") != "delphi.k3-ensemble-bundle.v1"
                 or data.get("protocol_sha256") != K3_PROTOCOL_SHA256
                 or data.get("tokenizer_sha256") != K3_TOKENIZER_SCHEMA_SHA256
@@ -107,8 +123,10 @@ class K3EnsemblePredictor:
         config = K3ScoreModelConfig(**data["model_config"])
         self.device = torch.device(device)
         self.models = []
+        self.network_sha256 = {}
         for member in members:
             path = _checked_weight_path(root, member)
+            self.network_sha256[member["file"]] = member["sha256"]
             model = CandidateConditionedScorer(config)
             model.load_state_dict(load_file(str(path)), strict=True)
             self.models.append(model.to(self.device).eval())
@@ -137,6 +155,9 @@ class K3EnsemblePredictor:
             "schema": "delphi.k3-ensemble-prediction.v1", "status": "ok",
             "object_id": object_id, "fold": self.manifest["fold"],
             "bundle_id": self.manifest["bundle_id"],
+            "software_version": __version__,
+            "training_commit": self.manifest.get("training_commit"),
+            "network_sha256": dict(self.network_sha256),
             "tokenizer_sha256": K3_TOKENIZER_SCHEMA_SHA256,
             "period_provenance": known_period.provenance,
             "axes": [{"axis_xyz": axis.tolist(), "score": float(score),
@@ -151,13 +172,15 @@ class K3EnsemblePredictor:
 class K3CustomPredictor:
     """Load one user-trained scorer without claiming benchmark calibration."""
 
-    def __init__(self, directory: str | Path, *, device: str = "cpu") -> None:
+    def __init__(self, directory: str | Path, *, device: str = "cpu",
+                 allow_legacy: bool = False) -> None:
         root = Path(directory).resolve()
         try:
             self.manifest = json.loads((root / "bundle.json").read_text())
         except (OSError, json.JSONDecodeError) as exc:
             raise ValueError(f"cannot read custom bundle metadata: {exc}") from exc
         data = self.manifest
+        check_network_provenance(data, allow_legacy=allow_legacy)
         if (
             data.get("schema") != "delphi.k3-custom-bundle.v1"
             or data.get("tokenizer_sha256") != K3_TOKENIZER_SCHEMA_SHA256
@@ -173,6 +196,7 @@ class K3CustomPredictor:
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("invalid custom model configuration") from exc
         path = _checked_weight_path(root, member)
+        self.network_sha256 = {member["file"]: member["sha256"]}
         self.device = torch.device(device)
         self.model = CandidateConditionedScorer(config)
         self.model.load_state_dict(load_file(str(path)), strict=True)
@@ -198,6 +222,9 @@ class K3CustomPredictor:
             "status": "ok",
             "object_id": object_id,
             "bundle_id": self.manifest["bundle_id"],
+            "software_version": __version__,
+            "training_commit": self.manifest.get("training_commit"),
+            "network_sha256": dict(self.network_sha256),
             "tokenizer_sha256": K3_TOKENIZER_SCHEMA_SHA256,
             "period_provenance": known_period.provenance,
             "candidate_semantics": "unordered axial set",
@@ -215,7 +242,8 @@ class K3CustomPredictor:
         }
 
 
-def load_predictor(directory: str | Path, *, device: str = "cpu") -> K3Predictor:
+def load_predictor(directory: str | Path, *, device: str = "cpu",
+                   allow_legacy: bool = False) -> K3Predictor:
     """Load a published ensemble or a custom bundle from its declared schema."""
     manifest_path = Path(directory).resolve() / "bundle.json"
     try:
@@ -224,7 +252,7 @@ def load_predictor(directory: str | Path, *, device: str = "cpu") -> K3Predictor
         raise ValueError(f"cannot read bundle metadata: {exc}") from exc
     schema = data.get("schema") if isinstance(data, dict) else None
     if schema == "delphi.k3-ensemble-bundle.v1":
-        return K3EnsemblePredictor(directory, device=device)
+        return K3EnsemblePredictor(directory, device=device, allow_legacy=allow_legacy)
     if schema == "delphi.k3-custom-bundle.v1":
-        return K3CustomPredictor(directory, device=device)
+        return K3CustomPredictor(directory, device=device, allow_legacy=allow_legacy)
     raise ValueError(f"unsupported bundle schema: {schema!r}")

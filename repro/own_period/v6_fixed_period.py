@@ -47,9 +47,8 @@ from lc_pipeline.k3.downstream import (
 )
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from lc_pipeline.physics.axial import axial_angular_error_deg, nearest_source_axis_errors_deg
-
-from repro.own_period import DataPath
 from repro import network_root as network
+from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
@@ -74,6 +73,7 @@ SOLVER_WORKERS = 1  # Original downstream setting: starts run serially.
 def retime_inference(oid, fold, models, example, expected_axes):
     """Repeat the published ensemble's timed core; never replace the fixed fit starts."""
     import torch
+
     from lc_pipeline.k3.inference import gpu_numerics
     from repro.own_period import predict_oof_full as inference
 
@@ -251,12 +251,14 @@ def run(args: argparse.Namespace) -> int:
                 valid[arm] = sum(_valid_result(r) for r in records)
                 continue
             if network.switched() and arm == "candidate" and header["classical_timing"] == "retime":
-                from repro.own_period import predict_oof_full as inference
                 import torch
+
+                from repro.own_period import predict_oof_full as inference
                 torch.set_num_threads(header["environment"]["neural_torch_threads"])
                 fold = next(int(row["fold"]) for row in inference.fold_rows() if oid in row["test_ids"])
                 if active_fold != fold:
-                    inference_models = [inference.load_model(fold, seed, "cuda")[0] for seed in network.SEEDS]
+                    inference_models = [inference.load_model(fold, seed, "cuda",
+                                        allow_legacy=not network.switched())[0] for seed in network.SEEDS]
                     active_fold = fold
                 # Read the original supplied period from a saved start, without opening reference poles.
                 period_source = Path(PUBLISHED_RUN) / "runs" / oid / "baseline/start-0/result.json"
@@ -447,7 +449,7 @@ def score(args: argparse.Namespace) -> int:
             verify_object(out, oid)
     orders = arm_order(object_order())
     # Reference poles are opened only now, after every fit is written.
-    catalog = {json.loads(l)["object_id"]: json.loads(l) for l in CATALOG.read_text().splitlines() if l.strip()}
+    catalog = {json.loads(line)["object_id"]: json.loads(line) for line in CATALOG.read_text().splitlines() if line.strip()}
     inference_path = PUBLISHED_ENSEMBLE
     network.check_npz(inference_path)
     if network.switched() and header["inference"] != {"path": str(inference_path), "sha256": digest(inference_path)}:

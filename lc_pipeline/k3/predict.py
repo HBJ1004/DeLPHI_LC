@@ -63,12 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--period-json", type=Path, help="use the rank-1 estimate instead of known_period")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--allow-legacy-networks", action="store_true",
+                        help="allow v1.0.0 seed-bug networks for historical reproduction")
     args = parser.parse_args(argv)
     if args.output.exists():
         parser.error("output already exists; choose a new filename")
     try:
         object_id, period, epochs = read_observations(args.input, period_json=args.period_json)
-        predictor = load_predictor(args.bundle, device=args.device)
+        predictor = load_predictor(args.bundle, device=args.device,
+                                   allow_legacy=args.allow_legacy_networks)
         result = predictor.predict(epochs, known_period=period, object_id=object_id)
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         parser.error(str(exc))

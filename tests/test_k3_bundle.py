@@ -14,6 +14,7 @@ from lc_pipeline.k3.cli import _smoke_geometry
 from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from lc_pipeline.version import __version__
 from repro.train_k3_custom import export_inference_bundle
 
 
@@ -32,6 +33,7 @@ def ensemble(tmp_path):
                 "protocol_sha256": bundle.K3_PROTOCOL_SHA256,
                 "tokenizer_sha256": bundle.K3_TOKENIZER_SCHEMA_SHA256,
                 "splits_sha256": bundle.sha256(splits), "fold": 0,
+                "training_commit": "4a7aacbaeb884940368e02b66e13b1d7c5cac149",
                 "object_roles": {key: value for key, value in roles.items() if key.endswith("_ids")},
                 "members": members, "model_config": asdict(config),
                 "calibration": {"cone90_deg": 40., "cone95_deg": 90.}}
@@ -49,6 +51,11 @@ def test_single_object_score_map_and_unseen_prediction(ensemble, monkeypatch):
     assert len(result["axes"]) == 3
     assert result["risk_deg"] is None
     assert result["period_provenance"] == "test"
+    assert result["software_version"] == __version__
+    assert result["training_commit"] == metadata["training_commit"]
+    assert result["network_sha256"] == {
+        member["file"]: bundle.sha256(root / member["file"]) for member in metadata["members"]
+    }
     assert np.allclose(np.linalg.norm([row["axis_xyz"] for row in result["axes"]], axis=1), 1)
 
 
@@ -96,6 +103,11 @@ def test_custom_bundle_predicts_without_calibration(custom_bundle, monkeypatch):
     assert result["risk_deg"] is None
     assert result["candidate_semantics"] == "unordered axial set"
     assert "do not use" in result["score_semantics"]
+    assert result["software_version"] == __version__
+    assert result["training_commit"] is None
+    assert result["network_sha256"] == {
+        "custom-model.safetensors": bundle.sha256(custom_bundle / "custom-model.safetensors")
+    }
 
 
 def test_tampered_custom_bundle_is_rejected(custom_bundle):
@@ -124,3 +136,43 @@ def test_tampered_bundle_is_rejected(ensemble, mutation):
     (root / "bundle.json").write_text(json.dumps(data))
     with pytest.raises(ValueError):
         bundle.K3EnsemblePredictor(root)
+
+
+@pytest.mark.parametrize("kind", ["ensemble", "custom_bundle"])
+@pytest.mark.parametrize("commit", ["7874092", "7874092b81d9456e5bf52fba9adb699b8218046f"])
+def test_legacy_bundle_requires_explicit_opt_in(request, kind, commit):
+    fixture = request.getfixturevalue(kind)
+    root = fixture[0] if kind == "ensemble" else fixture
+    path = root / "bundle.json"
+    metadata = json.loads(path.read_text())
+    metadata["training_commit"] = commit
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+        bundle.load_predictor(root)
+    predictor = bundle.load_predictor(root, allow_legacy=True)
+    assert predictor.manifest["training_commit"] == commit
+
+
+def test_prediction_cli_legacy_opt_in_and_provenance(ensemble, tmp_path, monkeypatch, capsys):
+    from lc_pipeline.k3.predict import main
+
+    root, metadata = ensemble
+    metadata["training_commit"] = "7874092"
+    (root / "bundle.json").write_text(json.dumps(metadata))
+    monkeypatch.setattr(bundle, "score_axial_grid", lambda *a, **kw: np.linspace(0, 1, 6144))
+    monkeypatch.setattr(bundle, "refine_ensemble_axes", lambda models, inputs, axes: (axes, np.ones(3)))
+    output = tmp_path / "prediction.json"
+    arguments = ["--bundle", str(root), "--input",
+                 str(bundle.repository_root() / "examples/astraea/observations.json"),
+                 "--output", str(output)]
+    with pytest.raises(SystemExit) as exc:
+        main(arguments)
+    assert exc.value.code == 2 and not output.exists()
+    assert "v1.0.0" in capsys.readouterr().err
+    assert main([*arguments, "--allow-legacy-networks"]) == 0
+    result = json.loads(output.read_text())
+    assert result["software_version"] == __version__
+    assert result["training_commit"] == "7874092"
+    assert result["network_sha256"] == {
+        member["file"]: bundle.sha256(root / member["file"]) for member in metadata["members"]
+    }

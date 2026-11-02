@@ -101,6 +101,7 @@ def export_inference_bundle(
     manifest = {
         "schema": "delphi.k3-custom-bundle.v1",
         "bundle_id": bundle_id,
+        "training_commit": (checkpoint.get("run_provenance") or {}).get("implementation_commit"),
         "scope": "user-trained model; accuracy and transfer performance require independent validation",
         "tokenizer_sha256": K3_TOKENIZER_SCHEMA_SHA256,
         "model_config": config.as_mapping(),

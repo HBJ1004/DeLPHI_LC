@@ -19,7 +19,6 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from lc_pipeline.k3.evaluation import modes_from_score_grid  # noqa: E402
-
 from repro import network_root as network  # noqa: E402
 
 FOLLOWUP = HERE.parents[1]

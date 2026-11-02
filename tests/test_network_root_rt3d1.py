@@ -1,19 +1,22 @@
 """CPU-only protocol and provenance checks for RT3d1 adapters."""
-from copy import deepcopy
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from lc_pipeline import grid_benchmark as grid
+from lc_pipeline.k3.inference import gpu_numerics
+from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
 from repro import network_root as network
 from repro.direct_workflow_benchmark import rerun
-from repro.own_period import temporal, refine_chain_post as post, v6_fixed_period as v6, v7_grid as v7
-from lc_pipeline import grid_benchmark as grid
-from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
-from lc_pipeline.k3.inference import gpu_numerics
+from repro.own_period import refine_chain_post as post
+from repro.own_period import temporal
+from repro.own_period import v6_fixed_period as v6
+from repro.own_period import v7_grid as v7
 
 
 def dump(path, value):
@@ -230,6 +233,9 @@ def test_v7_explicit_cpu_validation_keeps_four_workers(selected, tmp_path, monke
 @pytest.mark.parametrize('timing', ['reuse', 'retime'])
 @pytest.mark.parametrize('original_workers', [6, 12])
 def test_refine_lock_and_fit_plan_use_original_plan_workers(selected, tmp_path, monkeypatch, timing, original_workers):
+    cpus = tuple(sorted(os.sched_getaffinity(0)))
+    if len(cpus) < original_workers:
+        pytest.skip(f"requires {original_workers} available CPUs")
     original_plan = selected.parent / 'fixed/refine-chain/fits/fit-plan.json'
     dump(original_plan, {'workers': original_workers})
     refined_path = selected.parent / 'fixed/refine-chain/refined-periods.json'
@@ -242,7 +248,6 @@ def test_refine_lock_and_fit_plan_use_original_plan_workers(selected, tmp_path, 
     refined = {'periods_hours': {'a': 10}}
     objects = [{'object_id': 'a'}]
     monkeypatch.setattr(post, 'refined_inputs', lambda args: (parent, refined, objects))
-    cpus = tuple(sorted(os.sched_getaffinity(0)))
     args = SimpleNamespace(output_dir=tmp_path / 'output', benchmark_dir=benchmark, protocol=protocol,
                            cpus=cpus, workers=None, classical_timing=timing)
     lock = post.lock_outputs(args)[args.output_dir / 'evaluation-lock-refined.json']
@@ -605,6 +610,7 @@ def test_v7_retime_paths_leave_reuse_outputs_unchanged(selected, tmp_path, monke
 @pytest.mark.parametrize('change', ['identical', 'within_atol', 'small_angle', 'large_angle', 'swap', 'sign'])
 def test_v6_inference_retimes_core_and_records_axis_differences(selected, monkeypatch, change):
     import torch
+
     from repro.own_period import predict_oof_full as inference
     synchronizations = []
     monkeypatch.setattr(torch.cuda, 'synchronize', lambda: synchronizations.append(True))
@@ -667,7 +673,7 @@ def test_v6_retime_runs_inference_and_both_fit_arms_in_saved_order(selected, tmp
     monkeypatch.setattr(network, 'check_npz', lambda *args: None)
     monkeypatch.setattr(grid, '_environment', lambda device: {'cpu_models': ['new CPU'], 'gpu': ['new GPU']})
     monkeypatch.setattr(inference, 'fold_rows', lambda: [{'fold': 0, 'test_ids': ['a']}])
-    monkeypatch.setattr(inference, 'load_model', lambda *args: (object(), None, None))
+    monkeypatch.setattr(inference, 'load_model', lambda *args, **kwargs: (object(), None, None))
     def build_examples(ids, periods, policy):
         assert ids == ['a'] and periods == {'a': 10.}
         assert policy == 'frozen-DAMIT-primary-solution-fixed-period'
@@ -844,7 +850,8 @@ def test_ladder_rt5_producer_hash_is_pinned(ladder_timing_producer, monkeypatch)
 @pytest.mark.parametrize('arm', ['guided6', 'classical20'])
 def test_v7_worker_records_gpu_numerics_for_inference_only(tmp_path, monkeypatch, arm):
     import torch
-    from lc_pipeline.k3 import inference, damit
+
+    from lc_pipeline.k3 import damit, inference
     from lc_pipeline.v2 import convexinv
     curve = tmp_path / 'lc.txt'
     curve.write_text('photometry')
@@ -879,6 +886,7 @@ def test_v7_worker_records_gpu_numerics_for_inference_only(tmp_path, monkeypatch
 
 def test_cold_direct_worker_records_its_own_gpu_numerics(tmp_path, monkeypatch):
     import sys
+
     from lc_pipeline.k3 import inference
     path = tmp_path / 'selected-result.json'
     direct = SimpleNamespace(write_once=grid.write_once)

@@ -43,8 +43,8 @@ from pathlib import Path
 
 import numpy as np
 
-from repro.own_period import DataPath
 from repro import network_root as network
+from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
@@ -351,7 +351,8 @@ def command_predict(args) -> int:
             for item in bundle["files"]:
                 if sha256_file(Path(item["path"])) != item["sha256"]:
                     raise ValueError(f"bundle file changed: {item['path']}")
-            predictor = K3EnsemblePredictor(bundle["directory"], device=args.device)
+            predictor = K3EnsemblePredictor(bundle["directory"], device=args.device,
+                                            allow_legacy=not network.switched())
             for cell in todo:
                 if time.monotonic() >= deadline:
                     break
@@ -475,7 +476,13 @@ def command_withheld_candidates(args) -> int:
     import torch
 
     from lc_pipeline.k3.bundle import K3EnsemblePredictor
-    from lc_pipeline.k3.reliability_study import checkpoint_read, holdout_input, input_hash, predict_curve, seal
+    from lc_pipeline.k3.reliability_study import (
+        checkpoint_read,
+        holdout_input,
+        input_hash,
+        predict_curve,
+        seal,
+    )
     lock, schedule = published_lock(), published_schedule()
     by_id = {r["object_id"]: r for r in lock["objects"]}
     ids = args.ids or schedule["holdout_ids"]
@@ -488,7 +495,8 @@ def command_withheld_candidates(args) -> int:
         if not todo:
             continue
         bundle = network.bundle_record(fold, lock['bundles'])
-        predictor = K3EnsemblePredictor(bundle["directory"], device=args.device)
+        predictor = K3EnsemblePredictor(bundle["directory"], device=args.device,
+                                        allow_legacy=not network.switched())
         for oid in todo:
             for sampling in WITHHELD_SAMPLINGS:
                 period = periods[(oid, sampling)]

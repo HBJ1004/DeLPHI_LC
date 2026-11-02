@@ -27,11 +27,20 @@ from lc_pipeline.k3.config import K3ScoreModelConfig
 from lc_pipeline.k3.grid import axial_healpix_grid
 from lc_pipeline.k3.model import CandidateConditionedScorer
 from lc_pipeline.k3.training import collate_examples
-from repro import network_root as network
 from repro import group_shapley as gs
 from repro import group_shapley_summary as su
+from repro import network_root as network
 
-from .nettests_common import FOLLOWUP, MODELS, SEEDS, fold_rows, load_examples, max_abs, period_override, write_json_once
+from .nettests_common import (
+    FOLLOWUP,
+    MODELS,
+    SEEDS,
+    fold_rows,
+    load_examples,
+    max_abs,
+    period_override,
+    write_json_once,
+)
 
 PUBLISHED = FOLLOWUP / "data/interpretation-20260926/shapley"
 

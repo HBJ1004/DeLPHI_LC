@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 import numpy as np
+
 if __package__:
     from .physical import CATALOG
 else:

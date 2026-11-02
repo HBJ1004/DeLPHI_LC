@@ -334,7 +334,7 @@ def validated(out, manifest):
 def load_models(networks, device):
     import torch
 
-    from repro.network_root import load_models as _load_models
+    from repro.network_root import load_historical_models as _load_models
 
     if device != "cpu" and (device != "cuda" or not torch.cuda.is_available()):
         raise ValueError(

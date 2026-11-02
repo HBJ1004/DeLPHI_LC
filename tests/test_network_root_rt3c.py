@@ -7,10 +7,16 @@ import numpy as np
 import pytest
 
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
+from repro import (
+    amplitude_aspect_comparison,
+    candidate_count,
+    group_shapley,
+    interpretation_ablations,
+    label_shuffle_spread,
+    mirror_symmetry,
+)
 from repro import network_root as network
-from repro import candidate_count, group_shapley, interpretation_ablations, label_shuffle_spread
-from repro import amplitude_aspect_comparison, mirror_symmetry
-from repro.own_period import network_controls, summarize_controls, shapley_op, nettests_results
+from repro.own_period import nettests_results, network_controls, shapley_op, summarize_controls
 from repro.own_period.maps import analyses, validate_damit_run
 
 

@@ -1,14 +1,18 @@
 """The regeneration preflight must reject recipe and donor drift without rendering."""
 
-from dataclasses import asdict, replace
 import hashlib
 import json
+from dataclasses import asdict, replace
 
 import numpy as np
 import pytest
 
 from lc_pipeline.k3.synthetic import (
-    EmpiricalNoiseRecipe, SyntheticDataError, SyntheticRecipe, canonical_json, sha256_file,
+    EmpiricalNoiseRecipe,
+    SyntheticDataError,
+    SyntheticRecipe,
+    canonical_json,
+    sha256_file,
 )
 from repro import generate_k3_synthetic as launcher
 

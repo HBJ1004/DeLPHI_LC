@@ -34,10 +34,10 @@ from pathlib import Path
 import numpy as np
 
 from lc_pipeline.physics.axial import axial_angular_error_deg
+from repro import network_root as network
+from repro.own_period import DataPath
 
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period import DataPath
-from repro import network_root as network
 
 DATA = DataPath("..")
 OUTPUT = network.NetworkPath("results", "temporal", legacy_path=DataPath('temporal'))
@@ -480,7 +480,7 @@ def predict_rerun(args):
             row["status"] = status if status != "ok" else "no_period"
         else:
             if models is None:
-                models = network.load_models(args.models, args.model_manifest, tuple(range(5)), args.device)[0]
+                models = network.load_historical_models(args.models, args.model_manifest, tuple(range(5)), args.device)[0]
             _, period, epochs = _load_prepared(paths[oid])
             from lc_pipeline.v2.preprocessing import KnownPeriod
             axes, scores = predict(models, epochs, KnownPeriod(float(periods[oid]),

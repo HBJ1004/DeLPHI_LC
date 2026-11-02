@@ -372,7 +372,7 @@ def cmd_search(args) -> dict:
 def ensemble(device: str, threads: int):
     import torch
 
-    from repro.network_root import load_models as _load_models
+    from repro.network_root import load_historical_models as _load_models
     torch.set_num_threads(threads)
     models, names, bindings = _load_models(MODELS, MODEL_MANIFEST, tuple(range(5)), device)
     if len(models) != 25:

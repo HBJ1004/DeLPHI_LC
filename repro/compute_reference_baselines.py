@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 
 from repro.network_root import NetworkPath, check_npz, guard_output, switched
-
 from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")

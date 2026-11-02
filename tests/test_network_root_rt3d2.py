@@ -6,11 +6,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from repro import network_root as network
-from repro.own_period import reporting_inputs as inputs
-from repro.own_period import macro_table, mean_macros, period_drift
-from repro.own_period.figure_data import capture_figures
 from lc_pipeline.k3.protocol import K3_PROTOCOL_SHA256
+from repro import network_root as network
+from repro.own_period import macro_table, mean_macros, period_drift
+from repro.own_period import reporting_inputs as inputs
+from repro.own_period.figure_data import capture_figures
 
 
 def dump(path, value):

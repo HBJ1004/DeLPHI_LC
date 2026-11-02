@@ -13,6 +13,7 @@ lower-quality curve, amplitude-aspect map) keep the published inputs.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -21,9 +22,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Rectangle
 
-
-import argparse
-
 _ARGS = argparse.ArgumentParser(description=__doc__)
 _ARGS.add_argument("--analyses", type=Path, required=True)
 _ARGS.add_argument("--run", type=Path, required=True, help="directory holding evaluations/")
@@ -31,13 +29,14 @@ _ARGS.add_argument("--periods", required=True, help="damit or a periods JSON (wo
 _ARGS.add_argument("--out", type=Path, required=True)
 _ARGS.add_argument("--figures", nargs="+", choices=("worked-example", "oracle-error", "candidate-sky", "primary-coverage", "interpretation", "candidate-count", "reference-reassignment", "latitude"))
 ARGS = _ARGS.parse_args()
-from repro.own_period.reporting_inputs import DataPath, load_npz
 from repro import network_root as network
+from repro.own_period.reporting_inputs import DataPath, load_npz
 
 ROOT = DataPath("../../../paper")
 FOLLOWUP = DataPath("../..")
 DAMIT_DUMP = ROOT.parent / "damit-20250610T000301Z"
 from repro.own_period.reporting_inputs import InputPath
+
 ENSEMBLE = InputPath(ARGS.run) / "evaluations" / "real-oof-ensemble.npz"
 ANALYSES = InputPath(ARGS.analyses)
 FIG_OUT = ARGS.out
@@ -1351,7 +1350,7 @@ def render_latitude() -> None:
     low_lat, low_err, low_std = [], [], []
     for entry in lowq:
         listed = solutions[int(entry["object_id"].split(":")[1])]
-        references = np.array([base.unit_from_degrees(l, b) for l, b in listed])
+        references = np.array([base.unit_from_degrees(longitude, b) for longitude, b in listed])
         low_lat.append(abs(listed[0][1]))
         low_err.append(float(entry["oracle_at_3_error_deg"]))
         low_std.append(base.axial_error_deg(standard, references))

@@ -13,7 +13,7 @@ import torch
 
 from ..physics.axial import axial_angular_error_deg
 from ..v2.preprocessing import KnownPeriod, Observation, ObservationEpoch
-from .bundle import _model_inputs
+from .bundle import _model_inputs, check_network_provenance
 from .config import K3ScoreModelConfig
 from .evaluation import ensemble_score_grids, modes_from_score_grid
 from .external_provenance import EXTERNAL_MODEL_MANIFEST_SCHEMA
@@ -91,12 +91,15 @@ def _load_models(
     model_manifest_path: str | Path,
     folds: Sequence[int],
     device: str,
+    *,
+    allow_legacy: bool = False,
 ) -> tuple[list[CandidateConditionedScorer], list[str], list[dict[str, object]]]:
     manifest_path = Path(model_manifest_path)
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ZTFPredictionError(f"cannot load external model manifest: {exc}") from exc
+    check_network_provenance(manifest, allow_legacy=allow_legacy)
     records = manifest.get("models")
     if (
         manifest.get("schema") != EXTERNAL_MODEL_MANIFEST_SCHEMA
@@ -160,6 +163,7 @@ def _load_models(
                 ):
                     raise ZTFPredictionError(f"checkpoint hash mismatch: {path.name}")
                 checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+                check_network_provenance(checkpoint, allow_legacy=allow_legacy)
                 if (
                     checkpoint.get("schema") != record["checkpoint_schema"]
                     or checkpoint.get("stage") != record["stage"]

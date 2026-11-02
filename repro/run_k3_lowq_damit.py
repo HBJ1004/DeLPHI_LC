@@ -29,10 +29,11 @@ from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_gri
 from lc_pipeline.k3.generalization_validation import analyze_generalization
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.k3.tokenizer import tokenize_epochs
-from lc_pipeline.k3.ztf_prediction import _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _load_prepared
 from lc_pipeline.v2.catalog import ecliptic_vector
 from lc_pipeline.v2.data import parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro.network_root import load_historical_models as _load_models
 
 INPUT_SCHEMA = "delphi.k3-lowq-damit-input-index.v1"
 PREPARED_SCHEMA = "delphi.k3-lowq-damit-prepared-directory.v1"

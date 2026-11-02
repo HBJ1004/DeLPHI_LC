@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 from repro import network_root as network
 from repro.own_period import DataPath

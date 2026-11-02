@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+
 if __package__:
     from .physical import BASE, CATALOG, ROOT, SOURCE, STANDARD, load_models, preflight
     from .search import estimate, read_curves

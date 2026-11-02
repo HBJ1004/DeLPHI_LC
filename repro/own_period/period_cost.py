@@ -8,33 +8,32 @@ returned periods are fitted values, not the starting frequency grid.
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
 import multiprocessing
 import os
-from pathlib import Path
 import random
 import resource
 import tempfile
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
 from lc_pipeline.v2.convexinv import (
     PeriodScanParameters,
-    PeriodScanRow,
     parse_period_scan_rows,
     run_period_scan,
     write_period_scan_parameters,
 )
 from lc_pipeline.v2.serialization import sha256_file
+from repro.own_period import DataPath
 
 REPO = Path(__file__).resolve().parents[2]
-from repro.own_period import DataPath
 
 BASE = DataPath("../..")
 ROOT = BASE.parent
@@ -704,7 +703,7 @@ def main(argv=None) -> int:
     count.set_defaults(function=command_count)
     for name in ("sample", "full"):
         sub = subparsers.add_parser(name, parents=[common])
-        sub.add_argument("--cpus", type=parse_cpus, default=parse_cpus("12-23"))
+        sub.add_argument("--cpus", type=parse_cpus, default=tuple(sorted(os.sched_getaffinity(0))))
         sub.add_argument("--solver-source", type=Path, default=SOURCE)
         if name == "sample":
             sub.add_argument("--workers", type=int, default=12)

@@ -44,7 +44,6 @@ from lc_pipeline.k3.grid import axial_angular_error_deg, axial_healpix_grid  # n
 from lc_pipeline.k3.model import CandidateConditionedScorer  # noqa: E402
 from lc_pipeline.k3.tokenizer import K3_EPOCH_FEATURE_NAMES, K3_PHASE_FEATURE_NAMES  # noqa: E402
 from lc_pipeline.k3.training import collate_examples  # noqa: E402
-
 from repro import network_root as network
 from repro.own_period import DataPath
 

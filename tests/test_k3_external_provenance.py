@@ -132,12 +132,12 @@ class _FakeModel:
         return self
 
 
+@pytest.mark.parametrize("analysis_commit", ["a" * 40, "7874092b81d9456e5bf52fba9adb699b8218046f"])
 def test_model_loader_requires_complete_manifest_and_selects_exact_fold_sets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, analysis_commit: str
 ):
     model_config = asdict(K3ScoreModelConfig())
     model_hash = _mapping_hash(model_config)
-    analysis_commit = "a" * 40
     protocol_hash = "b" * 64
     run_provenance = {
         "implementation_commit": analysis_commit,
@@ -203,10 +203,14 @@ def test_model_loader_requires_complete_manifest_and_selects_exact_fold_sets(
         lambda _config: _FakeModel(),
     )
 
-    selected, _, bindings = _load_models(models, manifest, (2,), "cpu")
+    legacy = analysis_commit.startswith("7874092")
+    if legacy:
+        with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+            _load_models(models, manifest, (2,), "cpu")
+    selected, _, bindings = _load_models(models, manifest, (2,), "cpu", allow_legacy=legacy)
     assert len(selected) == 5
     assert {row["fold"] for row in bindings} == {2}
-    all_models, _, all_bindings = _load_models(models, manifest, tuple(range(5)), "cpu")
+    all_models, _, all_bindings = _load_models(models, manifest, tuple(range(5)), "cpu", allow_legacy=legacy)
     assert len(all_models) == 25
     assert {(row["fold"], row["seed"]) for row in all_bindings} == {
         (fold, seed) for fold in range(5) for seed in K3_OOF_SEEDS
@@ -216,4 +220,4 @@ def test_model_loader_requires_complete_manifest_and_selects_exact_fold_sets(
     broken["models"].pop()
     manifest.write_text(json.dumps(broken))
     with pytest.raises(ZTFPredictionError, match="complete 25-model set"):
-        _load_models(models, manifest, (2,), "cpu")
+        _load_models(models, manifest, (2,), "cpu", allow_legacy=legacy)

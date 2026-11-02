@@ -38,9 +38,8 @@ import numpy as np
 
 from lc_pipeline import grid_benchmark as grid
 from lc_pipeline.k3 import grid_benchmark_scoring as gs
-
-from repro.own_period import DataPath
 from repro import network_root as network
+from repro.own_period import DataPath
 
 ROOT = DataPath("../../..")
 FOLLOWUP = DataPath("../..")
@@ -397,7 +396,8 @@ def score(args: argparse.Namespace) -> int:
     def analysis(add=None, keep=None):
         b, c = arm_arrays("classical20", add), arm_arrays("guided20", add)
         sel = np.ones(len(ids), bool) if keep is None else keep
-        sub = lambda d: {k: v[sel] for k, v in d.items()}
+        def sub(d):
+            return {k: v[sel] for k, v in d.items()}
         b, c = sub(b), sub(c)
         sel_ids = tuple(o for o, k in zip(ids, sel) if k)
         f = folds[sel]
@@ -435,7 +435,8 @@ def score(args: argparse.Namespace) -> int:
         for d in range(boot.size):
             idx = np.concatenate([rng.choice(v, size=len(v), replace=True) for v in by_fold])
             boot[d] = diffs[idx].mean()
-        lower = sum(r[3] < r[2] for r in rows); equal = sum(r[3] == r[2] for r in rows)
+        lower = sum(r[3] < r[2] for r in rows)
+        equal = sum(r[3] == r[2] for r in rows)
         return {"n_objects": len(rows), "guided_minus_classical_mean_error_deg": float(diffs.mean()),
                 "guided_minus_classical_median_error_deg": float(np.median(diffs)),
                 "interval_95_deg": [float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))],

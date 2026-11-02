@@ -177,7 +177,7 @@ def load_models(fold, device='cuda'):
     from repro import network_root as network
 
     torch.set_num_threads(1)
-    models, _, bindings = network.load_models(
+    models, _, bindings = network.load_historical_models(
         network.NetworkPath('models', legacy_followup=BASE),
         network.NetworkPath('binding', legacy_followup=BASE),
         (fold,),

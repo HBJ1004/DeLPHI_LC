@@ -20,11 +20,11 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _load_models
 from lc_pipeline.physics.axial import axial_angular_error_deg
 from lc_pipeline.v2.catalog import ecliptic_vector
 from lc_pipeline.v2.data import canonical_json, parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod
+from repro.network_root import load_historical_models as _load_models
 
 INDEX_SCHEMA = "delphi.k3-lowq-damit-census-index.v1"
 REFERENCE_SCHEMA = "delphi.k3-lowq-damit-census-reference.v1"

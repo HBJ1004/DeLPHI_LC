@@ -1,15 +1,14 @@
 """Synthetic pipeline checks; the sole real inversion is tiny and CPU-only."""
 
-from concurrent.futures import Future
-from copy import deepcopy
 import json
 import math
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import Future
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -57,15 +56,23 @@ def inputs(tmp_path, monkeypatch):
         r["object_id"]: r["period_found_hours"] for r in refined}})
     write(data / "own-periods-170.json", {"periods_hours": {r["object_id"]: 9 for r in rows}})
     return SimpleNamespace(output_dir=output, benchmark_dir=benchmark, protocol=protocol,
-                           cpus=(23,), workers=1, device="cuda", published_dir=data / "published",
+                           cpus=(min(os.sched_getaffinity(0)),), workers=1, device="cuda", published_dir=data / "published",
                            cost_summary=data / "cost-summary.json")
 
 
 def test_data_paths_follow_environment_after_import(tmp_path, monkeypatch):
     import pickle
 
-    from repro.own_period import DataPath, period_cost, refine_chain, temporal
-    from repro.own_period import manifest, nettests_common, search_external, v67_periods
+    from repro.own_period import (
+        DataPath,
+        manifest,
+        nettests_common,
+        period_cost,
+        refine_chain,
+        search_external,
+        temporal,
+        v67_periods,
+    )
     from repro.own_period.spacecraft import reference_poles
 
     # These defaults and imported aliases already exist before changing the setting.
@@ -152,7 +159,8 @@ def fake_start(task, lock):
               "solver_wall_seconds": 2.0, "failure_reason": None}
     write(directory / "record.json", record)
     write(directory / "timing.json", {"task": task, "record": post.binding(directory / "record.json"),
-                                     "solver_cpu_seconds": 1.5, "nice": 19, "cpu_list": [23]})
+                                     "solver_cpu_seconds": 1.5, "nice": 19,
+                                     "cpu_list": [min(os.sched_getaffinity(0))]})
     return post.validate_start(task)
 
 
@@ -298,8 +306,8 @@ def test_predict_resume_does_not_reload_models_or_read_targets(inputs, monkeypat
 
 
 def test_photometry_only_prediction_follows_oof_numerical_path(inputs, monkeypatch):
-    from repro.own_period import predict_oof as p
     from lc_pipeline.k3 import damit
+    from repro.own_period import predict_oof as p
 
     row = post.read(inputs.benchmark_dir / "evaluation-lock.json")["objects"][0]
     seen = []
@@ -376,7 +384,7 @@ def test_all_starts_saved_at_refined_period_and_resume_immutable(fitted, monkeyp
     plan = post.read(args.output_dir / "fits/fit-plan.json")
     assert len(plan["tasks"]) == 158  # six DeLPHI, six standard, 146 grid
     assert {t["job"]["period_hours"] for t in plan["tasks"]} == {10.123457}
-    assert plan["nice"] == 19 and plan["cpus"] == [23]
+    assert plan["nice"] == 19 and plan["cpus"] == list(args.cpus)
     before = {p: (p.read_bytes(), p.stat().st_mtime_ns)
               for p in (args.output_dir / "fits").rglob("*") if p.is_file()}
     monkeypatch.setattr(post, "_fit_start", lambda *a: pytest.fail("reran saved start"))
@@ -622,13 +630,12 @@ def test_invalid_cpus(spec):
         post.parse_cpus(spec)
 
 
-def test_real_one_start_smoke_cpu23_nice19(require_delphi_files):
+def test_real_one_start_smoke_available_cpu_nice19(require_delphi_files):
     from repro.own_period import period_cost as cost
 
     binary = cost.SOURCE / "convexinv"
     require_delphi_files(binary)
-    if 23 not in os.sched_getaffinity(0):
-        pytest.skip("CPU 23 unavailable")
+    cpu = min(os.sched_getaffinity(0))
     with tempfile.TemporaryDirectory(prefix="refine-chain-post-smoke-", dir="/tmp") as temporary:
         root = Path(temporary)
         executable = root / "convexinv"
@@ -658,17 +665,17 @@ def test_real_one_start_smoke_cpu23_nice19(require_delphi_files):
                 "from concurrent.futures import ProcessPoolExecutor; "
                 "from repro.own_period.refine_chain_post import _fit_start,_init_worker; "
                 "p=Path(sys.argv[1]); "
-                "ctx=multiprocessing.get_context('spawn'); q=ctx.Queue(); q.put(23); "
+                "ctx=multiprocessing.get_context('spawn'); q=ctx.Queue(); q.put(int(sys.argv[2])); "
                 "pool=ProcessPoolExecutor(max_workers=1,mp_context=ctx,initializer=_init_worker,initargs=(q,)); "
                 "r=pool.submit(_fit_start,json.loads((p/'task.json').read_text()), "
                 "json.loads((p/'lock.json').read_text())).result(); pool.shutdown(); q.close(); q.join_thread(); "
                 "assert r['iterations'] == 3, r; assert r['solver_cpu_seconds'] > 0, r; "
                 "assert r['selected_fit'] is not None, r")
-        result = subprocess.run(["taskset", "-c", "23", "nice", "-n", str(max(0, 19 - os.nice(0))),
-                                 sys.executable, "-c", code, str(root)],
+        result = subprocess.run(["taskset", "-c", str(cpu), "nice", "-n", str(max(0, 19 - os.nice(0))),
+                                 sys.executable, "-c", code, str(root), str(cpu)],
                                 env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "PYTHONDONTWRITEBYTECODE": "1"},
                                 capture_output=True, text=True, timeout=90)
         assert result.returncode == 0, result.stdout + result.stderr
         receipt = post.read(root / "fits/start-000/timing.json")
-        assert receipt["cpu_list"] == [23] and receipt["nice"] == 19
+        assert receipt["cpu_list"] == [cpu] and receipt["nice"] == 19
     assert not root.exists()

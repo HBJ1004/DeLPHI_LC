@@ -12,8 +12,6 @@ resume. An interrupted start without both receipts needs manual inspection.
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from copy import deepcopy
 import fcntl
 import hashlib
 import importlib
@@ -21,17 +19,20 @@ import json
 import math
 import multiprocessing
 import os
-from pathlib import Path
 import resource
 import shlex
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from copy import deepcopy
+from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[2]
-from repro.own_period import DataPath
 from repro import network_root as network
+from repro.own_period import DataPath
+
+REPO = Path(__file__).resolve().parents[2]
 
 DATA = DataPath()
 OUTPUT = network.NetworkPath("results", "refine-chain", legacy_path=DATA / "refine-chain")
@@ -219,8 +220,8 @@ def validate_prediction(row: dict, request: dict, metadata: dict) -> None:
 
 
 def predict_one(path, row, models, device, request) -> dict:
-    from repro.own_period import predict_oof as p
     from lc_pipeline.k3.damit import _read_lc
+    from repro.own_period import predict_oof as p
 
     started = time.perf_counter()
     example = p.K3TrainingExample(
@@ -336,7 +337,8 @@ def ladder_indexes(benchmark_dir: Path) -> list[int]:
 
 
 def fit_tasks(args, lock, predictions) -> list[dict]:
-    from lc_pipeline import grid_benchmark as grid, workflow_benchmark as prior
+    from lc_pipeline import grid_benchmark as grid
+    from lc_pipeline import workflow_benchmark as prior
 
     common = {"lock": binding(args.output_dir / "evaluation-lock-refined.json"),
               "predictions": binding(args.output_dir / "predictions-refined/predictions.json"),
@@ -696,7 +698,8 @@ def results_markdown(scores) -> str:
     for name, modes in scores["paired_differences"].items():
         for mode, value in modes.items():
             ci = value["bootstrap_95"]
-            interval = lambda key: "NA" if ci is None else ", ".join(number(x) for x in ci[key])
+            def interval(key):
+                return "NA" if ci is None else ", ".join(number(x) for x in ci[key])
             lines.append(f"| {name} | {mode} | {value['n']} | {number(value['mean_error_difference_deg'])} "
                          f"[{interval('mean_error_difference_deg')}] | {number(value['within20_fraction_difference'])} "
                          f"[{interval('within20_fraction_difference')}] |")
@@ -808,7 +811,7 @@ def main(argv=None) -> int:
         if name == "predict":
             command.add_argument("--device", default="cuda")
         if name == "fits":
-            command.add_argument("--cpus", type=parse_cpus, default=tuple(range(12, 24)))
+            command.add_argument("--cpus", type=parse_cpus, default=tuple(sorted(os.sched_getaffinity(0))))
             command.add_argument("--workers", type=int)
             command.add_argument("--classical-timing", choices=("reuse", "retime"), default="reuse")
         if name == "score":

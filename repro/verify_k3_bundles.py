@@ -15,7 +15,8 @@ from lc_pipeline.k3.evaluation import oracle_at_k_error_deg
 from lc_pipeline.v2.preprocessing import KnownPeriod
 
 
-def verify(bundles: Path, archive: Path, catalog: Path, dump: Path, output: Path, device: str) -> dict:
+def verify(bundles: Path, archive: Path, catalog: Path, dump: Path, output: Path, device: str,
+           *, allow_legacy: bool = False) -> dict:
     """Require unchanged mode indices and oracle errors within 0.001 degree."""
     if output.exists():
         raise ValueError("output already exists")
@@ -29,7 +30,8 @@ def verify(bundles: Path, archive: Path, catalog: Path, dump: Path, output: Path
         raise ValueError("verification requires the full 170-object OOF artifact")
     rows = []
     for fold in range(5):
-        predictor = K3EnsemblePredictor(bundles / f"k3-oof-fold-{fold}", device=device)
+        predictor = K3EnsemblePredictor(bundles / f"k3-oof-fold-{fold}", device=device,
+                                        allow_legacy=allow_legacy)
         for index in np.flatnonzero(folds == fold):
             oid = ids[index]
             solutions = records[oid]["solutions"]
@@ -65,9 +67,12 @@ def main() -> None:
     for name in ("bundles", "ensemble", "catalog", "dump-root", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--allow-legacy-networks", action="store_true",
+                        help="allow v1.0.0 seed-bug networks for historical reproduction")
     args = parser.parse_args()
     torch.set_num_threads(4)
-    verify(args.bundles, args.ensemble, args.catalog, args.dump_root, args.output, args.device)
+    verify(args.bundles, args.ensemble, args.catalog, args.dump_root, args.output, args.device,
+           allow_legacy=args.allow_legacy_networks)
 
 
 if __name__ == "__main__":

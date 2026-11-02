@@ -309,7 +309,8 @@ def run(*, root: Path, parity_only: bool = False) -> dict:
                 },
                 replace=True,
             )
-            predictor = K3EnsemblePredictor(by_fold[fold], device=lock["device"])
+            # The sealed internal-validation study uses the historical networks.
+            predictor = K3EnsemblePredictor(by_fold[fold], device=lock["device"], allow_legacy=True)
             budget.charge(time.monotonic() - model_started)
             (root / "inflight.json").unlink()
             for row in [x for x in rows if x["fold"] == fold]:

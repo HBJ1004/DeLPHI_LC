@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import argparse
 import ast
-from copy import deepcopy
 import json
 import os
-from pathlib import Path
 import random
 import resource
 import subprocess
 import sys
 import time
 import types
+from copy import deepcopy
+from pathlib import Path
 
-
-from lc_pipeline import grid_benchmark as grid, workflow_benchmark as prior
+from lc_pipeline import grid_benchmark as grid
+from lc_pipeline import workflow_benchmark as prior
 from repro import network_root as network
 from repro.own_period import DataPath
 
@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[2]
 SOURCES = DataPath("benchmark")
 PREVIOUS_SCRIPT_SHA256 = "c56f35aa8e602e395d909944835230b89ee9a93a2f4dbfdf8e6e191b004a0d2d"
 RT4_SCRIPT_SHA256 = "4355cdfa3ef6a4f0830aa39acce3a2c574beb48664577b0b5b37693a1af451fc"
-RT5_PRODUCER_SHA256 = "a5fecf328a46f72370b16688b6a537d88c8c6387daf63a5ddfd04550ee3522a6"
+RT5_PRODUCER_SHA256 = "707f6c032eeed39bd188bd1ce60be2e828dcdb9fc87e37fdbb4ef2c681cc8691"
 RT5_SCRIPT_SHA256 = "41930e3244ab8e4089415f8b956ed9af5450e8028801cf71b63986958a3860ea"
 HASHES = {
     "run_direct_benchmark.py": "a3358ddeec1f17bed219282fab31ec576bb213a6ab5e5ce8845c057d07f51fe4",

@@ -31,7 +31,7 @@ from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
 from lc_pipeline.v2.data import parse_damit_lightcurve
 from lc_pipeline.v2.preprocessing import KnownPeriod
 from repro.network_root import NetworkPath, check_jsonl, guard_output, json_metadata, switched
-from repro.network_root import load_models as _load_models
+from repro.network_root import load_historical_models as _load_models
 
 from .lowq_search import INDEX, INDEX_SHA256, SNAPSHOT, sha256
 

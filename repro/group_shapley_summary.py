@@ -28,7 +28,6 @@ sys.path.insert(0, str(HERE))
 import group_shapley as gs  # noqa: E402
 
 from lc_pipeline.k3.grid import axial_healpix_grid  # noqa: E402
-
 from repro import network_root as network  # noqa: E402
 
 FOLLOWUP = HERE.parents[1]

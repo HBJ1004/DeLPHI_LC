@@ -16,7 +16,8 @@ import torch
 from lc_pipeline.k3.bundle import _model_inputs
 from lc_pipeline.k3.evaluation import ensemble_score_grids, modes_from_score_grid
 from lc_pipeline.k3.inference import refine_ensemble_axes, score_axial_grid
-from lc_pipeline.k3.ztf_prediction import _load_models, _load_prepared
+from lc_pipeline.k3.ztf_prediction import _load_prepared
+from repro.network_root import load_historical_models as _load_models
 
 
 def _sha256(path: Path) -> str:

@@ -70,12 +70,15 @@ def test_fit_self_prediction_seals_selected_network_binding(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("error", [
-    torch.OutOfMemoryError("fixture allocation failure"),
+    getattr(torch, "OutOfMemoryError", torch.cuda.OutOfMemoryError)("fixture allocation failure"),
     RuntimeError("CUDA error: out of memory"),
     RuntimeError("CUDA error: device-side assert triggered"),
     RuntimeError("CUBLAS_STATUS_ALLOC_FAILED"),
 ])
-def test_prediction_transient_failure_is_not_sealed_and_resume_retries(tmp_path, error):
+@pytest.mark.parametrize("top_level_oom", [True, False])
+def test_prediction_transient_failure_is_not_sealed_and_resume_retries(tmp_path, error, monkeypatch, top_level_oom):
+    if not top_level_oom:
+        monkeypatch.delattr(torch, "OutOfMemoryError", raising=False)
     row = _bound_curve(tmp_path / "lc.txt", _curve())
     config = {"condition": "full", "family": "full", "sampling": {"kind": "full"},
               "period_multiplier": 1.0}

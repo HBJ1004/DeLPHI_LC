@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from functools import total_ordering
 import os
+from functools import total_ordering
 from pathlib import Path
 
 

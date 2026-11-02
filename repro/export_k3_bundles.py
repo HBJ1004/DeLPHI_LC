@@ -131,7 +131,11 @@ def export(root: Path, splits: Path, output: Path, repository: Path, *, local_re
             "members": members,
         }
         (directory / "bundle.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        K3EnsemblePredictor(directory)
+        if local_rerun:
+            K3EnsemblePredictor(directory)
+        else:
+            # The publication exporter also supports its frozen v1.0.0 source.
+            K3EnsemblePredictor(directory, allow_legacy=True)
         archive = output / (directory.name + ".tar.gz")
         with tarfile.open(archive, "w:gz") as handle:
             handle.add(directory, arcname=directory.name)

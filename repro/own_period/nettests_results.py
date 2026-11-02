@@ -14,10 +14,11 @@ import json
 from pathlib import Path
 
 import numpy as np
+
 from repro import network_root as network
 
-from .network_controls import DIAGNOSTIC, FINER, output_name
 from .nettests_common import EVALUATIONS, FOLLOWUP, OP, OUT, SEEDS, sha256
+from .network_controls import DIAGNOSTIC, FINER, output_name
 
 PUB_SUMMARY = FOLLOWUP / "inputs/frozen-artifacts/k3-definitive-7874092/release/publication-summary.json"
 PUB_FINER = FOLLOWUP / "data/interpretation-20260923/ablations"
@@ -354,7 +355,7 @@ def main() -> int:
     w("- The automatic 1e-6 deg gate of the removal validation failed on the finer removals only (see B9); the own-period removals were run after checking that the difference lies in the published finer files themselves (`run_queue2.sh`).")
     w("- Removals and Shapley values were validated on a subset (fold 0: all 5 seeds and all 16 controls for the removals and the exchange; fold 0 seed 17 for the Shapley values), as allowed by the brief; training versus test, the ZTF variants and the runs without uncertainties were validated in full.")
     if tvt:
-        cells = [json.loads(l) for p in sorted((OUT / "train-vs-test-own").glob("cells-fold-*.jsonl")) for l in p.read_text().splitlines()]
+        cells = [json.loads(line) for p in sorted((OUT / "train-vs-test-own").glob("cells-fold-*.jsonl")) for line in p.read_text().splitlines()]
         oof = np.load(OP / "own-period-oof.npz")
         ref = dict(zip(oof["object_ids"].astype(str), oof["errors_deg"]))
         diff = max(abs(c["error_deg"] - ref[c["object_id"]]) for c in cells if c["role"] == "test")

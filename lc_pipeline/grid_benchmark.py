@@ -510,12 +510,14 @@ def _native_start(job: dict, index: int, vector: np.ndarray, observed: tuple,
 def _predictor(lock: dict, fold: int):
     import torch
 
-    from .k3.bundle import K3EnsemblePredictor
     from repro import network_root as network
+
+    from .k3.bundle import K3EnsemblePredictor
 
     torch.set_num_threads(6)
     record = network.bundle_record(fold, lock["bundles"]) if network.switched() else lock["bundles"][fold]
-    return K3EnsemblePredictor(record["directory"], device=lock["device"])
+    return K3EnsemblePredictor(record["directory"], device=lock["device"],
+                                allow_legacy=not network.switched())
 
 
 def _warmup(predictor) -> None:

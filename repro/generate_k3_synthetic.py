@@ -10,27 +10,27 @@ the shard writer, so summaries never infer it from a seed or from photometry.
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import asdict
 import hashlib
 import json
 import math
 import multiprocessing
-from pathlib import Path
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import asdict
+from pathlib import Path
 
 import numpy as np
-from scipy.stats import ks_2samp, kstest, spearmanr
 import torch
+from scipy.stats import ks_2samp, kstest, spearmanr
 
 from lc_pipeline.k3.damit import load_damit_object
 from lc_pipeline.k3.damit_synthetic import discover_damit_donors, partition_damit_donors
 from lc_pipeline.k3.synthetic import (
-    EmpiricalNoiseRecipe,
     LEGACY_SYNTHETIC_SHARD_SCHEMA,
-    ResidualNoiseBank,
     SYNTHETIC_RECIPE_SCHEMA,
     SYNTHETIC_SHARD_SCHEMA,
+    EmpiricalNoiseRecipe,
+    ResidualNoiseBank,
     SyntheticDataError,
     SyntheticRecipe,
     _atomic_json,
@@ -39,7 +39,6 @@ from lc_pipeline.k3.synthetic import (
     sha256_file,
     write_synthetic_shard,
 )
-
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 OLD_SCHEMA = "delphi.k3-synthetic-recipe.v1"

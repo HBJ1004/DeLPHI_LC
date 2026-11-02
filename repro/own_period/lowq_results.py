@@ -241,7 +241,8 @@ def main() -> int:
     add("| Item | Published | Own, at 90 | Own, excluded |")
     add("|---|---|---|---|")
     pa, oa, ea = pub_census["paired_atlas_minus_k3"], at90["census_paired_atlas_minus_k3"], exc["census_paired_atlas_minus_k3"]
-    fmt = lambda b: f"{b['mean_improvement_deg']:.2f} [{b['bootstrap_ci95_deg'][0]:.2f}, {b['bootstrap_ci95_deg'][1]:.2f}]"
+    def fmt(b):
+        return f"{b['mean_improvement_deg']:.2f} [{b['bootstrap_ci95_deg'][0]:.2f}, {b['bootstrap_ci95_deg'][1]:.2f}]"
     add(f"| Atlas minus DeLPHI, all | {fmt(pa)} | {fmt(oa)} | {fmt(ea)} |")
     for label, key in (("disjoint", "structured_reference_disjoint"), ("overlap", "structured_reference_overlap")):
         p, o, e = pub_lineage[key], at90[f"lineage_{label}"], exc[f"lineage_{label}"]

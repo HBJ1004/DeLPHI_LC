@@ -494,7 +494,9 @@ def capture_neural_timing(
                 torch.cuda.empty_cache()
             _synchronize(resolved_device)
             started = time.perf_counter()
-            cold_predictor = K3EnsemblePredictor(bundle_directory, device=str(resolved_device))
+            # Bundle hashes above bind this timing replay to its frozen networks.
+            cold_predictor = K3EnsemblePredictor(bundle_directory, device=str(resolved_device),
+                                                 allow_legacy=True)
             cold_outputs = _predict_full(cold_predictor, epochs, known_period=known_period)
             _synchronize(resolved_device)
             elapsed = time.perf_counter() - started
@@ -510,7 +512,8 @@ def capture_neural_timing(
 
         # Primary warm timing: one persistent held-out-fold ensemble.  Each
         # object receives its own untimed warmup before its single timed run.
-        warm_predictor = K3EnsemblePredictor(bundle_directory, device=str(resolved_device))
+        warm_predictor = K3EnsemblePredictor(bundle_directory, device=str(resolved_device),
+                                             allow_legacy=True)
         for index, object_id, epochs, known_period in prepared:
             _predict_full(warm_predictor, epochs, known_period=known_period)
             _synchronize(resolved_device)

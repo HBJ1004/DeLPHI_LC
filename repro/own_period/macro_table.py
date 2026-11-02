@@ -11,14 +11,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from pathlib import Path
 import re
+from pathlib import Path
 
 import numpy as np
 
 from repro import network_root as network
 from repro.own_period import DataPath as FixedDataPath
-from repro.own_period.reporting_inputs import load_npz, read_json, select, check
+from repro.own_period.reporting_inputs import check, load_npz, read_json, select
 
 
 def lookup(value, key):
@@ -173,9 +173,9 @@ class Values:
                     ]
                 )
             )
-        if name.startswith("KThreeFold") and not "Median" in name:
+        if name.startswith("KThreeFold") and "Median" not in name:
             return (min if name.endswith("Min") else max)(r["mean_deg"] for r in value["folds"])
-        if name.startswith("KThreeSeed") and not "Median" in name:
+        if name.startswith("KThreeSeed") and "Median" not in name:
             return (min if name.endswith("Min") else max)(value["per_seed_mean_deg"].values())
         if name == "ClassicalResidualMatchingBudget":
             return next(
