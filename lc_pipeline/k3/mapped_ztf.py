@@ -1,9 +1,8 @@
 """Mapped, label-blind ZTF preparation for internal DAMIT identities.
 
-The old follow-up accidentally used an internal DAMIT database suffix as an
-MPC number.  This module makes the two namespaces explicit: data acquisition
-uses a mapped MPC number, while every period/fold/prepared-object join retains
-the frozen internal ``asteroid_<damit_id>`` identifier.
+DAMIT IDs and MPC numbers are distinct namespaces. This module maps them
+explicitly. Data acquisition uses a mapped MPC number, while every
+period/fold/prepared-object join retains the frozen internal ``asteroid_<damit_id>`` identifier.
 """
 
 from __future__ import annotations

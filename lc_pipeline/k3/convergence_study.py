@@ -1,4 +1,4 @@
-"""Frozen, phase-separated orchestration for the K3 convergence follow-up.
+"""Frozen, phase-separated orchestration for the K3 convergence-stopped inversion study.
 
 The execution phase is deliberately label blind.  It consumes the stripped
 execution-input artifact, selects fits by final relative RMS, and atomically

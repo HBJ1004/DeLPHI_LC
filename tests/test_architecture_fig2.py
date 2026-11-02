@@ -1,4 +1,4 @@
-"""Regression checks for Fig. 2 of Paper I, without requiring Inkscape."""
+"""Regression checks for Fig. 2 of the paper, without requiring Inkscape."""
 
 from __future__ import annotations
 

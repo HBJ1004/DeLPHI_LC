@@ -1,8 +1,7 @@
-"""Canonical observation preprocessing contract for DeLPHI V2.
+"""Shared observation types and tensor preprocessing utilities.
 
-This module is the only supported path from validated lightcurve observations
-to fixed-shape model tensors.  It is intentionally independent of PyTorch so
-the exact same builder can be used by training, validation, and inference.
+The prediction command builds tensors with ``lc_pipeline.k3.tokenizer``.
+The builder here is independent of PyTorch and supports the tensor-cache path.
 
 The contract is deliberately lossless with respect to the scientifically
 meaningful inputs:
@@ -404,7 +403,7 @@ def build_observation_tensors(
         raise PreprocessingError(
             "deterministic epoch chunking requires "
             f"{len(chunk_plan)} slots, exceeding max_epoch_slots={config.max_epoch_slots}; "
-            "V2 preprocessing never drops observations"
+            "this tensor builder never drops observations"
         )
 
     n_slots = config.max_epoch_slots

@@ -144,9 +144,10 @@ def command_results(args) -> int:
     L = []
     w = L.append
     w("# Reduced data, added noise and withheld lightcurves with our own period search\n")
-    w("Package `reliability` of the own-period reproduction of Paper I (exploratory revision analysis on the "
-      "development sample). Protocol: `../PROTOCOL.md`, Addendum 1. Code: worktree `DeLPHI-followup/source-op-reliability`, "
-      f"branch `research/own-period-reliability` (commit {commit}), scripts `repro/own_period/reliability.py` (search, "
+    w("Package `reliability` of the own-period reproduction of the paper (exploratory analysis on the "
+      "development sample). See `../PROTOCOL.md`, Addendum 1. "
+      f"Historical producer commit {commit}. "
+      "Scripts `repro/own_period/reliability.py` (search, "
       "predictions, withheld fits), `reliability_score.py` (scoring), `reliability_report.py` (this file), "
       "`reliability_chunks.sh` (resumable GPU chunks).\n")
     w("## What was run\n")

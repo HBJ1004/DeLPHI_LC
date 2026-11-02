@@ -1,4 +1,4 @@
-"""Reproducible Paper I paired gains and refinement medians (CPU only)."""
+"""Reproducible paired gains and refinement medians for the paper (CPU only)."""
 
 from __future__ import annotations
 

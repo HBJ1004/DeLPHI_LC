@@ -29,15 +29,15 @@ def sha256(path: Path) -> str:
 
 
 def check_network_provenance(metadata: dict, *, allow_legacy: bool = False) -> None:
-    """Require explicit consent to use the seed-coupled v1.0.0 networks."""
+    """Require explicit consent for networks trained on simulations that reused random seeds (v1.0.0)."""
     provenance = metadata.get("run_provenance") or {}
     commits = [metadata.get(key) for key in
                ("training_commit", "implementation_commit", "analysis_commit")]
     commits.append(provenance.get("implementation_commit"))
     if not allow_legacy and any(str(commit).startswith("7874092") for commit in commits):
         raise ValueError(
-            "v1.0.0 networks (training commit 7874092) used simulations with the seed bug; "
-            "use allow_legacy=True / --allow-legacy-networks only for historical reproduction"
+            "networks trained on simulations that reused random seeds (v1.0.0) require "
+            "allow_legacy=True / --allow-legacy-networks for historical reproduction"
         )
 
 

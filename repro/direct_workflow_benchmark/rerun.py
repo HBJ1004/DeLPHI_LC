@@ -372,7 +372,7 @@ def reused_exploratory(source, lock):
         "source_saved_fits": bound(saved_fits), "classical_environment": old["environment"],
         "delphi_environment": reused["environment"],
         "note": "18/96-start classical ladder times are from the old machine (September); "
-                "DeLPHI ladder times are from the existing reuse-mode run. RT4 retimes neither."}
+                "DeLPHI ladder times are from the existing reuse-mode run. Neither timing set is remeasured here."}
     return score, metadata
 
 

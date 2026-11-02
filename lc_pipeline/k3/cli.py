@@ -1,4 +1,4 @@
-"""Command-line entry points for K3 smoke and definitive publication runs."""
+"""Command-line entry points for K3 smoke tests and publication runs."""
 
 from __future__ import annotations
 

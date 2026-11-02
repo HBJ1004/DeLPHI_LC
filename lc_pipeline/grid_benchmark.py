@@ -1,7 +1,7 @@
 """Reference-blind, directly timed known-period pole-grid benchmark.
 
 This module deliberately lives outside ``k3`` so classical cold workers do not
-import the neural stack. Published weights, APIs and archived runs are unchanged.
+import the neural stack.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Deterministic, same-object DAMIT catalog construction for DeLPHI V2.
+"""Shared utilities for deterministic, same-object DAMIT catalog construction.
 
 The builder deliberately has no machine-learning dependencies.  It turns a
 pinned DAMIT dump and an explicit membership list into a compact, hash-bound
@@ -111,9 +111,8 @@ def parse_spin(path: Path) -> SpinRecord:
 def audit_lightcurve_file(path: Path) -> dict[str, Any]:
     """Parse a DAMIT ``lc.txt`` and return validation statistics.
 
-    Epoch boundaries in the source file are retained.  Geometry is required to
-    be finite and nonzero for every observation; V2 never silently substitutes
-    zero geometry.
+    Epoch boundaries in the source file are retained. Geometry must be finite
+    and nonzero for every observation. Invalid geometry is rejected.
     """
     tokens = Path(path).read_text(encoding="utf-8").split()
     if not tokens:
@@ -206,8 +205,8 @@ def audit_lightcurve_file(path: Path) -> dict[str, Any]:
 def load_membership(path: Path) -> list[str]:
     """Load membership from JSON, JSONL, text, or a legacy fold directory.
 
-    A fold directory contributes only the union of ``fold*_test.json``.  Its old
-    assignments are not reused; V2 creates new grouped splits.
+    A fold directory contributes only the union of ``fold*_test.json``.
+    The catalog builder creates new grouped splits from that membership.
     """
     source = Path(path)
     values: list[Any] = []
@@ -723,10 +722,8 @@ def write_catalog_bundle(
 ) -> dict[str, str]:
     """Write deterministic compact evidence and return output SHA-256 values."""
     target = Path(output_dir)
-    # This is a deterministic source-catalog audit, not a release data
-    # manifest: its immutable URI, clean builder commit, and prospective
-    # evidence do not exist yet. Naming it honestly prevents accidental use
-    # with the stricter release-manifest validator.
+    # This catalog audit omits the immutable URI, clean builder commit and
+    # prospective evidence required by the release-manifest validator.
     _write_json(target / "catalog_manifest.json", manifest)
     _write_jsonl(target / "catalog.jsonl", records)
     _write_jsonl(target / "source_files.jsonl", source_files)

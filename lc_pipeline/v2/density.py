@@ -1,4 +1,4 @@
-"""HEALPix probability-density primitives for the DeLPHI V2 pole API."""
+"""Shared HEALPix probability-density utilities."""
 
 from __future__ import annotations
 

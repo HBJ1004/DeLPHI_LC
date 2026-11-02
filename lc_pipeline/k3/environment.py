@@ -1,4 +1,4 @@
-"""Immutable environment capture for the definitive K3 publication release."""
+"""Immutable environment capture for the K3 publication release."""
 
 from __future__ import annotations
 

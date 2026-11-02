@@ -1,4 +1,4 @@
-"""Score-map analyses of Paper I rerun on a chosen out-of-fold run (CPU only).
+"""Score-map analyses of the paper rerun on a chosen out-of-fold run (CPU only).
 
     python -m repro.own_period.maps.analyses --run RUN_DIR --periods damit|FILE --out OUT_DIR
 

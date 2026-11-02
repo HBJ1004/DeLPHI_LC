@@ -314,7 +314,7 @@ def main():
 
 
 def prepare_lowq_input():
-    """Publish the fresh RT3b reference-period census in the mirror input layout."""
+    """Convert the selected-network reference-period census into mirror-analysis inputs."""
     if not network.switched():
         raise ValueError("preparing the rerun mirror input requires the network switch")
     source = network.NetworkPath("results", "lower-quality-census", "scores-reference",

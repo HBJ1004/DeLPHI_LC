@@ -1,11 +1,11 @@
-"""Canonical directed-sphere operations for DeLPHI V2 pole vectors.
+"""Shared directed-sphere operations for pole vectors.
 
 A spin pole is an oriented vector on :math:`S^2`.  Consequently, ``p`` and
 ``-p`` are different predictions unless both vectors are independently present
-in the source catalogue.  This module is the only implementation of pole-angle
-metrics used by V2 evaluation and reporting code.
+in the source catalogue. Evaluation uses the axial metrics in
+``lc_pipeline.physics.axial``.
 
-Evaluation is deliberately performed in float64 using the well-conditioned
+Directed angles are computed in float64 using the well-conditioned
 ``atan2(||p x s||, p . s)`` identity.  It represents the complete [0, 180]
 degree interval without clipping and retains arbitrarily small non-zero angles.
 """

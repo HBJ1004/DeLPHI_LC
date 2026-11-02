@@ -1,4 +1,4 @@
-"""CPU-only protocol and provenance checks for RT3d1 adapters."""
+"""CPU protocol and provenance checks for benchmark, temporal and solver adapters."""
 import json
 import os
 from copy import deepcopy

@@ -1,4 +1,4 @@
-"""Read-only export of sealed follow-up transfer and grid-benchmark records."""
+"""Read-only export of sealed cross-survey transfer and pole-grid benchmark records."""
 
 from __future__ import annotations
 

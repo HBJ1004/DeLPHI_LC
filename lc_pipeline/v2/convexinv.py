@@ -20,7 +20,7 @@ import numpy as np
 
 try:  # ``resource`` is unavailable on Windows, where parsing/tests still run.
     import resource
-except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
+except ModuleNotFoundError:  # pragma: no cover - resource is unavailable on Windows
     resource = None  # type: ignore[assignment]
 
 from ..physics.axial import axial_angular_error_deg

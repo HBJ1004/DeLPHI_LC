@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--period-json", type=Path, help="use the rank-1 estimate instead of known_period")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--allow-legacy-networks", action="store_true",
-                        help="allow v1.0.0 seed-bug networks for historical reproduction")
+                        help="allow networks trained on simulations that reused random seeds (v1.0.0) for historical reproduction")
     args = parser.parse_args(argv)
     if args.output.exists():
         parser.error("output already exists; choose a new filename")

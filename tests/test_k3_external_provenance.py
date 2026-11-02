@@ -205,7 +205,7 @@ def test_model_loader_requires_complete_manifest_and_selects_exact_fold_sets(
 
     legacy = analysis_commit.startswith("7874092")
     if legacy:
-        with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+        with pytest.raises(ValueError, match=r"networks trained on simulations that reused random seeds \(v1\.0\.0\)"):
             _load_models(models, manifest, (2,), "cpu")
     selected, _, bindings = _load_models(models, manifest, (2,), "cpu", allow_legacy=legacy)
     assert len(selected) == 5

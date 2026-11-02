@@ -1,4 +1,4 @@
-"""Minimal, auditable DAMIT dump adapter for the definitive K3 run."""
+"""Minimal, auditable DAMIT dump adapter for the K3 run."""
 
 from __future__ import annotations
 

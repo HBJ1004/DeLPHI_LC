@@ -1,4 +1,4 @@
-"""RT3c provenance, output protection and selected-family integration on CPU."""
+"""CPU provenance and output checks for selected-network controls and input contributions."""
 import json
 from pathlib import Path
 from types import SimpleNamespace

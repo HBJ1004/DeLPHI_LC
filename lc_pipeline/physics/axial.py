@@ -1,4 +1,4 @@
-"""Canonical antipode-aware axis operations for the V2 comparison study.
+"""Shared antipode-aware axis operations.
 
 The comparison study evaluates an *axis* rather than an oriented pole.  The
 equivalence ``u ~ -u`` is therefore an explicit metric convention; it does not

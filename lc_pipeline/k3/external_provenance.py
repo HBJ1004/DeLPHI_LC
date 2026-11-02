@@ -1,4 +1,4 @@
-"""Deterministic, label-separated provenance for K3 external follow-up inputs."""
+"""Deterministic, label-separated provenance for K3 cross-survey transfer inputs."""
 
 from __future__ import annotations
 

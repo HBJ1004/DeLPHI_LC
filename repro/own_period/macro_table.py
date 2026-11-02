@@ -394,7 +394,7 @@ class Values:
             path = Path(network.NetworkPath("results")).parent / "runners/receipts-rt6/001.json"
             receipt = self.json(path)
             if not receipt["accepted_for_timing"]:
-                raise ValueError("RT6 Fourier timing receipt was not accepted")
+                raise ValueError("retimed Fourier period-search timing receipt was not accepted")
             return receipt["comparison"]["new_timing"]["mean_seconds"]
         value = self.json(FixedDataPath("period-cost/period-cost-summary.json"))
         return value["fourier_seconds"]
@@ -496,7 +496,7 @@ def build(inventory, manuscript, *, selected=True):
         if name == "WorkflowFullSearchSpeedFactor" and selected and network.switched():
             source_key = (
                 "median(Set A full-scan seconds) / "
-                "(RT6 Fourier mean seconds + retimed loaded DeLPHI mean seconds)"
+                "(retimed Fourier mean seconds + retimed loaded DeLPHI mean seconds)"
             )
         if name.startswith("TOne"):
             base, kind, bound = re.fullmatch(r"(TOne.+?)(Mean|Median)(Low|High)?", name).groups()

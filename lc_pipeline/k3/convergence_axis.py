@@ -1,6 +1,6 @@
 """Interpret unconstrained angular coordinates printed by ``convexinv``.
 
-The convergence follow-up uses this adapter only for trusted solver output.
+The convergence-stopped inversion study uses this adapter only for trusted solver output.
 It does not change the input-coordinate contract for public APIs.
 """
 

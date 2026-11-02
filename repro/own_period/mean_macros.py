@@ -1,9 +1,9 @@
-"""Recover the deleted M1 input list from its surviving scope and paper definitions.
+"""Rebuild the manuscript statistics inventory from archived records and definitions.
 
-The archived records preserve the complete 183-item M1/M1b scope: 93
-original inputs (including seven deliberate exclusions) and 90 additions.
+M1 is the archived inventory of 93 original inputs, including seven deliberate
+exclusions. M1b adds 90 entries, bringing the total to 183.
 Further printed summaries are audited by median_stats.audit_manuscript.
-Neither source is edited.
+The source records and manuscript are read-only inputs.
 """
 
 from __future__ import annotations

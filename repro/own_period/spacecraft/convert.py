@@ -528,7 +528,7 @@ def data_markdown(summaries: list[dict]) -> str:
                   "Combined removes only ALCDEF sessions whose median-JD UT date occurs in catalogue observation JDs of that object.",
                   "No light-time, distance, phase, colour or brightness correction is added by this adapter.",
                   "SessionDateTime Z follows the accepted schema; it does not establish the source JD time scale.",
-                  "The cohort lock is pending; Job 2 must establish a hash-bound lock before freezing SBDB receipts.", ""])
+                  "A hash-bound cohort lock is required before freezing SBDB receipts.", ""])
     for row in summaries:
         lines.extend([f"## {row['object_name'].title()}: {row['source']}", "",
                       f"Time system: {row['time_system']}.", f"Magnitude type: {row['magnitude_type']}.",

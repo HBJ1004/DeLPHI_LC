@@ -1,4 +1,4 @@
-"""Validated configuration for the prospective K=3 scorer."""
+"""Validated configuration for the K=3 scorer."""
 
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ class K3TrainingConfig:
         if self.synthetic_to_real_ratio != (3, 1):
             raise K3ConfigError("the locked real fine-tune ratio is 3 synthetic to 1 real")
         if self.num_workers != 0:
-            raise K3ConfigError("definitive deterministic runs require num_workers=0")
+            raise K3ConfigError("deterministic runs require num_workers=0")
 
     def as_mapping(self) -> dict[str, Any]:
         return asdict(self)

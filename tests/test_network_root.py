@@ -204,7 +204,7 @@ def test_checkpoint_seed_bug_requires_opt_in(selected, monkeypatch, loader):
             return nr.load_models(root / "models", manifest, (0,), "cpu", **kwargs)[0]
         return [predict_oof_full.load_model(0, 17, "cpu", **kwargs)[0]]
 
-    with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+    with pytest.raises(ValueError, match=r"networks trained on simulations that reused random seeds \(v1\.0\.0\)"):
         load()
     assert len(load(allow_legacy=True)) == (5 if loader == "ensemble" else 1)
 

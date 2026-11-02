@@ -107,7 +107,7 @@ def main() -> int:
         "five-network ensemble** (`run_k3_lowq_census.py`, `inference_policy: fixed_fold_five_seed_ensemble`), "
         "same scoring, lineage grouping, standard poles and latitude analysis, run with the published code. "
         "An asteroid without a period is a failure, given at 90 deg and also excluded.\n")
-    add("Code: branch `research/own-period-lowq`, `repro/own_period/lowq_*.py`, chain "
+    add("Scripts `repro/own_period/lowq_*.py`, chain "
         "`repro/own_period/run_lowq_chain.sh`, figure script `repro/own_period/lowq_figures/render_main_figures.py`.\n")
 
     add("## Validation\n")
@@ -264,7 +264,7 @@ def main() -> int:
     add(f"\nSource: `{REL}/scores-damit-period-500/` (rerun), published errors from `scores-published-check/direction-excluded.json`.\n")
 
     add("## Deviations and notes\n")
-    add("- The brief speaks of the 25 networks; the published census (9,783) used the fixed fold-0 five-network "
+    add("- The published census (9,783) used the fixed fold-0 five-network "
         "ensemble (`predictions-fold0-five-seed/manifest.json`), so that is what is rerun here ('exactly as "
         "published'). The 25-network policy belongs to the earlier 169-asteroid low-quality cohort "
         "(`run_k3_lowq_damit.py`), which the manuscript does not print.")

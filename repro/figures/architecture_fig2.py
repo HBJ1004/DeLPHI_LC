@@ -1,4 +1,4 @@
-"""Draw the DeLPHI architecture (design B4), Fig. 2 of Paper I."""
+"""Draw the DeLPHI architecture (design B4), Fig. 2 of the paper."""
 
 from __future__ import annotations
 

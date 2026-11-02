@@ -22,5 +22,5 @@ def sha256_file(path: str | Path) -> str:
 
 
 def canonical_json(value: object) -> str:
-    """Serialize JSON with the stable settings used by the V2 contracts."""
+    """Serialize JSON with the stable settings used by the shared utilities."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)

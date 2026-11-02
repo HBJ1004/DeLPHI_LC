@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Acquire Job 1 inputs, preserving bytes and SHA256 receipts; never run models.
+"""Acquire spacecraft photometry and reference inputs with byte and SHA256 receipts.
 
-Run with the prescribed interpreter's -I option. A failed source is recorded and
-the command exits nonzero. In particular, an inaccessible CDS catalogue is not
-replaced with observations from another source.
+Run Python with -I to isolate imports from the user site and environment.
+A failed source is recorded and the command exits nonzero.
+An inaccessible CDS catalogue is not replaced with observations from another source.
 """
 from __future__ import annotations
 

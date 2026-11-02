@@ -111,7 +111,7 @@ def summarize(errors: np.ndarray) -> dict:
 
 
 def damit_table_poles() -> dict[int, np.ndarray]:
-    """Pole vectors of every DAMIT model, keyed by asteroid number."""
+    """Pole vectors of every DAMIT model, keyed by internal DAMIT asteroid ID."""
     import csv
 
     path = ROOT / "damit-20250610T000301Z/tables/asteroid_models.csv"

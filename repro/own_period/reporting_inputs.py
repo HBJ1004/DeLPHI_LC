@@ -1,4 +1,4 @@
-"""Reporting consumers of the RT3 runners, using the central network switch.
+"""Selected-network reporting inputs, using the central network switch.
 
 Only network-derived paths move. Catalogs, saved searches, classical references
 and historical drawing source remain explicit read-only inputs.
@@ -17,7 +17,7 @@ from repro.own_period import DataPath as FixedDataPath
 
 
 def substitutions():
-    """Longest-prefix translation to the outputs actually made by RT3a--d1."""
+    """Translate paths to selected-network evaluation, survey and benchmark outputs."""
     own = Path(FixedDataPath())
     followup = own.parent.parent
     results = Path(network.NetworkPath("results"))
@@ -162,7 +162,7 @@ def read_json(path):
 
 
 class InputPath(os.PathLike):
-    """Keep joins lazy, and validate reads after selecting the RT3 result."""
+    """Keep joins lazy and validate reads after selecting the network result."""
 
     def __init__(self, path):
         self.original = path

@@ -68,7 +68,7 @@ def main() -> None:
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--allow-legacy-networks", action="store_true",
-                        help="allow v1.0.0 seed-bug networks for historical reproduction")
+                        help="allow networks trained on simulations that reused random seeds (v1.0.0) for historical reproduction")
     args = parser.parse_args()
     torch.set_num_threads(4)
     verify(args.bundles, args.ensemble, args.catalog, args.dump_root, args.output, args.device,

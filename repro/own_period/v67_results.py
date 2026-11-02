@@ -43,7 +43,7 @@ def main() -> int:
     L = []
     w = L.append
     w("# V6 and V7 at our own period (package v67)\n")
-    w("Code: `DeLPHI-followup/source-op-v67` (branch `research/own-period-v67`), scripts `repro/own_period/v67_periods.py`, "
+    w("Scripts `repro/own_period/v67_periods.py`, "
       "`v6_fixed_period.py`, `v7_grid.py`, `v67_queue.sh`, `v67_results.py`. Exploratory revision analysis on the development sample.\n")
     w("## Periods\n")
     w(f"Top `fourier_gpu` period of `own-periods-170.json`, rounded to six decimals for every run of both tests "

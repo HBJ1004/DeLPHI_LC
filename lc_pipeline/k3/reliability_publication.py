@@ -1,4 +1,4 @@
-"""Read-only publication exports for the sealed 2026-09-15 reliability run.
+"""Read-only publication exports for the reliability run.
 
 This is intentionally not part of the reliability runner: it consumes sealed
 receipts and cannot create predictions, fits, or modify a scientific run.

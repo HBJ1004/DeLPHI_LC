@@ -147,7 +147,7 @@ def test_legacy_bundle_requires_explicit_opt_in(request, kind, commit):
     metadata = json.loads(path.read_text())
     metadata["training_commit"] = commit
     path.write_text(json.dumps(metadata))
-    with pytest.raises(ValueError, match="v1.0.0.*seed bug"):
+    with pytest.raises(ValueError, match=r"networks trained on simulations that reused random seeds \(v1\.0\.0\)"):
         bundle.load_predictor(root)
     predictor = bundle.load_predictor(root, allow_legacy=True)
     assert predictor.manifest["training_commit"] == commit
